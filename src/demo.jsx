@@ -135,29 +135,35 @@ const BroncoModel = ({ activeRisk, onSpotClick }) => {
     const sh = new THREE.Mesh(shG,shM); sh.rotation.x=-Math.PI/2; sh.position.set(0,-0.01,0); sh.scale.set(1.5,1,1);
     scene.add(sh);
 
-    /* Hotspot positions — aligned to mechanical zones */
+    /* Hotspot positions — calibrated to mesh geometry
+       Anchor: original Head Gasket (0, 0.82, 1.54) = engine bay top center
+       Body: X ±0.55, Y 0–1.50, Z -1.40 to 1.60
+       Hood line: Y ~0.80, Z 1.0–1.55
+       Underbody: Y ~0.20–0.35
+       Cabin roof: Y ~1.30–1.50
+       Wheel center: X ±0.52, Y ~0.30 */
     const hotspots = [
-      /* Engine Bay (Front Upper) */
-      {id:0,  pos:new THREE.Vector3(0.15,0.85,1.55),  color:"#B91C1C"},  // Engine Coolant Intrusion (Critical)
-      {id:2,  pos:new THREE.Vector3(-0.25,0.72,1.60),  color:"#B91C1C"},  // Turbocharger (Critical)
-      {id:3,  pos:new THREE.Vector3(0.35,0.65,1.50),   color:"#B91C1C"},  // Fuel Injector (Critical)
-      {id:6,  pos:new THREE.Vector3(-0.40,0.55,1.20),  color:"#EA580C"},  // Water Pump (Major)
-      {id:14, pos:new THREE.Vector3(0.55,0.60,1.30),   color:"#16A34A"},  // 12V Battery (Minor)
-      {id:15, pos:new THREE.Vector3(-0.15,0.95,1.35),  color:"#16A34A"},  // Filters (Minor)
-      /* Front Lower Drivetrain */
-      {id:1,  pos:new THREE.Vector3(0,0.30,1.15),      color:"#B91C1C"},  // Transmission (Critical)
-      {id:8,  pos:new THREE.Vector3(0,0.25,0.75),      color:"#FFC72C"},  // Shift Calibration (Moderate)
-      /* Rear Undercarriage */
-      {id:4,  pos:new THREE.Vector3(0,0.32,-1.30),     color:"#EA580C"},  // Rear Drive Unit (Major)
-      {id:9,  pos:new THREE.Vector3(0.25,0.28,-1.10),  color:"#FFC72C"},  // EVAP Purge (Moderate)
-      /* Front Wheel Corners */
-      {id:10, pos:new THREE.Vector3(-0.78,0.38,0.90),  color:"#FFC72C"},  // Suspension (Moderate)
-      {id:11, pos:new THREE.Vector3(0.78,0.32,0.90),   color:"#FFC72C"},  // Brake Wear (Moderate)
-      {id:13, pos:new THREE.Vector3(-0.72,0.55,1.10),  color:"#16A34A"},  // Driver Assist Sensor (Minor)
-      /* Dash / Interior Zone */
-      {id:7,  pos:new THREE.Vector3(0.50,0.72,-0.20),  color:"#EA580C"},  // BCM Voltage (Major)
-      {id:5,  pos:new THREE.Vector3(-0.35,0.68,0.30),  color:"#EA580C"},  // Steering Rack (Major)
-      {id:12, pos:new THREE.Vector3(0,1.10,0.40),      color:"#16A34A"},  // SYNC Infotainment (Minor)
+      /* Engine Bay — clustered on hood area */
+      {id:0,  pos:new THREE.Vector3(0, 0.82, 1.54),      color:"#B91C1C"},   // Engine Coolant (top center engine)
+      {id:2,  pos:new THREE.Vector3(-0.18, 0.78, 1.48),   color:"#B91C1C"},   // Turbocharger (left of center)
+      {id:3,  pos:new THREE.Vector3(0.20, 0.76, 1.50),    color:"#B91C1C"},   // Fuel Injector (right of center)
+      {id:6,  pos:new THREE.Vector3(-0.28, 0.72, 1.25),   color:"#EA580C"},   // Water Pump (left mid engine)
+      {id:14, pos:new THREE.Vector3(0.38, 0.74, 1.20),    color:"#16A34A"},   // 12V Battery (right front)
+      {id:15, pos:new THREE.Vector3(0.05, 0.85, 1.35),    color:"#16A34A"},   // Filters (top center)
+      /* Underbody Front — transmission */
+      {id:1,  pos:new THREE.Vector3(0, 0.28, 1.10),       color:"#B91C1C"},   // Transmission (center low front)
+      {id:8,  pos:new THREE.Vector3(0, 0.25, 0.50),       color:"#FFC72C"},   // Shift Calibration (center low mid)
+      /* Rear Underbody */
+      {id:4,  pos:new THREE.Vector3(0, 0.28, -1.15),      color:"#EA580C"},   // Rear Drive Unit (center low rear)
+      {id:9,  pos:new THREE.Vector3(0.15, 0.30, -0.95),   color:"#FFC72C"},   // EVAP Purge (right rear)
+      /* Wheel Areas */
+      {id:10, pos:new THREE.Vector3(-0.50, 0.32, 0.85),   color:"#FFC72C"},   // Suspension (left front wheel)
+      {id:11, pos:new THREE.Vector3(0.50, 0.30, 0.85),    color:"#FFC72C"},   // Brake Wear (right front wheel)
+      {id:13, pos:new THREE.Vector3(-0.38, 0.58, 1.45),   color:"#16A34A"},   // Driver Assist (left headlight)
+      /* Cabin / Dash */
+      {id:7,  pos:new THREE.Vector3(0.25, 0.90, -0.05),   color:"#EA580C"},   // BCM (right dash)
+      {id:5,  pos:new THREE.Vector3(-0.12, 0.55, 0.55),   color:"#EA580C"},   // Steering Rack (left front low)
+      {id:12, pos:new THREE.Vector3(0, 1.08, 0.25),       color:"#16A34A"},   // SYNC (center dash/windshield)
     ];
 
     /* Load and display model */
@@ -516,7 +522,7 @@ const P3 = () => {
 
 /* ═══ PAGE 4: INSPECTION FINDINGS ═══ */
 const findings = [
-  { sev: "Critical", Icon: Tri, c: B.crit, bg: B.critBg, bd: B.critBd, t: "Head Gasket Compromised", desc: "White residue on oil cap. Coolant reservoir 40% low. Combustion gas detected in coolant via block test.", ev: "Photo evidence + Block test", repair: "$2,800 – $4,200", impact: "Structural — affects resale and reliability" },
+  { sev: "Critical", Icon: Tri, c: B.crit, bg: B.critBg, bd: B.critBd, t: "Head Gasket Compromised", desc: "White milky residue visible on oil filler cap. Coolant reservoir approximately 40% below minimum line. Sweet chemical smell detected from engine bay at operating temperature.", ev: "Visual inspection + Photo evidence", repair: "$2,800 – $4,200", impact: "Structural — affects resale and reliability" },
   { sev: "Major", Icon: Circ, c: B.orange, bg: B.orangeBg, bd: B.orangeBd, t: "Fuel Injector Leak Confirmed", desc: "Wet spot on injector #3 rail seat. Raw fuel smell at cold start confirmed.", ev: "Photo + inspection evidence", repair: "$600 – $1,100", impact: "Safety risk — must be addressed" },
   { sev: "Moderate", Icon: Eye, c: B.black, bg: B.ynBg, bd: B.ynBd, t: "Driver Seat Tear — Leather Bolster", desc: "1.5-inch tear on driver seat outer bolster. Consistent with entry/exit wear. Not structural but affects perceived condition.", ev: "Photo evidence", repair: "$200 – $350", impact: "Cosmetic — affects retail presentation" },
 ];
