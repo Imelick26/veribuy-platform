@@ -10,7 +10,7 @@ const B = {
   g900: "#111827", g700: "#374151", g500: "#6B7280", g300: "#D1D5DB", g200: "#E5E7EB", g100: "#F3F4F6", g50: "#F9FAFB",
   white: "#FFFFFF", pageBg: "#EAEBEF", black: "#0B0B0C",
   ok: "#16A34A", okBg: "#F0FDF4", okBd: "#BBF7D0",
-  yn: "#FFC72C", ynBg: "#FFF3CC", ynBd: "#FFDF66", ynT: "#0B0B0C",
+  yn: "#FFFF00", ynBg: "#FEFCBF", ynBd: "#FDE047", ynT: "#0B0B0C",
   sh: "0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)",
 };
 
@@ -35,10 +35,10 @@ const ChevR = p => <I s={p.s} c={p.c} style={{transform:p.rot?`rotate(${p.rot}de
 const HistIc = p => <I s={p.s} c={p.c} d={<><circle cx={12} cy={12} r={10}/><polyline points="12 6 12 12 16 14"/></>}/>;
 
 /* ═══ SHARED UI ═══ */
-const Card = ({ children, style, redBlue }) => <div style={{ background: B.white, border: `1px solid ${redBlue ? B.blueBd : B.g200}`, borderRadius: "14px", padding: "20px", boxShadow: B.sh, ...style }}>{children}</div>;
+const Card = ({ children, style, redBlue }) => <div data-hover="card" style={{ background: B.white, border: `1px solid ${redBlue ? B.blueBd : B.g200}`, borderRadius: "14px", padding: "20px", boxShadow: B.sh, ...style }}>{children}</div>;
 const SevPill = ({ sev }) => { const m = { Critical: [B.critBg, B.crit, B.critBd], Major: [B.orangeBg, B.orange, B.orangeBd], Moderate: [B.ynBg, B.ynT, B.ynBd], Minor: [B.okBg, B.ok, B.okBd], High: [B.orangeBg, B.orange, B.orangeBd] }; const [bg, c, bd] = m[sev] || m.Moderate; return <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", background: bg, color: c, border: `1px solid ${bd}` }}>{sev}</span>; };
 const SPill = ({ children, v }) => { const m = { ok: [B.okBg, B.ok, B.okBd], yn: [B.ynBg, B.ynT, B.ynBd], red: [B.redBg, B.red, B.redBd] }; const [bg, c, bd] = m[v] || m.yn; return <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", background: bg, color: c, border: `1px solid ${bd}` }}>{children}</span>; };
-const Btn = ({ children, onClick, red, secondary, style }) => <button onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, border: secondary ? `1px solid ${B.g200}` : "none", background: secondary ? B.white : red ? B.red : B.blue, color: secondary ? B.g700 : B.white, cursor: "pointer", boxShadow: secondary ? "none" : B.sh, ...style }}>{children}</button>;
+const Btn = ({ children, onClick, red, secondary, style }) => <button data-hover="btn" onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, border: secondary ? `1px solid ${B.g200}` : "none", background: secondary ? B.white : red ? B.red : B.blue, color: secondary ? B.g700 : B.white, cursor: "pointer", boxShadow: secondary ? "none" : B.sh, ...style }}>{children}</button>;
 const PBar = ({ v, c }) => <div style={{ width: "100%", height: "6px", background: B.g100, borderRadius: "3px", overflow: "hidden" }}><div style={{ width: v + "%", height: "100%", background: c, borderRadius: "3px", transition: "width 0.8s ease" }} /></div>;
 const Dot = ({ c }) => <div style={{ width: 5, height: 5, borderRadius: "50%", background: c, flexShrink: 0 }} />;
 const Label = ({ children }) => <div style={{ fontSize: "11px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>{children}</div>;
@@ -152,13 +152,13 @@ const BroncoModel = ({ activeRisk, onSpotClick }) => {
       {id:15, pos:new THREE.Vector3(0.05, 0.85, 1.35),    color:"#16A34A"},   // Filters (top center)
       /* Underbody Front — transmission */
       {id:1,  pos:new THREE.Vector3(0, 0.28, 1.10),       color:"#B91C1C"},   // Transmission (center low front)
-      {id:8,  pos:new THREE.Vector3(0, 0.25, 0.50),       color:"#FFC72C"},   // Shift Calibration (center low mid)
+      {id:8,  pos:new THREE.Vector3(0, 0.25, 0.50),       color:"#FFFF00"},   // Shift Calibration (center low mid)
       /* Rear Underbody */
       {id:4,  pos:new THREE.Vector3(0, 0.28, -1.15),      color:"#EA580C"},   // Rear Drive Unit (center low rear)
-      {id:9,  pos:new THREE.Vector3(0.15, 0.30, -0.95),   color:"#FFC72C"},   // EVAP Purge (right rear)
+      {id:9,  pos:new THREE.Vector3(0.15, 0.30, -0.95),   color:"#FFFF00"},   // EVAP Purge (right rear)
       /* Wheel Areas */
-      {id:10, pos:new THREE.Vector3(-0.50, 0.32, 0.85),   color:"#FFC72C"},   // Suspension (left front wheel)
-      {id:11, pos:new THREE.Vector3(0.50, 0.30, 0.85),    color:"#FFC72C"},   // Brake Wear (right front wheel)
+      {id:10, pos:new THREE.Vector3(-0.50, 0.32, 0.85),   color:"#FFFF00"},   // Suspension (left front wheel)
+      {id:11, pos:new THREE.Vector3(0.50, 0.30, 0.85),    color:"#FFFF00"},   // Brake Wear (right front wheel)
       {id:13, pos:new THREE.Vector3(-0.38, 0.58, 1.45),   color:"#16A34A"},   // Driver Assist (left headlight)
       /* Cabin / Dash */
       {id:7,  pos:new THREE.Vector3(0.25, 0.90, -0.05),   color:"#EA580C"},   // BCM (right dash)
@@ -273,7 +273,7 @@ const BroncoModel = ({ activeRisk, onSpotClick }) => {
       <div style={{display:"flex",justifyContent:"center",gap:"14px",marginTop:"10px"}}>
         <div style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:B.g500}}><Dot c={B.crit}/> Critical</div>
         <div style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:B.g500}}><Dot c={B.orange}/> Major</div>
-        <div style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:B.g500}}><Dot c="#FFC72C"/> Moderate</div>
+        <div style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:B.g500}}><Dot c="#FFFF00"/> Moderate</div>
         <div style={{display:"flex",alignItems:"center",gap:"4px",fontSize:"10px",color:B.g500}}><Dot c={B.ok}/> Minor</div>
       </div>
       <div style={{textAlign:"center",marginTop:"6px",fontSize:"11px",color:B.g500}}>Drag to rotate • Click hotspots to inspect • Auto-rotates</div>
@@ -307,28 +307,79 @@ const risks = [
 ];
 
 /* ═══ PAGE 0: INTRO ═══ */
-const P0 = ({ go }) => (
-  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", textAlign: "center" }}>
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "36px" }}>
-      <div style={{ width: 48, height: 48, borderRadius: "12px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={24} c="#fff" /></div>
-      <span style={{ fontSize: "26px", fontWeight: 800, color: B.g900 }}>VeriBuy</span>
-    </div>
-    <h1 style={{ fontSize: "34px", fontWeight: 700, color: B.g900, margin: "0 0 14px", maxWidth: "580px", lineHeight: 1.2 }}>Pre-Purchase Vehicle Intelligence Platform</h1>
-    <p style={{ fontSize: "15px", color: B.g700, margin: "0 0 40px", maxWidth: "540px", lineHeight: 1.65 }}>VeriBuy combines VIN-specific risk intelligence, guided inspection capture, and live market pricing to produce a verified condition report — giving dealers a data-backed acquisition decision before money changes hands.</p>
-    <div style={{ display: "flex", gap: "16px", marginBottom: "40px", flexWrap: "wrap", justifyContent: "center" }}>
-      {[[Tri, "Guided Vehicle Inspection", "Structured inspection capture identifies issues that photos alone miss."],
-        [Bar, "Market-Based Pricing", "Live comps and condition-adjusted pricing from AutoTrader, Cars.com & wholesale."],
-        [Lock, "Verified Reports", "Blockchain-anchored evidence packages for every inspection."]].map(([Icon, t, d], i) => (
-        <Card key={i} style={{ flex: "1 1 0", minWidth: "180px", maxWidth: "240px", textAlign: "center" }}>
-          <div style={{ width: 36, height: 36, borderRadius: "10px", background: B.blueBg, border: `1px solid ${B.blueBd}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}><Icon s={18} c={B.blue} /></div>
-          <div style={{ fontSize: "14px", fontWeight: 700, color: B.g900, marginBottom: "6px" }}>{t}</div>
-          <div style={{ fontSize: "12px", color: B.g500, lineHeight: 1.55 }}>{d}</div>
+const P0 = ({ go }) => {
+  const [phase, setPhase] = useState(0);
+  const [dealer, setDealer] = useState("");
+  const [pass, setPass] = useState("");
+  const fullDealer = "premier_ford";
+  const fullPass = "••••••••••";
+  useEffect(() => {
+    if (phase === 0) { let i = 0; const iv = setInterval(() => { i++; setDealer(fullDealer.slice(0, i)); if (i >= fullDealer.length) { clearInterval(iv); setTimeout(() => setPhase(1), 400); } }, 70); return () => clearInterval(iv); }
+  }, [phase]);
+  useEffect(() => {
+    if (phase === 1) { let i = 0; const iv = setInterval(() => { i++; setPass(fullPass.slice(0, i)); if (i >= fullPass.length) { clearInterval(iv); setTimeout(() => setPhase(2), 500); } }, 90); return () => clearInterval(iv); }
+  }, [phase]);
+  useEffect(() => { if (phase === 2) { const t = setTimeout(() => setPhase(3), 1400); return () => clearTimeout(t); } }, [phase]);
+  if (phase < 3) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
+      <div style={{ width: "100%", maxWidth: "400px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px", justifyContent: "center" }}>
+          <div style={{ width: 44, height: 44, borderRadius: "12px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={22} c="#fff" /></div>
+          <div><div style={{ fontSize: "20px", fontWeight: 800, color: B.g900 }}>VeriBuy</div><div style={{ fontSize: "11px", color: B.g500, fontWeight: 500 }}>Dealer Portal</div></div>
+        </div>
+        <Card style={{ padding: "28px" }}>
+          {phase < 2 ? <>
+            <div style={{ marginBottom: "18px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Dealer ID</div>
+              <div style={{ display: "flex", alignItems: "center", padding: "12px 14px", borderRadius: "8px", background: B.g50, border: `1px solid ${phase === 0 ? B.blue : B.g200}`, minHeight: "44px" }}>
+                <span style={{ fontSize: "14px", fontWeight: 500, color: B.g900, fontFamily: "monospace" }}>{dealer}</span>
+                {phase === 0 && <span style={{ width: 2, height: 18, background: B.blue, marginLeft: 1, animation: "tc 1s step-end infinite" }} />}
+              </div>
+            </div>
+            <div style={{ marginBottom: "22px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Password</div>
+              <div style={{ display: "flex", alignItems: "center", padding: "12px 14px", borderRadius: "8px", background: B.g50, border: `1px solid ${phase === 1 ? B.blue : B.g200}`, minHeight: "44px" }}>
+                <span style={{ fontSize: "14px", fontWeight: 500, color: B.g900, letterSpacing: "2px" }}>{pass}</span>
+                {phase === 1 && <span style={{ width: 2, height: 18, background: B.blue, marginLeft: 1, animation: "tc 1s step-end infinite" }} />}
+              </div>
+            </div>
+            <div style={{ padding: "12px 24px", borderRadius: "10px", background: B.g200, color: B.g500, fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Sign In</div>
+          </> : <>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 0", animation: "fadeIn 0.3s ease" }}>
+              <div style={{ width: 32, height: 32, border: "3px solid " + B.blue, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: "16px" }} />
+              <div style={{ fontSize: "14px", fontWeight: 600, color: B.g700 }}>Authenticating...</div>
+              <div style={{ fontSize: "12px", color: B.g500, marginTop: "4px" }}>Premier Ford Dealership</div>
+            </div>
+          </>}
         </Card>
-      ))}
+        <div style={{ textAlign: "center", marginTop: "20px", fontSize: "11px", color: B.g500 }}>Secured with end-to-end encryption</div>
+      </div>
     </div>
-    <Btn red onClick={() => go(1)}>Begin Verification <Arr s={14} c="#fff" /></Btn>
-  </div>
-);
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", textAlign: "center", animation: "fadeIn 0.5s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+        <div style={{ width: 48, height: 48, borderRadius: "12px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={24} c="#fff" /></div>
+        <span style={{ fontSize: "26px", fontWeight: 800, color: B.g900 }}>VeriBuy</span>
+      </div>
+      <div style={{ fontSize: "13px", color: B.ok, fontWeight: 600, marginBottom: "28px", animation: "scaleIn 0.4s ease" }}>Welcome, Premier Ford Dealership</div>
+      <h1 style={{ fontSize: "32px", fontWeight: 700, color: B.g900, margin: "0 0 14px", maxWidth: "580px", lineHeight: 1.2 }}>Pre-Purchase Vehicle Intelligence</h1>
+      <p style={{ fontSize: "15px", color: B.g700, margin: "0 0 36px", maxWidth: "520px", lineHeight: 1.65 }}>VIN-specific risk intelligence, guided inspection capture, and live market pricing — producing verified condition reports for data-backed acquisition decisions.</p>
+      <div style={{ display: "flex", gap: "16px", marginBottom: "36px", flexWrap: "wrap", justifyContent: "center" }}>
+        {[[Tri, "Guided Inspection", "Structured capture identifies issues photos alone miss."],
+          [Bar, "Market Pricing", "Live comps from AutoTrader, Cars.com & wholesale."],
+          [Lock, "Verified Reports", "Blockchain-anchored evidence packages."]].map(([Icon, t, d], i) => (
+          <Card key={i} style={{ flex: "1 1 0", minWidth: "170px", maxWidth: "220px", textAlign: "center", animation: `scaleIn 0.4s ease ${i * 0.1}s both` }}>
+            <div style={{ width: 36, height: 36, borderRadius: "10px", background: B.blueBg, border: `1px solid ${B.blueBd}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}><Icon s={18} c={B.blue} /></div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: B.g900, marginBottom: "4px" }}>{t}</div>
+            <div style={{ fontSize: "11px", color: B.g500, lineHeight: 1.55 }}>{d}</div>
+          </Card>
+        ))}
+      </div>
+      <Btn red onClick={() => go(1)} style={{ animation: "scaleIn 0.4s ease 0.4s both" }}>Begin Verification <Arr s={14} c="#fff" /></Btn>
+    </div>
+  );
+};
 
 /* ═══ PAGE 1: VEHICLE ID ═══ */
 const P1 = () => {
@@ -462,39 +513,81 @@ const P2 = () => {
 };
 
 /* ═══ PAGE 3: GUIDED MEDIA CAPTURE ═══ */
-const captureItems = ["Front • Centered • 6 ft","Front 3/4 Driver","Driver Side","Rear 3/4 Driver","Rear Centered","Passenger Side","Engine Bay","Under Hood Label"];
+const captureItems = [
+  { label: "Front Centered", distance: "6 ft back, centered", angle: "Straight on, bumper height", coverage: "Full front fascia, both headlights visible" },
+  { label: "Front 3/4 Driver", distance: "8 ft back, 45° left", angle: "Slightly above bumper line", coverage: "Driver fender, front wheel, A-pillar" },
+  { label: "Driver Side", distance: "8 ft, perpendicular", angle: "Door handle height", coverage: "Full driver side, both wheels visible" },
+  { label: "Rear 3/4 Driver", distance: "8 ft back, 45° left-rear", angle: "Taillight height", coverage: "Rear quarter panel, rear wheel, bumper" },
+  { label: "Rear Centered", distance: "6 ft back, centered", angle: "Bumper height", coverage: "Full rear fascia, both taillights" },
+  { label: "Passenger Side", distance: "8 ft, perpendicular", angle: "Door handle height", coverage: "Full passenger side, both wheels visible" },
+  { label: "Engine Bay", distance: "2 ft above, centered", angle: "Top-down, slight tilt", coverage: "Full engine bay, all fluid reservoirs" },
+  { label: "Under Hood Label", distance: "1 ft, direct focus", angle: "Perpendicular to label", coverage: "VIN label, emissions sticker legible" },
+];
+/* Corner bracket for viewfinder */
+const Corner = ({ pos }) => {
+  const s = { position: "absolute", width: 20, height: 20, borderColor: B.blue, borderStyle: "solid", borderWidth: 0 };
+  if (pos === "tl") return <div style={{ ...s, top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 4 }} />;
+  if (pos === "tr") return <div style={{ ...s, top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 4 }} />;
+  if (pos === "bl") return <div style={{ ...s, bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 4 }} />;
+  return <div style={{ ...s, bottom: -1, right: -1, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 4 }} />;
+};
 const P3 = () => {
   const [captured, setCaptured] = useState(new Set());
-  const [modal, setModal] = useState(-1);
+  const [hudActive, setHudActive] = useState(false);
+  const [hudIdx, setHudIdx] = useState(0);
   const [aligning, setAligning] = useState(false);
-  const doCapture = (idx) => { setAligning(true); setTimeout(() => { setCaptured(prev => new Set([...prev, idx])); setAligning(false); setModal(-1); }, 1200); };
+  const [confirmed, setConfirmed] = useState(false);
+  const [score, setScore] = useState(0);
   const allDone = captured.size === captureItems.length;
+  const nextUncaptured = () => { for (let i = 0; i < captureItems.length; i++) if (!captured.has(i)) return i; return -1; };
+  const openHud = (idx) => { setHudIdx(idx >= 0 ? idx : nextUncaptured()); setHudActive(true); setAligning(false); setConfirmed(false); };
+  const doCapture = () => {
+    setAligning(true); setScore(0);
+    setTimeout(() => { setScore(Math.floor(Math.random() * 6) + 95); }, 800);
+    setTimeout(() => {
+      setAligning(false); setConfirmed(true);
+      setCaptured(prev => new Set([...prev, hudIdx]));
+      setTimeout(() => {
+        setConfirmed(false);
+        /* auto-advance or close */
+        let next = -1;
+        for (let i = hudIdx + 1; i < captureItems.length; i++) { if (!captured.has(i) && i !== hudIdx) { next = i; break; } }
+        if (next === -1) for (let i = 0; i < hudIdx; i++) { if (!captured.has(i) && i !== hudIdx) { next = i; break; } }
+        if (next >= 0) { setHudIdx(next); } else { setHudActive(false); }
+      }, 800);
+    }, 1400);
+  };
+  const item = captureItems[hudIdx];
   return (
     <div style={{ maxWidth: "720px", margin: "0 auto" }}>
       <h2 style={{ fontSize: "22px", fontWeight: 700, color: B.g900, margin: "0 0 4px" }}>Guided Media Capture</h2>
-      <p style={{ color: B.g500, fontSize: "14px", marginBottom: "20px" }}>Follow the framing guides for each shot. AI alignment scoring ensures usable evidence.</p>
+      <p style={{ color: B.g500, fontSize: "14px", marginBottom: "20px" }}>Structured, step-by-step capture ensures every inspection zone is documented with usable evidence.</p>
+      {/* Progress + Start button */}
       <Card style={{ marginBottom: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><Cam s={16} c={B.blue} /><span style={{ fontSize: "14px", fontWeight: 700 }}>Photo Capture</span></div>
           <SPill v={allDone ? "ok" : "red"}>{captured.size} / {captureItems.length} {allDone ? "Complete" : "Remaining"}</SPill>
         </div>
         <PBar v={(captured.size / captureItems.length) * 100} c={allDone ? B.ok : B.blue} />
-        <div style={{ fontSize: "12px", color: B.g500, marginTop: "8px" }}>Consistent framing enables AI damage detection and comp matching.</div>
+        {!allDone && <div style={{ marginTop: "12px", textAlign: "center" }}>
+          <Btn onClick={() => openHud(nextUncaptured())}><Cam s={16} c="#fff" /> {captured.size === 0 ? "Start Guided Capture" : "Resume Capture"}</Btn>
+        </div>}
       </Card>
+      {/* Grid overview */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
-        {captureItems.map((item, i) => {
+        {captureItems.map((ci, i) => {
           const done = captured.has(i);
           return (
-            <Card key={i} style={{ padding: "14px 16px", borderColor: done ? B.okBd : B.g200, cursor: "pointer" }} onClick={() => !done && setModal(i)}>
+            <Card key={i} style={{ padding: "14px 16px", borderColor: done ? B.okBd : B.g200, cursor: done ? "default" : "pointer", animation: `scaleIn 0.3s ease ${i * 0.05}s both` }} onClick={() => !done && openHud(i)}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: 40, height: 40, borderRadius: "8px", background: done ? B.okBg : B.g100, border: `1px solid ${done ? B.okBd : B.g200}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{done ? <Check s={18} c={B.ok} /> : <Cam s={18} c={B.g300} />}</div>
-                <div style={{ flex: 1 }}><div style={{ fontSize: "13px", fontWeight: 600, color: B.g900 }}>{item}</div></div>
-                {!done && <div style={{ padding: "4px 10px", borderRadius: "6px", background: B.blueBg, color: B.blue, fontSize: "11px", fontWeight: 600 }}>Capture</div>}
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: done ? B.ok : B.g100, border: `1px solid ${done ? B.okBd : B.g200}`, display: "flex", alignItems: "center", justifyContent: "center", color: done ? B.white : B.g500, fontSize: "13px", fontWeight: 700 }}>{done ? <Check s={16} c="#fff" /> : i + 1}</div>
+                <div style={{ flex: 1 }}><div style={{ fontSize: "13px", fontWeight: 600, color: B.g900 }}>{ci.label}</div><div style={{ fontSize: "11px", color: B.g500 }}>{ci.distance}</div></div>
               </div>
             </Card>
           );
         })}
       </div>
+      {/* Video/audio requirements */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "14px" }}>
         {[["Walkaround Video","60–90s"],["Engine Start Audio","15–30s"],["Interior Walkthrough","45–60s"]].map(([t,d],i) => (
           <Card key={i} style={{ padding: "14px", textAlign: "center" }}>
@@ -503,17 +596,57 @@ const P3 = () => {
           </Card>
         ))}
       </div>
-      {allDone && <Card style={{ padding: "14px 18px", background: B.okBg, borderColor: B.okBd }}><div style={{ display: "flex", alignItems: "center", gap: "8px" }}><Check s={16} c={B.ok} /><span style={{ fontSize: "14px", fontWeight: 600, color: B.ok }}>All captures complete — ready for analysis</span></div></Card>}
-      {modal >= 0 && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-        <div style={{ background: B.white, borderRadius: "16px", padding: "28px", width: "340px", textAlign: "center" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, marginBottom: "8px" }}>{captureItems[modal]}</h3>
-          <div style={{ width: "100%", height: "180px", background: B.g100, borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "16px", border: `2px dashed ${aligning ? B.ok : B.g300}` }}>
-            {aligning ? <div style={{ fontSize: "14px", color: B.ok, fontWeight: 600 }}>Aligning & scoring...</div> : <Cam s={40} c={B.g300} />}
+      {allDone && <Card style={{ padding: "14px 18px", background: B.okBg, borderColor: B.okBd, animation: "scaleIn 0.4s ease" }}><div style={{ display: "flex", alignItems: "center", gap: "8px" }}><Check s={16} c={B.ok} /><span style={{ fontSize: "14px", fontWeight: 600, color: B.ok }}>All captures complete — ready for analysis</span></div></Card>}
+      {/* ─── HUD OVERLAY ─── */}
+      {hudActive && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.3s ease" }}>
+        {/* Top bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px" }}>
+          <button onClick={() => setHudActive(false)} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, padding: "8px 16px", borderRadius: "8px", cursor: "pointer" }}>✕ Close</button>
+          <div style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>Shot {hudIdx + 1} of {captureItems.length}</div>
+          <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>{captured.size} captured</div>
+        </div>
+        {/* Viewfinder area */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
+          <div style={{ width: "100%", maxWidth: "480px", aspectRatio: "16/10", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: `2px solid ${confirmed ? B.ok : aligning ? B.ok : "rgba(255,255,255,0.15)"}`, position: "relative", overflow: "hidden", animation: !aligning && !confirmed ? "borderPulse 2s ease infinite" : "none", transition: "border-color 0.3s ease" }}>
+            <Corner pos="tl" /><Corner pos="tr" /><Corner pos="bl" /><Corner pos="br" />
+            {/* Crosshair */}
+            {!aligning && !confirmed && <>
+              <div style={{ position: "absolute", top: "50%", left: "20%", right: "20%", height: 1, background: "rgba(255,255,255,0.08)" }} />
+              <div style={{ position: "absolute", left: "50%", top: "20%", bottom: "20%", width: 1, background: "rgba(255,255,255,0.08)" }} />
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><Cam s={48} c="rgba(255,255,255,0.12)" /></div>
+            </>}
+            {/* Scan line */}
+            {aligning && <div style={{ position: "absolute", left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${B.ok}, transparent)`, animation: "scanLine 1.2s ease infinite" }} />}
+            {aligning && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 28, height: 28, border: "3px solid " + B.ok, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: "12px" }} />
+              <div style={{ fontSize: "14px", fontWeight: 600, color: B.ok }}>Analyzing frame alignment...</div>
+              {score > 0 && <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "6px", animation: "fadeIn 0.3s ease" }}>Quality score: {score}/100</div>}
+            </div>}
+            {/* Confirmed */}
+            {confirmed && <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", animation: "scaleIn 0.3s ease" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: B.ok, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "12px" }}><Check s={28} c="#fff" /></div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: B.ok }}>Captured</div>
+              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "4px" }}>Score: {score}/100</div>
+            </div>}
           </div>
-          <div style={{ display: "flex", gap: "10px" }}>
-            <Btn secondary onClick={() => setModal(-1)} style={{ flex: 1 }}>Cancel</Btn>
-            <Btn onClick={() => doCapture(modal)} style={{ flex: 1 }}>Simulate Capture</Btn>
+          {/* Zone info */}
+          <div style={{ textAlign: "center", marginTop: "20px", maxWidth: "480px" }}>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: "#fff", marginBottom: "12px" }}>{item.label}</div>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+              {[["Distance", item.distance], ["Angle", item.angle], ["Coverage", item.coverage]].map(([k, v], i) => (
+                <div key={i} style={{ padding: "6px 12px", borderRadius: "6px", background: "rgba(255,255,255,0.08)", fontSize: "11px" }}>
+                  <span style={{ color: "rgba(255,255,255,0.4)", fontWeight: 600 }}>{k}: </span><span style={{ color: "#fff" }}>{v}</span>
+                </div>
+              ))}
+            </div>
           </div>
+        </div>
+        {/* Bottom bar */}
+        <div style={{ padding: "20px 24px 28px", display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
+          <PBar v={((captured.size + (confirmed ? 1 : 0)) / captureItems.length) * 100} c={B.ok} />
+          {!aligning && !confirmed && <button onClick={doCapture} style={{ width: 64, height: 64, borderRadius: "50%", border: "4px solid rgba(255,255,255,0.9)", background: "rgba(255,255,255,0.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(255,255,255,0.9)" }} />
+          </button>}
         </div>
       </div>}
     </div>
@@ -725,40 +858,120 @@ const P5 = () => (
 );
 
 /* ═══ PAGE 6: REPORT ═══ */
-const P6 = () => (
-  <div style={{ maxWidth: "680px", margin: "0 auto" }}>
-    <h2 style={{ fontSize: "22px", fontWeight: 700, color: B.g900, margin: "0 0 4px" }}>Verified Report</h2>
-    <p style={{ color: B.g500, fontSize: "14px", marginBottom: "20px" }}>Inspection evidence package with tamper-proof verification.</p>
-    <Card style={{ marginBottom: "16px" }}>
-      <div style={{ display: "flex", gap: "20px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ width: 48, height: 48, borderRadius: "12px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={24} c="#fff" /></div>
-        <div style={{ flex: 1 }}><div style={{ fontSize: "18px", fontWeight: 700 }}>2024 Ford Bronco Sport</div><div style={{ fontSize: "13px", color: B.g500 }}>VIN: 3FMCR9B60RRE18247 • 21,340 mi</div></div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ padding: "10px 20px", borderRadius: "10px", background: B.ynBg, marginBottom: "6px" }}><div style={{ fontSize: "28px", fontWeight: 800, color: B.ynT }}>64</div><div style={{ fontSize: "10px", fontWeight: 600, color: B.ynT }}>Score</div></div>
-          <div style={{ fontSize: "10px", fontWeight: 600, color: B.ok, background: B.okBg, border: `1px solid ${B.okBd}`, padding: "3px 8px", borderRadius: "4px" }}>High Confidence</div>
+const P6 = () => {
+  const [rev, setRev] = useState(0);
+  useEffect(() => { let i = 0; const iv = setInterval(() => { i++; setRev(i); if (i >= 7) clearInterval(iv); }, 150); return () => clearInterval(iv); }, []);
+  const rptDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const S = (n, d) => rev >= n ? { animation: `fadeIn 0.4s ease`, opacity: 1 } : { opacity: 0 };
+  return (
+    <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+      {/* PDF Document */}
+      <div style={{ background: B.white, borderRadius: "4px", boxShadow: "0 4px 24px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)", padding: "48px 48px 40px", position: "relative", overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", ...S(0) }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: 36, height: 36, borderRadius: "8px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={18} c="#fff" /></div>
+            <div><div style={{ fontSize: "14px", fontWeight: 800, color: B.g900 }}>VeriBuy</div><div style={{ fontSize: "10px", color: B.g500 }}>Verified Condition Report</div></div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: "16px", fontWeight: 800, color: B.g900, letterSpacing: "0.5px" }}>VEHICLE CONDITION REPORT</div>
+            <div style={{ fontSize: "10px", color: B.g500, marginTop: "2px" }}>Report #VB-2024-18247 • {rptDate}</div>
+          </div>
+        </div>
+        <div style={{ height: 2, background: B.blue, marginBottom: "20px", ...S(0) }} />
+
+        {/* Hero Image */}
+        <div style={{ width: "100%", height: "200px", borderRadius: "8px", overflow: "hidden", marginBottom: "20px", background: `linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)`, position: "relative", ...S(1) }}>
+          <img src="https://images.unsplash.com/photo-1669725621246-6c5e01c2da1a?w=800&q=80" alt="2024 Ford Bronco Sport" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.target.style.display = "none"; }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 18px", background: "linear-gradient(transparent, rgba(0,0,0,0.7))" }}>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "#fff" }}>2024 Ford Bronco Sport Base AWD</div>
+            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.8)" }}>VIN: 3FMCR9B60RRE18247 | 21,340 mi | Portland, OR</div>
+          </div>
+        </div>
+
+        {/* Vehicle Summary */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "20px", ...S(2) }}>
+          {[["Year / Make / Model", "2024 Ford Bronco Sport"], ["Trim / Body / Drive", "Base • 4D SUV • AWD"], ["Mileage / MSRP", "21,340 mi • $29,395"]].map(([k, v], i) => (
+            <div key={i} style={{ padding: "10px 12px", background: B.g50, borderRadius: "6px" }}>
+              <div style={{ fontSize: "10px", color: B.g500, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: "3px" }}>{k}</div>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: B.g900 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Condition Assessment */}
+        <div style={{ marginBottom: "20px", ...S(3) }}>
+          <div style={{ fontSize: "12px", fontWeight: 700, color: B.g900, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px", borderBottom: `1px solid ${B.g200}`, paddingBottom: "6px" }}>Condition Assessment</div>
+          <div style={{ display: "flex", gap: "20px", alignItems: "center", marginBottom: "14px" }}>
+            <div style={{ textAlign: "center", padding: "14px 22px", borderRadius: "10px", background: B.ynBg, border: `1px solid ${B.ynBd}` }}>
+              <div style={{ fontSize: "36px", fontWeight: 800, color: B.ynT }}>64</div>
+              <div style={{ fontSize: "10px", fontWeight: 600, color: B.ynT }}>Condition Score</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              {[["Structural / Drivetrain", 42, B.red], ["Cosmetic / Interior", 78, B.ok], ["Electronics / Software", 65, B.blue]].map(([l, v, c], i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "11px", color: B.g700, width: "130px" }}>{l}</div>
+                  <div style={{ flex: 1 }}><PBar v={v} c={c} /></div>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: c, width: "40px", textAlign: "right" }}>{v}/100</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Findings table */}
+          <div style={{ border: `1px solid ${B.g200}`, borderRadius: "8px", overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "0", background: B.g50, padding: "8px 12px", fontSize: "10px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.3px" }}>
+              <div>Severity</div><div>Finding</div><div style={{ textAlign: "right" }}>Est. Repair</div>
+            </div>
+            {findings.map((f, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", gap: "0", padding: "10px 12px", borderTop: `1px solid ${B.g100}`, alignItems: "center" }}>
+                <div style={{ marginRight: "10px" }}><SevPill sev={f.sev} /></div>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: B.g900 }}>{f.t}</div>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: B.red, textAlign: "right" }}>{f.repair}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Pricing Evaluation */}
+        <div style={{ marginBottom: "20px", ...S(4) }}>
+          <div style={{ fontSize: "12px", fontWeight: 700, color: B.g900, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px", borderBottom: `1px solid ${B.g200}`, paddingBottom: "6px" }}>Pricing Evaluation</div>
+          {[["Market wholesale baseline (clean, 21K mi)", "$20,100", B.g900], ["Head gasket repair (est.)", "−$3,500", B.red], ["Fuel injector repair (est.)", "−$850", B.red], ["Seat bolster repair (est.)", "−$275", B.red], ["Condition score adjustment (64/100)", "−$200", B.g500]].map(([l, v, c], i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: i < 4 ? `1px solid ${B.g100}` : "none", fontSize: "12px" }}>
+              <span style={{ color: B.g700 }}>{l}</span><span style={{ fontWeight: 600, color: c }}>{v}</span>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: `2px solid ${B.blue}`, marginTop: "4px", fontSize: "13px" }}>
+            <span style={{ fontWeight: 700, color: B.g900 }}>Adjusted Acquisition Value</span>
+            <span style={{ fontWeight: 700, color: B.red }}>$15,275</span>
+          </div>
+        </div>
+
+        {/* Acquisition Recommendation */}
+        <div style={{ marginBottom: "20px", ...S(5) }}>
+          <div style={{ padding: "20px", borderRadius: "10px", background: B.g50, border: `1px solid ${B.g200}`, textAlign: "center" }}>
+            <div style={{ fontSize: "10px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Recommended Max Acquisition</div>
+            <div style={{ fontSize: "38px", fontWeight: 800, color: B.g900, letterSpacing: "-1px" }}>$15,275</div>
+            <div style={{ width: 50, height: 2, background: B.red, margin: "6px auto 10px" }} />
+            <div style={{ fontSize: "11px", color: B.g500, marginBottom: "12px" }}>Based on $24,100 avg retail minus $4,825 estimated reconditioning.</div>
+            <div style={{ padding: "10px 14px", borderRadius: "8px", background: B.redBg, border: `1px solid ${B.redBd}`, fontSize: "12px", color: B.red, fontWeight: 600, display: "inline-block" }}>High-risk acquisition above $15,275 — head gasket and fuel injector issues require resolution.</div>
+          </div>
+        </div>
+
+        {/* Blockchain verification */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 14px", fontSize: "10px", color: B.g500, background: B.g50, borderRadius: "6px", borderTop: `1px solid ${B.g200}`, ...S(6) }}>
+          <Lock s={12} c={B.g300} />
+          <div>Report hash anchored to blockchain — tamper-evident and independently verifiable. Hash: 0xf8c2...9a41 • {rptDate}</div>
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "16px" }}>
-        {[["Max Acquisition","$15,275",B.red],["Est. Recon","$4,825",B.red],["Avg Retail (Clean)","$24,100",B.ok]].map(([k,v,c],i) => (
-          <div key={i} style={{ padding: "12px", borderRadius: "8px", background: B.g50, textAlign: "center" }}><div style={{ fontSize: "11px", color: B.g500, marginBottom: "4px" }}>{k}</div><div style={{ fontSize: "16px", fontWeight: 700, color: c }}>{v}</div></div>
-        ))}
+
+      {/* Action buttons (outside the document) */}
+      <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "20px" }}>
+        <Btn><DL s={16} c="#fff" /> Download PDF</Btn>
+        <Btn secondary><FileIc s={16} c={B.g500} /> Share Report</Btn>
       </div>
-      <Card redBlue style={{ padding: "18px", marginBottom: "16px" }}>
-        <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "10px" }}>Decision Summary</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", fontSize: "13px" }}>
-          <div style={{ color: B.g500 }}>Recommended max acquisition</div><div style={{ fontWeight: 600, color: B.g900 }}>$15,275</div>
-          <div style={{ color: B.g500 }}>Estimated recon</div><div style={{ fontWeight: 600, color: B.red }}>$4,825</div>
-          <div style={{ color: B.g500 }}>Key risks</div><div style={{ fontWeight: 600 }}>2 Critical, 1 High, 1 Moderate</div>
-          <div style={{ color: B.g500 }}>External docs</div><div style={{ fontWeight: 600, color: B.ok }}>Vehicle History Added</div>
-          <div style={{ color: B.g500 }}>Confidence</div><div style={{ fontWeight: 600, color: B.ok }}>High — corroborated by history</div>
-        </div>
-        <div style={{ marginTop: "12px", padding: "10px 14px", borderRadius: "8px", background: B.redBg, border: `1px solid ${B.redBd}`, fontSize: "13px", color: B.red, fontWeight: 600 }}>⚠ Head gasket and fuel injector issues make this a high-risk acquisition above $15,275.</div>
-      </Card>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px 16px", fontSize: "12px", color: B.g500, background: B.g50, borderRadius: "8px", marginBottom: "16px" }}><Lock s={14} c={B.g300} /> Report hash anchored to blockchain — tamper-evident and independently verifiable.</div>
-      <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}><Btn><DL s={16} c="#fff" /> Download PDF</Btn><Btn secondary><FileIc s={16} c={B.g500} /> Share Report</Btn></div>
-    </Card>
-  </div>
-);
+    </div>
+  );
+};
 
 /* ═══ PAGE 7: FINAL ═══ */
 const P7 = ({ go }) => (
@@ -776,11 +989,14 @@ const STEPS = [P0, P1, P2, P3, P4, P5, P6, P7];
 
 export default function App() {
   const [step, setStep] = useState(0);
-  const go = useCallback((s) => setStep(s), []);
+  const prevRef = useRef(0);
+  const dir = step >= prevRef.current ? "forward" : "back";
+  const go = useCallback((s) => { prevRef.current = step; setStep(s); }, [step]);
+  const nav = useCallback((s) => { prevRef.current = step; setStep(s); }, [step]);
   const Cur = STEPS[step];
   return (
     <div style={{ width: "100vw", height: "100vh", background: B.pageBg, fontFamily: "'Inter',system-ui,sans-serif", color: B.g900, display: "flex", flexDirection: "column" }}>
-      <style>{`@keyframes tc{50%{opacity:0}} @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.6)}} @keyframes spin{to{transform:rotate(360deg)}} * {box-sizing:border-box;margin:0;padding:0}`}</style>
+      <style>{`@keyframes tc{50%{opacity:0}} @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.6)}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0}to{opacity:1}} @keyframes slideInRight{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}} @keyframes slideInLeft{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:translateX(0)}} @keyframes scaleIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}} @keyframes scanLine{0%{top:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}} @keyframes borderPulse{0%,100%{border-color:rgba(45,17,173,0.3)}50%{border-color:rgba(45,17,173,1)}} @keyframes shimmer{from{background-position:-200% 0}to{background-position:200% 0}} @keyframes countUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}} [data-hover="card"]{transition:all 0.2s ease} [data-hover="card"]:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.1) !important} [data-hover="btn"]{transition:all 0.15s ease} [data-hover="btn"]:hover{transform:translateY(-1px);filter:brightness(1.08)} * {box-sizing:border-box;margin:0;padding:0}`}</style>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", background: B.white, borderBottom: `1px solid ${B.g200}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ width: 30, height: 30, borderRadius: "8px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={16} c="#fff" /></div>
@@ -790,16 +1006,16 @@ export default function App() {
         </div>
         {step > 0 && step < 7 && <nav style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           {labels.slice(1, 7).map((l, i) => (
-            <button key={i} onClick={() => setStep(i + 1)} style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 500, border: "none", background: step === i + 1 ? B.blueBg : "transparent", color: step === i + 1 ? B.blue : B.g500, cursor: "pointer" }}>{l}</button>
+            <button key={i} onClick={() => nav(i + 1)} style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 500, border: "none", background: step === i + 1 ? B.blueBg : "transparent", color: step === i + 1 ? B.blue : B.g500, cursor: "pointer" }}>{l}</button>
           ))}
         </nav>}
         <div style={{ fontSize: "12px", color: B.g500 }}>{step > 0 && step < 7 ? `Step ${step} of 6` : ""}</div>
       </header>
-      <main style={{ flex: 1, overflow: "auto", padding: "28px 32px" }}><Cur go={go} /></main>
+      <main style={{ flex: 1, overflow: "auto", padding: "28px 32px" }}><div key={step} style={{ animation: `${dir === "forward" ? "slideInRight" : "slideInLeft"} 0.35s ease` }}><Cur go={go} /></div></main>
       {step > 0 && step < 7 && <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", background: B.white, borderTop: `1px solid ${B.g200}`, flexShrink: 0 }}>
-        <Btn secondary onClick={() => setStep(Math.max(0, step - 1))}><ChevR s={14} c={B.g500} rot={180} /> Back</Btn>
+        <Btn secondary onClick={() => nav(Math.max(0, step - 1))}><ChevR s={14} c={B.g500} rot={180} /> Back</Btn>
         <span style={{ fontSize: "12px", color: B.g500 }}>Workflow • Step {step} of 6</span>
-        {step < 6 ? <Btn onClick={() => setStep(step + 1)}>Continue <Arr s={14} c="#fff" /></Btn> : step === 6 ? <Btn red onClick={() => setStep(7)}>Complete <Check s={14} c="#fff" /></Btn> : null}
+        {step < 6 ? <Btn onClick={() => nav(step + 1)}>Continue <Arr s={14} c="#fff" /></Btn> : step === 6 ? <Btn red onClick={() => nav(7)}>Complete <Check s={14} c="#fff" /></Btn> : null}
       </footer>}
     </div>
   );
