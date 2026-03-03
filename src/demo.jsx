@@ -1,14 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as THREE from "three";
+import logoSrc from "./assets/logo.png";
 
 /* ═══ TOKENS ═══ */
 const B = {
-  blue: "#2d11ad", blueH: "#220d8a", blueBg: "#EEEAFC", blueBd: "#C7BFEE",
+  brand: "#5C0099", brandH: "#46006d", brandBg: "#F3ECFA", brandBd: "#D4BFE8",
+  brandGrad: "linear-gradient(135deg, #ff4289 0%, #be00a4 50%, #5C0099 100%)",
   red: "#F83C50", redBg: "#FEF1F2", redBd: "#FCD5D9",
   crit: "#B91C1C", critBg: "#FEF2F2", critBd: "#FECACA",
   orange: "#EA580C", orangeBg: "#FFF7ED", orangeBd: "#FED7AA",
   g900: "#111827", g700: "#374151", g500: "#6B7280", g300: "#D1D5DB", g200: "#E5E7EB", g100: "#F3F4F6", g50: "#F9FAFB",
-  white: "#FFFFFF", pageBg: "#EAEBEF", black: "#0B0B0C",
+  white: "#FFFFFF", pageBg: "#EEEAF4", black: "#0B0B0C",
   ok: "#16A34A", okBg: "#F0FDF4", okBd: "#BBF7D0",
   yn: "#FFFF00", ynBg: "#FEFCBF", ynBd: "#FDE047", ynT: "#0B0B0C",
   sh: "0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)",
@@ -35,10 +37,10 @@ const ChevR = p => <I s={p.s} c={p.c} style={{transform:p.rot?`rotate(${p.rot}de
 const HistIc = p => <I s={p.s} c={p.c} d={<><circle cx={12} cy={12} r={10}/><polyline points="12 6 12 12 16 14"/></>}/>;
 
 /* ═══ SHARED UI ═══ */
-const Card = ({ children, style, redBlue }) => <div data-hover="card" style={{ background: B.white, border: `1px solid ${redBlue ? B.blueBd : B.g200}`, borderRadius: "14px", padding: "20px", boxShadow: B.sh, ...style }}>{children}</div>;
+const Card = ({ children, style, accent }) => <div data-hover="card" style={{ background: B.white, border: `1px solid ${accent ? B.brandBd : B.g200}`, borderRadius: "14px", padding: "20px", boxShadow: B.sh, ...style }}>{children}</div>;
 const SevPill = ({ sev }) => { const m = { Critical: [B.critBg, B.crit, B.critBd], Major: [B.orangeBg, B.orange, B.orangeBd], Moderate: [B.ynBg, B.ynT, B.ynBd], Minor: [B.okBg, B.ok, B.okBd], High: [B.orangeBg, B.orange, B.orangeBd] }; const [bg, c, bd] = m[sev] || m.Moderate; return <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", background: bg, color: c, border: `1px solid ${bd}` }}>{sev}</span>; };
 const SPill = ({ children, v }) => { const m = { ok: [B.okBg, B.ok, B.okBd], yn: [B.ynBg, B.ynT, B.ynBd], red: [B.redBg, B.red, B.redBd] }; const [bg, c, bd] = m[v] || m.yn; return <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", background: bg, color: c, border: `1px solid ${bd}` }}>{children}</span>; };
-const Btn = ({ children, onClick, red, secondary, style }) => <button data-hover="btn" onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, border: secondary ? `1px solid ${B.g200}` : "none", background: secondary ? B.white : red ? B.red : B.blue, color: secondary ? B.g700 : B.white, cursor: "pointer", boxShadow: secondary ? "none" : B.sh, ...style }}>{children}</button>;
+const Btn = ({ children, onClick, primary, secondary, style }) => <button data-hover="btn" onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "12px 24px", borderRadius: "10px", fontSize: "14px", fontWeight: 600, border: secondary ? `1px solid ${B.g200}` : "none", background: secondary ? B.white : primary ? B.brandGrad : B.brand, color: secondary ? B.g700 : B.white, cursor: "pointer", boxShadow: secondary ? "none" : primary ? "0 2px 8px rgba(92,0,153,0.25),0 1px 2px rgba(0,0,0,.04)" : B.sh, ...style }}>{children}</button>;
 const PBar = ({ v, c }) => <div style={{ width: "100%", height: "6px", background: B.g100, borderRadius: "3px", overflow: "hidden" }}><div style={{ width: v + "%", height: "100%", background: c, borderRadius: "3px", transition: "width 0.8s ease" }} /></div>;
 const Dot = ({ c }) => <div style={{ width: 5, height: 5, borderRadius: "50%", background: c, flexShrink: 0 }} />;
 const Label = ({ children }) => <div style={{ fontSize: "11px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>{children}</div>;
@@ -256,9 +258,9 @@ const BroncoModel = ({ activeRisk, onSpotClick }) => {
 
   return (
     <div style={{position:"relative"}}>
-      <div ref={mountRef} style={{width:"100%",height:"440px",borderRadius:"10px",overflow:"hidden",background:"linear-gradient(180deg,#f6f7f9 0%,#eef0f3 35%,#e6e8ec 100%)",cursor:"grab"}}/>
+      <div ref={mountRef} style={{width:"100%",height:"440px",borderRadius:"10px",overflow:"hidden",background:"linear-gradient(180deg,#f5f2f9 0%,#ede8f3 35%,#e4dff0 100%)",cursor:"grab"}}/>
       {loading && <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",fontSize:"13px",color:B.g500,display:"flex",alignItems:"center",gap:"8px"}}>
-        <div style={{width:16,height:16,border:"2px solid "+B.g200,borderTopColor:B.blue,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
+        <div style={{width:16,height:16,border:"2px solid "+B.g200,borderTopColor:B.brand,borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
         Loading 3D model…
       </div>}
       {!loading && hsp.filter(h=>h.visible && activeRisk===h.id).map(h=>(
@@ -324,29 +326,29 @@ const P0 = ({ go }) => {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
       <div style={{ width: "100%", maxWidth: "400px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px", justifyContent: "center" }}>
-          <div style={{ width: 44, height: 44, borderRadius: "12px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={22} c="#fff" /></div>
+          <img src={logoSrc} alt="VeriBuy" style={{ width: 44, height: 44, borderRadius: "12px", objectFit: "contain" }} />
           <div><div style={{ fontSize: "20px", fontWeight: 800, color: B.g900 }}>VeriBuy</div><div style={{ fontSize: "11px", color: B.g500, fontWeight: 500 }}>Dealer Portal</div></div>
         </div>
         <Card style={{ padding: "28px" }}>
           {phase < 2 ? <>
             <div style={{ marginBottom: "18px" }}>
               <div style={{ fontSize: "11px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Dealer ID</div>
-              <div style={{ display: "flex", alignItems: "center", padding: "12px 14px", borderRadius: "8px", background: B.g50, border: `1px solid ${phase === 0 ? B.blue : B.g200}`, minHeight: "44px" }}>
+              <div style={{ display: "flex", alignItems: "center", padding: "12px 14px", borderRadius: "8px", background: B.g50, border: `1px solid ${phase === 0 ? B.brand : B.g200}`, minHeight: "44px" }}>
                 <span style={{ fontSize: "14px", fontWeight: 500, color: B.g900, fontFamily: "monospace" }}>{dealer}</span>
-                {phase === 0 && <span style={{ width: 2, height: 18, background: B.blue, marginLeft: 1, animation: "tc 1s step-end infinite" }} />}
+                {phase === 0 && <span style={{ width: 2, height: 18, background: B.brand, marginLeft: 1, animation: "tc 1s step-end infinite" }} />}
               </div>
             </div>
             <div style={{ marginBottom: "22px" }}>
               <div style={{ fontSize: "11px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>Password</div>
-              <div style={{ display: "flex", alignItems: "center", padding: "12px 14px", borderRadius: "8px", background: B.g50, border: `1px solid ${phase === 1 ? B.blue : B.g200}`, minHeight: "44px" }}>
+              <div style={{ display: "flex", alignItems: "center", padding: "12px 14px", borderRadius: "8px", background: B.g50, border: `1px solid ${phase === 1 ? B.brand : B.g200}`, minHeight: "44px" }}>
                 <span style={{ fontSize: "14px", fontWeight: 500, color: B.g900, letterSpacing: "2px" }}>{pass}</span>
-                {phase === 1 && <span style={{ width: 2, height: 18, background: B.blue, marginLeft: 1, animation: "tc 1s step-end infinite" }} />}
+                {phase === 1 && <span style={{ width: 2, height: 18, background: B.brand, marginLeft: 1, animation: "tc 1s step-end infinite" }} />}
               </div>
             </div>
             <div style={{ padding: "12px 24px", borderRadius: "10px", background: B.g200, color: B.g500, fontSize: "14px", fontWeight: 600, textAlign: "center" }}>Sign In</div>
           </> : <>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 0", animation: "fadeIn 0.3s ease" }}>
-              <div style={{ width: 32, height: 32, border: "3px solid " + B.blue, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: "16px" }} />
+              <div style={{ width: 32, height: 32, border: "3px solid " + B.brand, borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", marginBottom: "16px" }} />
               <div style={{ fontSize: "14px", fontWeight: 600, color: B.g700 }}>Authenticating...</div>
               <div style={{ fontSize: "12px", color: B.g500, marginTop: "4px" }}>Premier Ford Dealership</div>
             </div>
@@ -359,7 +361,7 @@ const P0 = ({ go }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", textAlign: "center", animation: "fadeIn 0.5s ease" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-        <div style={{ width: 48, height: 48, borderRadius: "12px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={24} c="#fff" /></div>
+        <img src={logoSrc} alt="VeriBuy" style={{ width: 48, height: 48, borderRadius: "12px", objectFit: "contain" }} />
         <span style={{ fontSize: "26px", fontWeight: 800, color: B.g900 }}>VeriBuy</span>
       </div>
       <div style={{ fontSize: "13px", color: B.ok, fontWeight: 600, marginBottom: "28px", animation: "scaleIn 0.4s ease" }}>Welcome, Premier Ford Dealership</div>
@@ -370,13 +372,13 @@ const P0 = ({ go }) => {
           [Bar, "Market Pricing", "Live comps from AutoTrader, Cars.com & wholesale."],
           [Lock, "Verified Reports", "Blockchain-anchored evidence packages."]].map(([Icon, t, d], i) => (
           <Card key={i} style={{ flex: "1 1 0", minWidth: "170px", maxWidth: "220px", textAlign: "center", animation: `scaleIn 0.4s ease ${i * 0.1}s both` }}>
-            <div style={{ width: 36, height: 36, borderRadius: "10px", background: B.blueBg, border: `1px solid ${B.blueBd}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}><Icon s={18} c={B.blue} /></div>
+            <div style={{ width: 36, height: 36, borderRadius: "10px", background: B.brandBg, border: `1px solid ${B.brandBd}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}><Icon s={18} c={B.brand} /></div>
             <div style={{ fontSize: "13px", fontWeight: 700, color: B.g900, marginBottom: "4px" }}>{t}</div>
             <div style={{ fontSize: "11px", color: B.g500, lineHeight: 1.55 }}>{d}</div>
           </Card>
         ))}
       </div>
-      <Btn red onClick={() => go(1)} style={{ animation: "scaleIn 0.4s ease 0.4s both" }}>Begin Verification <Arr s={14} c="#fff" /></Btn>
+      <Btn primary onClick={() => go(1)} style={{ animation: "scaleIn 0.4s ease 0.4s both" }}>Begin Verification <Arr s={14} c="#fff" /></Btn>
     </div>
   );
 };
@@ -405,8 +407,8 @@ const P1 = () => {
       <Card>
         <Label>VIN Number</Label>
         <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
-          <div style={{ flex: 1, padding: "12px 16px", background: B.g50, border: `1px solid ${B.g200}`, borderRadius: "10px", fontFamily: "monospace", fontSize: "15px", fontWeight: 600, color: B.g900, letterSpacing: "1px" }}>{typed}<span style={{ animation: "tc 1s step-end infinite", color: B.blue }}>|</span></div>
-          <div style={{ padding: "12px 20px", borderRadius: "10px", background: ph >= 1 ? B.ok : B.blue, color: "#fff", fontWeight: 600, fontSize: "14px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>{ph >= 1 ? <><Check s={16} c="#fff" /> Decoded</> : <><Srch s={16} c="#fff" /> Decode</>}</div>
+          <div style={{ flex: 1, padding: "12px 16px", background: B.g50, border: `1px solid ${B.g200}`, borderRadius: "10px", fontFamily: "monospace", fontSize: "15px", fontWeight: 600, color: B.g900, letterSpacing: "1px" }}>{typed}<span style={{ animation: "tc 1s step-end infinite", color: B.brand }}>|</span></div>
+          <div style={{ padding: "12px 20px", borderRadius: "10px", background: ph >= 1 ? B.ok : B.brand, color: "#fff", fontWeight: 600, fontSize: "14px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>{ph >= 1 ? <><Check s={16} c="#fff" /> Decoded</> : <><Srch s={16} c="#fff" /> Decode</>}</div>
         </div>
         {ph >= 1 && <div style={{ animation: "su 0.4s ease" }}>
           <div style={{ padding: "20px", borderRadius: "10px", background: B.g50, border: `1px solid ${B.g200}` }}>
@@ -525,7 +527,7 @@ const captureItems = [
 ];
 /* Corner bracket for viewfinder */
 const Corner = ({ pos }) => {
-  const s = { position: "absolute", width: 20, height: 20, borderColor: B.blue, borderStyle: "solid", borderWidth: 0 };
+  const s = { position: "absolute", width: 20, height: 20, borderColor: B.brand, borderStyle: "solid", borderWidth: 0 };
   if (pos === "tl") return <div style={{ ...s, top: -1, left: -1, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 4 }} />;
   if (pos === "tr") return <div style={{ ...s, top: -1, right: -1, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 4 }} />;
   if (pos === "bl") return <div style={{ ...s, bottom: -1, left: -1, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 4 }} />;
@@ -565,10 +567,10 @@ const P3 = () => {
       {/* Progress + Start button */}
       <Card style={{ marginBottom: "14px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><Cam s={16} c={B.blue} /><span style={{ fontSize: "14px", fontWeight: 700 }}>Photo Capture</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><Cam s={16} c={B.brand} /><span style={{ fontSize: "14px", fontWeight: 700 }}>Photo Capture</span></div>
           <SPill v={allDone ? "ok" : "red"}>{captured.size} / {captureItems.length} {allDone ? "Complete" : "Remaining"}</SPill>
         </div>
-        <PBar v={(captured.size / captureItems.length) * 100} c={allDone ? B.ok : B.blue} />
+        <PBar v={(captured.size / captureItems.length) * 100} c={allDone ? B.ok : B.brand} />
         {!allDone && <div style={{ marginTop: "12px", textAlign: "center" }}>
           <Btn onClick={() => openHud(nextUncaptured())}><Cam s={16} c="#fff" /> {captured.size === 0 ? "Start Guided Capture" : "Resume Capture"}</Btn>
         </div>}
@@ -686,7 +688,7 @@ const P4 = () => {
             <div style={{ fontSize: "11px", fontWeight: 600, color: sc }}>Condition Score</div>
           </div>
           <div style={{ flex: 1 }}>
-            {[["Structural / Drivetrain",42,B.red],["Cosmetic / Interior",78,B.ok],["Electronics / Software",65,B.blue]].map(([l,v,c],i) => (
+            {[["Structural / Drivetrain",42,B.red],["Cosmetic / Interior",78,B.ok],["Electronics / Software",65,B.brand]].map(([l,v,c],i) => (
               <div key={i} style={{ marginBottom: "10px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "4px" }}><span style={{ color: B.g700 }}>{l}</span><span style={{ fontWeight: 600, color: c }}>{v}/100</span></div>
                 <PBar v={v} c={c} />
@@ -695,7 +697,7 @@ const P4 = () => {
           </div>
         </div>
         <div style={{ marginTop: "14px", padding: "10px 14px", borderRadius: "8px", background: B.g50, border: `1px solid ${B.g200}`, display: "flex", alignItems: "center", gap: "8px" }}>
-          <Shield s={14} c={B.blue} />
+          <Shield s={14} c={B.brand} />
           <span style={{ fontSize: "12px", color: B.g700 }}>Score derived from physical inspection and VeriBuy AI analysis.</span>
           {histAdded && <span style={{ marginLeft: "auto", fontSize: "11px", fontWeight: 600, color: B.ok, background: B.okBg, border: `1px solid ${B.okBd}`, padding: "2px 8px", borderRadius: "4px" }}>High Confidence</span>}
         </div>
@@ -732,7 +734,7 @@ const P4 = () => {
         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
           <span style={{ fontSize: "11px", fontWeight: 600, color: B.g500, textTransform: "uppercase", letterSpacing: "0.5px" }}>Optional</span>
           <span style={{ width: 1, height: 12, background: B.g300 }} />
-          <span style={{ fontSize: "11px", fontWeight: 600, color: B.blue, textTransform: "uppercase", letterSpacing: "0.5px" }}>Supporting Documentation</span>
+          <span style={{ fontSize: "11px", fontWeight: 600, color: B.brand, textTransform: "uppercase", letterSpacing: "0.5px" }}>Supporting Documentation</span>
         </div>
         {!histAdded && !histLoading && (
           <Card style={{ background: B.g50, borderStyle: "dashed", borderColor: B.g300 }}>
@@ -748,7 +750,7 @@ const P4 = () => {
         )}
         {histLoading && (
           <Card style={{ textAlign: "center", padding: "32px" }}>
-            <div style={{ width: 32, height: 32, border: `3px solid ${B.g200}`, borderTopColor: B.blue, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+            <div style={{ width: 32, height: 32, border: `3px solid ${B.g200}`, borderTopColor: B.brand, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
             <div style={{ fontSize: "13px", color: B.g500 }}>Retrieving vehicle history report...</div>
           </Card>
         )}
@@ -756,12 +758,12 @@ const P4 = () => {
           <div style={{ animation: "su 0.4s ease" }}>
             <Card style={{ marginBottom: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-                <HistIc s={16} c={B.blue} />
+                <HistIc s={16} c={B.brand} />
                 <span style={{ fontSize: "14px", fontWeight: 700, color: B.g900 }}>Vehicle History Report</span>
-                <span style={{ fontSize: "11px", fontWeight: 600, color: B.blue, background: B.blueBg, border: `1px solid ${B.blueBd}`, padding: "2px 8px", borderRadius: "4px", marginLeft: "auto" }}>External Corroboration</span>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: B.brand, background: B.brandBg, border: `1px solid ${B.brandBd}`, padding: "2px 8px", borderRadius: "4px", marginLeft: "auto" }}>External Corroboration</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
-                {[["Title Status","Clean",B.ok],["Accidents Reported","0",B.ok],["Service Records","4 entries",B.blue],["Open Recalls","2",B.red]].map(([k,v,c],i) => (
+                {[["Title Status","Clean",B.ok],["Accidents Reported","0",B.ok],["Service Records","4 entries",B.brand],["Open Recalls","2",B.red]].map(([k,v,c],i) => (
                   <div key={i} style={{ padding: "12px", borderRadius: "8px", background: B.g50, border: `1px solid ${B.g200}` }}>
                     <div style={{ fontSize: "11px", color: B.g500, marginBottom: "4px" }}>{k}</div>
                     <div style={{ fontSize: "16px", fontWeight: 700, color: c }}>{v}</div>
@@ -781,9 +783,9 @@ const P4 = () => {
               </div>
             </Card>
             {/* Confidence Refinement */}
-            <Card redBlue>
+            <Card accent>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
-                <Shield s={16} c={B.blue} />
+                <Shield s={16} c={B.brand} />
                 <span style={{ fontSize: "14px", fontWeight: 700, color: B.g900 }}>Confidence Refinement</span>
                 <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "6px" }}>
                   <span style={{ fontSize: "12px", color: B.g500, fontWeight: 500 }}>Standard</span>
@@ -822,23 +824,23 @@ const P5 = () => (
     <h2 style={{ fontSize: "22px", fontWeight: 700, color: B.g900, margin: "0 0 4px" }}>Market Analysis</h2>
     <p style={{ color: B.g500, fontSize: "14px", marginBottom: "20px" }}>Market benchmarks and condition-adjusted pricing for acquisition decision.</p>
     <Card style={{ marginBottom: "14px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}><Dollar s={16} c={B.blue} /><span style={{ fontSize: "14px", fontWeight: 700 }}>Comparable Listings</span></div>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}><Dollar s={16} c={B.brand} /><span style={{ fontSize: "14px", fontWeight: 700 }}>Comparable Listings</span></div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-        <thead><tr style={{ borderTop: `2px solid ${B.red}`, borderBottom: `2px solid ${B.blue}` }}><th style={{ textAlign: "left", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Source</th><th style={{ textAlign: "right", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Avg Price</th><th style={{ textAlign: "right", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Listings</th><th style={{ textAlign: "right", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Market</th></tr></thead>
+        <thead><tr style={{ borderTop: `2px solid ${B.red}`, borderBottom: `2px solid ${B.brand}` }}><th style={{ textAlign: "left", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Source</th><th style={{ textAlign: "right", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Avg Price</th><th style={{ textAlign: "right", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Listings</th><th style={{ textAlign: "right", padding: "8px 10px", fontSize: "11px", fontWeight: 600, color: B.g500 }}>Market</th></tr></thead>
         <tbody>{[["AutoTrader","$23,495","28","Portland, OR"],["Cars.com","$24,200","34","Eugene, OR"],["Wholesale","$20,100","12","PNW Region"]].map(([s,p,n,m],i) => (
           <tr key={i} style={{ borderBottom: `1px solid ${B.g100}` }}><td style={{ padding: "10px", fontSize: "13px", fontWeight: 600 }}>{s}</td><td style={{ padding: "10px", fontSize: "13px", textAlign: "right", fontWeight: 600 }}>{p}</td><td style={{ padding: "10px", fontSize: "13px", textAlign: "right", color: B.g500 }}>{n}</td><td style={{ padding: "10px", fontSize: "13px", textAlign: "right", color: B.g500 }}>{m}</td></tr>
         ))}</tbody>
       </table>
     </Card>
-    <Card redBlue>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px" }}><Bar s={16} c={B.blue} /><span style={{ fontSize: "14px", fontWeight: 700 }}>Condition-Adjusted Pricing</span></div>
+    <Card accent>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px" }}><Bar s={16} c={B.brand} /><span style={{ fontSize: "14px", fontWeight: 700 }}>Condition-Adjusted Pricing</span></div>
       {[["Market wholesale baseline (clean, 21K mi)","$20,100",B.g900],["Head gasket repair (est.)","−$3,500",B.red],["Fuel injector repair (est.)","−$850",B.red],["Seat bolster repair (est.)","−$275",B.red],["Condition score adjustment (64/100)","−$200",B.g500]].map(([l,v,c],i) => (
         <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 4 ? `1px solid ${B.g100}` : "none", fontSize: "13px" }}>
           <span style={{ color: B.g700 }}>{l}</span>
           <span style={{ fontWeight: 600, color: c }}>{v}</span>
         </div>
       ))}
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: `2px solid ${B.blue}`, marginTop: "4px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: `2px solid ${B.brand}`, marginTop: "4px" }}>
         <span style={{ fontSize: "14px", fontWeight: 700, color: B.g900 }}>Adjusted Value</span>
         <span style={{ fontSize: "14px", fontWeight: 700, color: B.red }}>$15,275</span>
       </div>
@@ -870,7 +872,7 @@ const P6 = () => {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", ...S(0) }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "8px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={18} c="#fff" /></div>
+            <img src={logoSrc} alt="VeriBuy" style={{ width: 36, height: 36, borderRadius: "8px", objectFit: "contain" }} />
             <div><div style={{ fontSize: "14px", fontWeight: 800, color: B.g900 }}>VeriBuy</div><div style={{ fontSize: "10px", color: B.g500 }}>Verified Condition Report</div></div>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -878,10 +880,10 @@ const P6 = () => {
             <div style={{ fontSize: "10px", color: B.g500, marginTop: "2px" }}>Report #VB-2024-18247 • {rptDate}</div>
           </div>
         </div>
-        <div style={{ height: 2, background: B.blue, marginBottom: "20px", ...S(0) }} />
+        <div style={{ height: 2, background: B.brand, marginBottom: "20px", ...S(0) }} />
 
         {/* Hero Image */}
-        <div style={{ width: "100%", height: "200px", borderRadius: "8px", overflow: "hidden", marginBottom: "20px", background: `linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)`, position: "relative", ...S(1) }}>
+        <div style={{ width: "100%", height: "200px", borderRadius: "8px", overflow: "hidden", marginBottom: "20px", background: `linear-gradient(135deg, #1e0049 0%, #30006b 50%, #46006d 100%)`, position: "relative", ...S(1) }}>
           <img src="https://images.unsplash.com/photo-1669725621246-6c5e01c2da1a?w=800&q=80" alt="2024 Ford Bronco Sport" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.target.style.display = "none"; }} />
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "14px 18px", background: "linear-gradient(transparent, rgba(0,0,0,0.7))" }}>
             <div style={{ fontSize: "17px", fontWeight: 700, color: "#fff" }}>2024 Ford Bronco Sport Base AWD</div>
@@ -908,7 +910,7 @@ const P6 = () => {
               <div style={{ fontSize: "10px", fontWeight: 600, color: B.ynT }}>Condition Score</div>
             </div>
             <div style={{ flex: 1 }}>
-              {[["Structural / Drivetrain", 42, B.red], ["Cosmetic / Interior", 78, B.ok], ["Electronics / Software", 65, B.blue]].map(([l, v, c], i) => (
+              {[["Structural / Drivetrain", 42, B.red], ["Cosmetic / Interior", 78, B.ok], ["Electronics / Software", 65, B.brand]].map(([l, v, c], i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
                   <div style={{ fontSize: "11px", color: B.g700, width: "130px" }}>{l}</div>
                   <div style={{ flex: 1 }}><PBar v={v} c={c} /></div>
@@ -940,7 +942,7 @@ const P6 = () => {
               <span style={{ color: B.g700 }}>{l}</span><span style={{ fontWeight: 600, color: c }}>{v}</span>
             </div>
           ))}
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: `2px solid ${B.blue}`, marginTop: "4px", fontSize: "13px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderTop: `2px solid ${B.brand}`, marginTop: "4px", fontSize: "13px" }}>
             <span style={{ fontWeight: 700, color: B.g900 }}>Adjusted Acquisition Value</span>
             <span style={{ fontWeight: 700, color: B.red }}>$15,275</span>
           </div>
@@ -976,10 +978,10 @@ const P6 = () => {
 /* ═══ PAGE 7: FINAL ═══ */
 const P7 = ({ go }) => (
   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", textAlign: "center" }}>
-    <div style={{ width: 56, height: 56, borderRadius: "14px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px" }}><Check s={28} c="#fff" /></div>
+    <div style={{ width: 56, height: 56, borderRadius: "14px", background: B.brandGrad, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px" }}><Check s={28} c="#fff" /></div>
     <h1 style={{ fontSize: "30px", fontWeight: 700, color: B.g900, margin: "0 0 12px" }}>The Complete Picture, Before You Buy</h1>
     <p style={{ fontSize: "16px", color: B.g500, margin: "0 0 36px", maxWidth: "460px", lineHeight: 1.6 }}>VeriBuy gives your acquisition team the intelligence they need to make confident, data-backed decisions on every vehicle.</p>
-    <div style={{ display: "flex", gap: "12px" }}><Btn red>Request Dealer Pilot</Btn><Btn secondary onClick={() => go(0)}>Restart Demo</Btn></div>
+    <div style={{ display: "flex", gap: "12px" }}><Btn primary>Request Dealer Pilot</Btn><Btn secondary onClick={() => go(0)}>Restart Demo</Btn></div>
   </div>
 );
 
@@ -996,17 +998,17 @@ export default function App() {
   const Cur = STEPS[step];
   return (
     <div style={{ width: "100vw", height: "100vh", background: B.pageBg, fontFamily: "'Inter',system-ui,sans-serif", color: B.g900, display: "flex", flexDirection: "column" }}>
-      <style>{`@keyframes tc{50%{opacity:0}} @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.6)}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0}to{opacity:1}} @keyframes slideInRight{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}} @keyframes slideInLeft{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:translateX(0)}} @keyframes scaleIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}} @keyframes scanLine{0%{top:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}} @keyframes borderPulse{0%,100%{border-color:rgba(45,17,173,0.3)}50%{border-color:rgba(45,17,173,1)}} @keyframes shimmer{from{background-position:-200% 0}to{background-position:200% 0}} @keyframes countUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}} [data-hover="card"]{transition:all 0.2s ease} [data-hover="card"]:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.1) !important} [data-hover="btn"]{transition:all 0.15s ease} [data-hover="btn"]:hover{transform:translateY(-1px);filter:brightness(1.08)} * {box-sizing:border-box;margin:0;padding:0}`}</style>
+      <style>{`@keyframes tc{50%{opacity:0}} @keyframes su{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}} @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.6)}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0}to{opacity:1}} @keyframes slideInRight{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}} @keyframes slideInLeft{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:translateX(0)}} @keyframes scaleIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}} @keyframes scanLine{0%{top:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}} @keyframes borderPulse{0%,100%{border-color:rgba(92,0,153,0.3)}50%{border-color:rgba(92,0,153,1)}} @keyframes shimmer{from{background-position:-200% 0}to{background-position:200% 0}} @keyframes countUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}} [data-hover="card"]{transition:all 0.2s ease} [data-hover="card"]:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.1) !important} [data-hover="btn"]{transition:all 0.15s ease} [data-hover="btn"]:hover{transform:translateY(-1px);filter:brightness(1.08)} * {box-sizing:border-box;margin:0;padding:0}`}</style>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", background: B.white, borderBottom: `1px solid ${B.g200}`, flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ width: 30, height: 30, borderRadius: "8px", background: B.blue, display: "flex", alignItems: "center", justifyContent: "center" }}><Shield s={16} c="#fff" /></div>
+          <img src={logoSrc} alt="VeriBuy" style={{ width: 30, height: 30, borderRadius: "8px", objectFit: "contain" }} />
           <span style={{ fontSize: "16px", fontWeight: 700 }}>VeriBuy</span>
           <span style={{ width: 1, height: 20, background: B.g200, margin: "0 6px" }} />
           <span style={{ fontSize: "13px", color: B.g500, fontWeight: 500 }}>Verify Before You Buy</span>
         </div>
         {step > 0 && step < 7 && <nav style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           {labels.slice(1, 7).map((l, i) => (
-            <button key={i} onClick={() => nav(i + 1)} style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 500, border: "none", background: step === i + 1 ? B.blueBg : "transparent", color: step === i + 1 ? B.blue : B.g500, cursor: "pointer" }}>{l}</button>
+            <button key={i} onClick={() => nav(i + 1)} style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 500, border: "none", background: step === i + 1 ? B.brandBg : "transparent", color: step === i + 1 ? B.brand : B.g500, cursor: "pointer" }}>{l}</button>
           ))}
         </nav>}
         <div style={{ fontSize: "12px", color: B.g500 }}>{step > 0 && step < 7 ? `Step ${step} of 6` : ""}</div>
@@ -1015,7 +1017,7 @@ export default function App() {
       {step > 0 && step < 7 && <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", background: B.white, borderTop: `1px solid ${B.g200}`, flexShrink: 0 }}>
         <Btn secondary onClick={() => nav(Math.max(0, step - 1))}><ChevR s={14} c={B.g500} rot={180} /> Back</Btn>
         <span style={{ fontSize: "12px", color: B.g500 }}>Workflow • Step {step} of 6</span>
-        {step < 6 ? <Btn onClick={() => nav(step + 1)}>Continue <Arr s={14} c="#fff" /></Btn> : step === 6 ? <Btn red onClick={() => nav(7)}>Complete <Check s={14} c="#fff" /></Btn> : null}
+        {step < 6 ? <Btn onClick={() => nav(step + 1)}>Continue <Arr s={14} c="#fff" /></Btn> : step === 6 ? <Btn primary onClick={() => nav(7)}>Complete <Check s={14} c="#fff" /></Btn> : null}
       </footer>}
     </div>
   );
