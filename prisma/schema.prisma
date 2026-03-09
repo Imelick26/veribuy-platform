@@ -1,0 +1,491 @@
+// VeriBuy Platform — Prisma Schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Authentication & Multi-tenancy
+// ═══════════════════════════════════════════════════════════════
+
+model Organization {
+  id           String           @id @default(cuid())
+  name         String
+  slug         String           @unique
+  type         OrgType
+  logo         String?
+  address      String?
+  city         String?
+  state        String?
+  zip          String?
+  phone        String?
+  website      String?
+  subscription SubscriptionTier @default(FREE)
+
+  users       User[]
+  vehicles    Vehicle[]
+  inspections Inspection[]
+  reports     Report[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum OrgType {
+  DEALER
+  INSPECTOR_FIRM
+  INSURANCE
+  INDIVIDUAL
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String?
+  avatar       String?
+  role         UserRole @default(INSPECTOR)
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id])
+
+  inspections Inspection[]
+  auditLogs   AuditLog[]
+
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  @@index([orgId])
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  INSPECTOR
+  VIEWER
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Vehicle Intelligence
+// ═══════════════════════════════════════════════════════════════
+
+model Vehicle {
+  id            String  @id @default(cuid())
+  vin           String  @unique
+  year          Int
+  make          String
+  model         String
+  trim          String?
+  bodyStyle     String?
+  drivetrain    String?
+  engine        String?
+  transmission  String?
+  exteriorColor String?
+  interiorColor String?
+  msrp          Int?
+
+  nhtsaData Json?
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id])
+
+  inspections Inspection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vin])
+  @@index([orgId])
+  @@index([make, model, year])
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Inspection Workflow
+// ═══════════════════════════════════════════════════════════════
+
+model Inspection {
+  id     String           @id @default(cuid())
+  number String           @unique
+  status InspectionStatus @default(CREATED)
+
+  odometer Int?
+  location String?
+  notes    String?
+
+  overallScore     Int?
+  structuralScore  Int?
+  cosmeticScore    Int?
+  electronicsScore Int?
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+
+  inspectorId String
+  inspector   User @relation(fields: [inspectorId], references: [id])
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id])
+
+  steps          InspectionStep[]
+  findings       Finding[]
+  media          MediaItem[]
+  marketAnalysis MarketAnalysis?
+  vehicleHistory VehicleHistory?
+  report         Report?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([orgId, status])
+  @@index([vehicleId])
+  @@index([inspectorId])
+  @@index([number])
+}
+
+enum InspectionStatus {
+  CREATED
+  VIN_DECODED
+  RISK_REVIEWED
+  MEDIA_CAPTURE
+  FINDINGS_RECORDED
+  MARKET_PRICED
+  REVIEWED
+  COMPLETED
+  CANCELLED
+}
+
+model InspectionStep {
+  id     String       @id @default(cuid())
+  step   WorkflowStep
+  status StepStatus   @default(PENDING)
+  data   Json?
+
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  enteredAt   DateTime?
+  completedAt DateTime?
+
+  @@unique([inspectionId, step])
+}
+
+enum WorkflowStep {
+  VIN_DECODE
+  RISK_REVIEW
+  MEDIA_CAPTURE
+  PHYSICAL_INSPECTION
+  VEHICLE_HISTORY
+  MARKET_ANALYSIS
+  REPORT_GENERATION
+}
+
+enum StepStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Findings
+// ═══════════════════════════════════════════════════════════════
+
+model Finding {
+  id          String          @id @default(cuid())
+  severity    Severity
+  category    FindingCategory
+  title       String
+  description String
+  evidence    String?
+  impact      String?
+
+  repairCostLow  Int?
+  repairCostHigh Int?
+
+  positionX Float?
+  positionY Float?
+  positionZ Float?
+
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  media MediaItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([inspectionId])
+  @@index([severity])
+}
+
+enum Severity {
+  CRITICAL
+  MAJOR
+  MODERATE
+  MINOR
+  INFO
+}
+
+enum FindingCategory {
+  STRUCTURAL
+  DRIVETRAIN
+  ENGINE
+  TRANSMISSION
+  ELECTRICAL
+  COSMETIC_EXTERIOR
+  COSMETIC_INTERIOR
+  ELECTRONICS
+  SAFETY
+  TIRES_WHEELS
+  BRAKES
+  SUSPENSION
+  HVAC
+  OTHER
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Media
+// ═══════════════════════════════════════════════════════════════
+
+model MediaItem {
+  id          String       @id @default(cuid())
+  type        MediaType
+  captureType CaptureType?
+
+  s3Key        String
+  s3Bucket     String @default("veribuy-media")
+  url          String
+  thumbnailUrl String?
+
+  mimeType   String
+  sizeBytes  Int
+  width      Int?
+  height     Int?
+  durationMs Int?
+  exifData   Json?
+
+  qualityScore Int?
+  aiAnalysis   Json?
+
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  findingId String?
+  finding   Finding? @relation(fields: [findingId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([inspectionId])
+  @@index([findingId])
+}
+
+enum MediaType {
+  PHOTO
+  VIDEO
+  AUDIO
+}
+
+enum CaptureType {
+  FRONT_CENTER
+  FRONT_34_DRIVER
+  DRIVER_SIDE
+  REAR_34_DRIVER
+  REAR_CENTER
+  PASSENGER_SIDE
+  ENGINE_BAY
+  UNDER_HOOD_LABEL
+  WALKAROUND_VIDEO
+  ENGINE_AUDIO
+  INTERIOR_WALKTHROUGH
+  FINDING_EVIDENCE
+  OTHER
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Market Intelligence
+// ═══════════════════════════════════════════════════════════════
+
+model MarketAnalysis {
+  id String @id @default(cuid())
+
+  comparables   Json
+  baselinePrice Int
+  adjustments   Json
+  adjustedPrice Int
+
+  recommendation BuyRecommendation
+  strongBuyMax   Int
+  fairBuyMax     Int
+
+  estRetailPrice Int?
+  estReconCost   Int?
+  estGrossProfit Int?
+
+  inspectionId String     @unique
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  fetchedAt DateTime @default(now())
+
+  @@index([inspectionId])
+}
+
+enum BuyRecommendation {
+  STRONG_BUY
+  FAIR_BUY
+  OVERPAYING
+  PASS
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Vehicle History
+// ═══════════════════════════════════════════════════════════════
+
+model VehicleHistory {
+  id String @id @default(cuid())
+
+  provider         String
+  titleStatus      String
+  accidentCount    Int     @default(0)
+  serviceRecords   Int     @default(0)
+  ownerCount       Int?
+  structuralDamage Boolean @default(false)
+  floodDamage      Boolean @default(false)
+
+  rawData         Json?
+  recalls         Json?
+  openRecallCount Int @default(0)
+
+  inspectionId String     @unique
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  fetchedAt DateTime @default(now())
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Reports
+// ═══════════════════════════════════════════════════════════════
+
+model Report {
+  id     String @id @default(cuid())
+  number String @unique
+
+  pdfS3Key String?
+  pdfUrl   String?
+
+  shareToken     String?   @unique
+  sharePassword  String?
+  shareExpiresAt DateTime?
+  viewCount      Int       @default(0)
+
+  blockchainHash String?
+  blockchainTxId String?
+  anchoredAt     DateTime?
+
+  inspectionId String     @unique
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  orgId String
+  org   Organization @relation(fields: [orgId], references: [id])
+
+  generatedAt DateTime @default(now())
+
+  @@index([shareToken])
+  @@index([orgId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Audit Trail
+// ═══════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id         String @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String
+  metadata   Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  Risk Intelligence (Reference Data)
+// ═══════════════════════════════════════════════════════════════
+
+model RiskProfile {
+  id String @id @default(cuid())
+
+  make     String
+  model    String
+  yearFrom Int
+  yearTo   Int
+  engine   String?
+
+  risks  Json
+  source String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([make, model])
+}
