@@ -43,8 +43,8 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-blue-50 p-3">
-              <ClipboardCheck className="h-6 w-6 text-blue-600" />
+            <div className="rounded-lg bg-brand-50 p-3">
+              <ClipboardCheck className="h-6 w-6 text-brand-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Active Inspections</p>
@@ -152,10 +152,10 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <Link
               href="/dashboard/inspections/new"
-              className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 hover:bg-blue-50 hover:border-blue-200 transition-colors"
+              className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 hover:bg-brand-50 hover:border-blue-200 transition-colors"
             >
-              <div className="rounded-lg bg-blue-100 p-2.5">
-                <Plus className="h-5 w-5 text-blue-600" />
+              <div className="rounded-lg bg-brand-100 p-2.5">
+                <Plus className="h-5 w-5 text-brand-600" />
               </div>
               <div>
                 <p className="font-medium text-gray-900">New Inspection</p>

@@ -2,8 +2,39 @@
 
 @theme inline {
   --font-sans: var(--font-inter);
+
+  /* VeriBuy Brand Colors */
+  --color-brand-50: #f3ecfa;
+  --color-brand-100: #e4d4f4;
+  --color-brand-200: #d4bfe8;
+  --color-brand-300: #b794d6;
+  --color-brand-400: #9b6dc0;
+  --color-brand-500: #7c3aad;
+  --color-brand-600: #5c0099;
+  --color-brand-700: #46006d;
+  --color-brand-800: #320050;
+  --color-brand-900: #1a0033;
+
+  /* Severity Colors */
+  --color-severity-critical: #b91c1c;
+  --color-severity-major: #ea580c;
+  --color-severity-moderate: #ca8a04;
+  --color-severity-minor: #16a34a;
+  --color-severity-info: #2563eb;
 }
 
 body {
-  background: #f9fafb;
+  background: #f3ecfa;
+}
+
+/* Brand gradient utility */
+.bg-brand-gradient {
+  background: linear-gradient(135deg, #ff4289 0%, #be00a4 50%, #5c0099 100%);
+}
+
+.text-brand-gradient {
+  background: linear-gradient(135deg, #ff4289 0%, #be00a4 50%, #5c0099 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
