@@ -2,13 +2,15 @@ import { cn } from "@/lib/utils";
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
+  accent?: boolean;
 }
 
-export function Card({ className, children, ...props }: CardProps) {
+export function Card({ className, accent, children, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-xl border border-gray-200 bg-white p-6 shadow-sm",
+        "rounded-2xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all duration-200",
+        accent && "card-accent-top",
         className
       )}
       {...props}
@@ -18,7 +20,7 @@ export function Card({ className, children, ...props }: CardProps) {
   );
 }
 
-export function CardHeader({ className, children, ...props }: CardProps) {
+export function CardHeader({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement> & { children: React.ReactNode }) {
   return (
     <div className={cn("mb-4", className)} {...props}>
       {children}

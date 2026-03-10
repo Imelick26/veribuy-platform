@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -27,16 +28,11 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-brand-200 bg-white">
+    <aside className="flex h-screen w-64 flex-col bg-white border-r border-gray-100">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2.5 border-b border-brand-200 px-6">
-        <div className="h-8 w-8 rounded-lg bg-brand-gradient flex items-center justify-center">
-          <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2l-8 4.5v7c0 4.28 3.4 8.28 8 9.5 4.6-1.22 8-5.22 8-9.5v-7L12 2z" />
-            <path d="M9 12l2 2 4-4" />
-          </svg>
-        </div>
-        <span className="text-xl font-bold text-gray-900">VeriBuy</span>
+      <div className="flex h-16 items-center gap-2.5 px-6 border-b border-gray-100">
+        <Image src="/logo.png" alt="VeriBuy" width={36} height={36} className="h-9 w-9" />
+        <span className="text-xl font-bold text-brand-gradient">VeriBuy</span>
       </div>
 
       {/* Navigation */}
@@ -50,13 +46,13 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-gray-600 hover:bg-brand-50/50 hover:text-brand-700"
+                  ? "bg-brand-gradient-subtle text-brand-700 nav-accent-left"
+                  : "text-gray-500 hover:bg-brand-50/50 hover:text-brand-700"
               )}
             >
-              <item.icon className="h-5 w-5 flex-shrink-0" />
+              <item.icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-brand-600")} />
               {item.name}
             </Link>
           );
@@ -64,10 +60,10 @@ export function Sidebar() {
       </nav>
 
       {/* Sign out */}
-      <div className="border-t border-brand-200 px-3 py-4">
+      <div className="border-t border-gray-100 px-3 py-4">
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-200 cursor-pointer"
         >
           <LogOut className="h-5 w-5" />
           Sign Out

@@ -11,7 +11,6 @@ import {
   Plus,
   ArrowRight,
   TrendingUp,
-  AlertTriangle,
   CheckCircle,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -28,7 +27,7 @@ export default function DashboardPage() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard</h1>
           <p className="text-gray-500 mt-1">Overview of your inspection activity</p>
         </div>
         <Link href="/dashboard/inspections/new">
@@ -41,14 +40,14 @@ export default function DashboardPage() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+        <Card accent>
           <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-brand-50 p-3">
-              <ClipboardCheck className="h-6 w-6 text-brand-600" />
+            <div className="rounded-xl bg-brand-gradient p-3 shadow-brand-glow">
+              <ClipboardCheck className="h-6 w-6 text-white" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Active Inspections</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-3xl font-bold text-gray-900">
                 {recentInspections.filter((i) => i.status !== "COMPLETED" && i.status !== "CANCELLED").length}
               </p>
             </div>
@@ -56,12 +55,12 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-green-50 p-3">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="rounded-xl bg-green-500 p-3 shadow-sm">
+              <CheckCircle className="h-6 w-6 text-white" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Completed</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-3xl font-bold text-gray-900">
                 {recentInspections.filter((i) => i.status === "COMPLETED").length}
               </p>
             </div>
@@ -69,23 +68,23 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-purple-50 p-3">
-              <Car className="h-6 w-6 text-purple-600" />
+            <div className="rounded-xl bg-brand-500 p-3 shadow-sm">
+              <Car className="h-6 w-6 text-white" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Vehicles</p>
-              <p className="text-2xl font-bold text-gray-900">—</p>
+              <p className="text-3xl font-bold text-gray-900">&mdash;</p>
             </div>
           </div>
         </Card>
         <Card>
           <div className="flex items-center gap-4">
-            <div className="rounded-lg bg-amber-50 p-3">
-              <FileText className="h-6 w-6 text-amber-600" />
+            <div className="rounded-xl bg-amber-500 p-3 shadow-sm">
+              <FileText className="h-6 w-6 text-white" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Reports</p>
-              <p className="text-2xl font-bold text-gray-900">{recentReports.length}</p>
+              <p className="text-3xl font-bold text-gray-900">{recentReports.length}</p>
             </div>
           </div>
         </Card>
@@ -107,21 +106,23 @@ export default function DashboardPage() {
           </CardHeader>
           {recentInspections.length === 0 ? (
             <div className="text-center py-8">
-              <ClipboardCheck className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">No inspections yet</p>
-              <Link href="/dashboard/inspections/new" className="mt-3 inline-block">
-                <Button variant="secondary" size="sm">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-brand-50 flex items-center justify-center">
+                <ClipboardCheck className="h-6 w-6 text-brand-400" />
+              </div>
+              <p className="text-sm text-gray-500 mb-3">No inspections yet</p>
+              <Link href="/dashboard/inspections/new">
+                <Button size="sm">
                   <Plus className="h-3.5 w-3.5" /> Start First Inspection
                 </Button>
               </Link>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {recentInspections.map((insp) => (
                 <Link
                   key={insp.id}
                   href={`/dashboard/inspections/${insp.id}`}
-                  className="flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:bg-brand-gradient-subtle hover:border-brand-200/50 transition-all duration-200"
                 >
                   <div>
                     <p className="font-medium text-gray-900 text-sm">
@@ -149,13 +150,13 @@ export default function DashboardPage() {
             <CardTitle>Quick Actions</CardTitle>
             <CardDescription>Common tasks to get you started</CardDescription>
           </CardHeader>
-          <div className="space-y-3">
+          <div className="space-y-2">
             <Link
               href="/dashboard/inspections/new"
-              className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 hover:bg-brand-50 hover:border-brand-200 transition-colors"
+              className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:bg-brand-gradient-subtle hover:border-brand-200/50 transition-all duration-200 group"
             >
-              <div className="rounded-lg bg-brand-100 p-2.5">
-                <Plus className="h-5 w-5 text-brand-600" />
+              <div className="rounded-xl bg-brand-gradient p-2.5 shadow-brand-glow group-hover:shadow-brand-glow-lg transition-shadow">
+                <Plus className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="font-medium text-gray-900">New Inspection</p>
@@ -164,10 +165,10 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/dashboard/reports"
-              className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 hover:bg-green-50 hover:border-green-200 transition-colors"
+              className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:bg-green-50/50 hover:border-green-200/50 transition-all duration-200"
             >
-              <div className="rounded-lg bg-green-100 p-2.5">
-                <FileText className="h-5 w-5 text-green-600" />
+              <div className="rounded-xl bg-green-500 p-2.5 shadow-sm">
+                <FileText className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="font-medium text-gray-900">View Reports</p>
@@ -176,10 +177,10 @@ export default function DashboardPage() {
             </Link>
             <Link
               href="/dashboard/vehicles"
-              className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 hover:bg-purple-50 hover:border-purple-200 transition-colors"
+              className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:bg-brand-gradient-subtle hover:border-brand-200/50 transition-all duration-200"
             >
-              <div className="rounded-lg bg-purple-100 p-2.5">
-                <TrendingUp className="h-5 w-5 text-purple-600" />
+              <div className="rounded-xl bg-brand-500 p-2.5 shadow-sm">
+                <TrendingUp className="h-5 w-5 text-white" />
               </div>
               <div>
                 <p className="font-medium text-gray-900">Vehicle Database</p>

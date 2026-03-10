@@ -22,7 +22,7 @@ export function Progress({ value, color = "brand", size = "md", className }: Pro
           "bg-green-500": color === "green",
           "bg-yellow-500": color === "yellow",
           "bg-red-500": color === "red",
-          "bg-brand-600": color === "brand",
+          "bg-gradient-progress": color === "brand",
         })}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />

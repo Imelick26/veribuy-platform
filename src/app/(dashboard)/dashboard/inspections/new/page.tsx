@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
 import { trpc } from "@/lib/trpc";
 import {
   Search,
-  Car,
   CheckCircle,
   ArrowRight,
   AlertTriangle,
@@ -62,12 +60,12 @@ export default function NewInspectionPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">New Inspection</h1>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">New Inspection</h1>
         <p className="text-gray-500 mt-1">Start by entering the vehicle&apos;s VIN</p>
       </div>
 
       {/* Step 1: VIN Decode */}
-      <Card>
+      <Card accent>
         <CardHeader>
           <CardTitle>Step 1: Vehicle Identification</CardTitle>
           <CardDescription>Enter the 17-character VIN to decode vehicle details</CardDescription>
@@ -94,7 +92,7 @@ export default function NewInspectionPage() {
         </form>
 
         {decodeMutation.error && (
-          <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-100">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             {decodeMutation.error.message}
           </div>
@@ -102,7 +100,7 @@ export default function NewInspectionPage() {
 
         {/* Decoded vehicle info */}
         {decodedVehicle && (
-          <div className="mt-6 p-4 rounded-lg bg-green-50 border border-green-200">
+          <div className="mt-6 p-4 rounded-xl bg-green-50 border border-green-200">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <span className="font-semibold text-green-800">Vehicle Decoded</span>
@@ -112,10 +110,10 @@ export default function NewInspectionPage() {
                 ["Year", decodedVehicle.year],
                 ["Make", decodedVehicle.make],
                 ["Model", decodedVehicle.model],
-                ["Trim", decodedVehicle.trim || "—"],
-                ["Body", decodedVehicle.bodyStyle || "—"],
-                ["Drivetrain", decodedVehicle.drivetrain || "—"],
-                ["Engine", decodedVehicle.engine || "—"],
+                ["Trim", decodedVehicle.trim || "\u2014"],
+                ["Body", decodedVehicle.bodyStyle || "\u2014"],
+                ["Drivetrain", decodedVehicle.drivetrain || "\u2014"],
+                ["Engine", decodedVehicle.engine || "\u2014"],
               ].map(([label, value]) => (
                 <div key={label as string}>
                   <p className="text-xs text-green-600 uppercase font-medium">{label}</p>

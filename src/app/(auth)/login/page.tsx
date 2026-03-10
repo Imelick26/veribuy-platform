@@ -1,12 +1,12 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Shield } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,12 +43,12 @@ export default function LoginPage() {
   return (
     <div>
       {/* Mobile logo */}
-      <div className="flex items-center gap-2 mb-8 lg:hidden">
-        <Shield className="h-7 w-7 text-brand-600" />
-        <span className="text-xl font-bold">VeriBuy</span>
+      <div className="flex items-center gap-2.5 mb-8 lg:hidden">
+        <img src="/logo.png" alt="VeriBuy" className="h-8 w-8" />
+        <span className="text-xl font-bold text-brand-gradient">VeriBuy</span>
       </div>
 
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h2>
+      <h2 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">Welcome back</h2>
       <p className="text-gray-500 mb-8">Sign in to your account to continue</p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -72,7 +72,7 @@ export default function LoginPage() {
         />
 
         {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-100">
             {error}
           </div>
         )}
@@ -84,7 +84,7 @@ export default function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-medium text-brand-600 hover:text-brand-500">
+        <Link href="/register" className="font-semibold text-brand-gradient hover:opacity-80 transition-opacity">
           Create one
         </Link>
       </p>

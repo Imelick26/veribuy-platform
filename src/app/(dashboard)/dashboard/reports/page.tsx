@@ -14,25 +14,27 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Reports</h1>
         <p className="text-gray-500 mt-1">Generated inspection reports</p>
       </div>
 
       <Card className="p-0 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+            <div className="spinner-gradient" />
           </div>
         ) : reports.length === 0 ? (
           <div className="text-center py-20">
-            <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-1">No reports yet</h3>
+            <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-brand-50 flex items-center justify-center">
+              <FileText className="h-7 w-7 text-brand-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">No reports yet</h3>
             <p className="text-gray-500">Reports are generated when inspections are completed</p>
           </div>
         ) : (
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
+            <thead>
+              <tr className="border-b border-gray-100">
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Report</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Vehicle</th>
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Findings</th>
@@ -41,9 +43,9 @@ export default function ReportsPage() {
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider px-6 py-3">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-50">
               {reports.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={r.id} className="hover:bg-brand-gradient-subtle transition-all duration-200">
                   <td className="px-6 py-4 font-mono text-sm text-gray-900">{r.number}</td>
                   <td className="px-6 py-4">
                     <p className="font-medium text-gray-900">
@@ -51,7 +53,7 @@ export default function ReportsPage() {
                     </p>
                   </td>
                   <td className="px-6 py-4">
-                    <Badge>{r.inspection._count.findings}</Badge>
+                    <Badge variant="info">{r.inspection._count.findings}</Badge>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">{r.viewCount}</td>
                   <td className="px-6 py-4 text-sm text-gray-500">{formatDate(r.generatedAt)}</td>

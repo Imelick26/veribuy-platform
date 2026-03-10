@@ -8,17 +8,19 @@ export function Header() {
   const user = session?.user;
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
+    <header className="flex h-16 items-center justify-between bg-white px-6 relative">
+      {/* Gradient bottom border */}
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-brand-200 to-transparent" />
       <div />
       <div className="flex items-center gap-4">
         {user && (
           <>
-            <Badge variant="info">
+            <Badge variant="gradient">
               {(user as Record<string, unknown>).orgName as string}
             </Badge>
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-brand-100 flex items-center justify-center">
-                <span className="text-sm font-semibold text-brand-700">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-full bg-brand-gradient flex items-center justify-center shadow-sm">
+                <span className="text-sm font-semibold text-white">
                   {user.name?.charAt(0).toUpperCase()}
                 </span>
               </div>

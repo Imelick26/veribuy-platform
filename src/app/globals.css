@@ -4,12 +4,12 @@
   --font-sans: var(--font-inter);
 
   /* VeriBuy Brand Colors */
-  --color-brand-50: #f3ecfa;
-  --color-brand-100: #e4d4f4;
-  --color-brand-200: #d4bfe8;
-  --color-brand-300: #b794d6;
-  --color-brand-400: #9b6dc0;
-  --color-brand-500: #7c3aad;
+  --color-brand-50: #faf5ff;
+  --color-brand-100: #f0e4fa;
+  --color-brand-200: #e0c9f5;
+  --color-brand-300: #c9a0eb;
+  --color-brand-400: #ab6dd9;
+  --color-brand-500: #8b3bbf;
   --color-brand-600: #5c0099;
   --color-brand-700: #46006d;
   --color-brand-800: #320050;
@@ -23,13 +23,19 @@
   --color-severity-info: #2563eb;
 }
 
+/* === Body === */
 body {
-  background: #f3ecfa;
+  background: linear-gradient(135deg, #faf5ff 0%, #f0e4fa 50%, #faf5ff 100%);
+  min-height: 100vh;
 }
 
-/* Brand gradient utility */
+/* === Brand Gradient Utilities === */
 .bg-brand-gradient {
   background: linear-gradient(135deg, #ff4289 0%, #be00a4 50%, #5c0099 100%);
+}
+
+.bg-brand-gradient-subtle {
+  background: linear-gradient(135deg, rgba(255,66,137,0.08) 0%, rgba(190,0,164,0.06) 50%, rgba(92,0,153,0.08) 100%);
 }
 
 .text-brand-gradient {
@@ -37,4 +43,109 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* Gradient border (uses pseudo-element) */
+.border-brand-gradient {
+  position: relative;
+  border: none;
+}
+.border-brand-gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #ff4289, #be00a4, #5c0099);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Gradient shadow glow */
+.shadow-brand-glow {
+  box-shadow:
+    0 4px 14px -2px rgba(190, 0, 164, 0.25),
+    0 2px 6px -1px rgba(255, 66, 137, 0.15);
+}
+.shadow-brand-glow-lg {
+  box-shadow:
+    0 8px 30px -4px rgba(190, 0, 164, 0.3),
+    0 4px 12px -2px rgba(255, 66, 137, 0.2);
+}
+
+/* Progress bar gradient fill */
+.bg-gradient-progress {
+  background: linear-gradient(90deg, #ff4289, #be00a4, #5c0099);
+}
+
+/* Shimmer animation for premium feel */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+}
+
+/* Gradient top accent for cards */
+.card-accent-top {
+  position: relative;
+  overflow: hidden;
+}
+.card-accent-top::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ff4289, #be00a4, #5c0099);
+  border-radius: 12px 12px 0 0;
+}
+
+/* Gradient accent left border for nav items */
+.nav-accent-left {
+  position: relative;
+}
+.nav-accent-left::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #ff4289, #be00a4, #5c0099);
+}
+
+/* Spinner gradient */
+@keyframes gradient-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.spinner-gradient {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(190, 0, 164, 0.1);
+  border-top-color: #be00a4;
+  border-right-color: #ff4289;
+  animation: gradient-spin 0.8s linear infinite;
+}
+
+/* Gradient ring for avatars */
+.ring-brand-gradient {
+  position: relative;
+}
+.ring-brand-gradient::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #ff4289, #be00a4, #5c0099);
+  z-index: -1;
 }
