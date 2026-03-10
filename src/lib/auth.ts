@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import bcrypt from "bcryptjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   adapter: PrismaAdapter(db) as never,
   session: { strategy: "jwt" },
   pages: {
