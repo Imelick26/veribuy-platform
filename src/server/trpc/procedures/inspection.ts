@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
+import type { AggregatedRiskProfile } from "@/types/risk";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -78,6 +79,23 @@ export const inspectionRouter = router({
 
       if (!inspection) throw new Error("Inspection not found");
       return inspection;
+    }),
+
+  // Get the aggregated risk profile for an inspection (stored in RISK_REVIEW step data)
+  getRiskProfile: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const step = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "RISK_REVIEW",
+          },
+        },
+      });
+
+      if (!step?.data) return null;
+      return step.data as unknown as AggregatedRiskProfile;
     }),
 
   // List inspections for the org
@@ -189,6 +207,9 @@ export const inspectionRouter = router({
         impact: z.string().optional(),
         repairCostLow: z.number().optional(),
         repairCostHigh: z.number().optional(),
+        positionX: z.number().optional(),
+        positionY: z.number().optional(),
+        positionZ: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -211,6 +232,75 @@ export const inspectionRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return recalculateScore(ctx.db, input.inspectionId);
+    }),
+
+  // Record risk check status during physical inspection
+  recordRiskCheck: protectedProcedure
+    .input(
+      z.object({
+        inspectionId: z.string(),
+        riskId: z.string(),
+        status: z.enum(["NOT_CHECKED", "CONFIRMED", "NOT_FOUND", "UNABLE_TO_INSPECT"]),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get the PHYSICAL_INSPECTION step
+      const step = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "PHYSICAL_INSPECTION",
+          },
+        },
+      });
+
+      // Get existing check data or initialize
+      const existingData = (step?.data as Record<string, unknown>) || {};
+      const checkStatuses = (existingData.checkStatuses as Record<string, unknown>) || {};
+
+      // Update the risk check status
+      checkStatuses[input.riskId] = {
+        riskId: input.riskId,
+        status: input.status,
+        notes: input.notes || null,
+        checkedAt: new Date().toISOString(),
+      };
+
+      // Save back to the step
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "PHYSICAL_INSPECTION",
+          },
+        },
+        data: {
+          status: "IN_PROGRESS",
+          enteredAt: step?.enteredAt || new Date(),
+          data: JSON.parse(JSON.stringify({ ...existingData, checkStatuses })),
+        },
+      });
+
+      return { success: true };
+    }),
+
+  // Get risk checklist statuses for an inspection
+  getRiskChecklist: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const step = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "PHYSICAL_INSPECTION",
+          },
+        },
+      });
+
+      if (!step?.data) return {};
+      const data = step.data as Record<string, unknown>;
+      return (data.checkStatuses || {}) as Record<string, { riskId: string; status: string; notes?: string; checkedAt?: string }>;
     }),
 });
 

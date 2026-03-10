@@ -26,6 +26,10 @@ import {
   Wrench,
   ShieldAlert,
 } from "lucide-react";
+import { StepPanel } from "@/components/inspection/StepPanel";
+import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
+import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
 // Dynamic import to avoid SSR issues with Three.js
 const Vehicle3D = dynamic(() => import("@/components/vehicle/Vehicle3D").then(m => ({ default: m.Vehicle3D })), {
@@ -69,26 +73,24 @@ export default function InspectionDetailPage({
   const utils = trpc.useUtils();
   const { data: inspection, isLoading } = trpc.inspection.get.useQuery({ id });
 
-  // Fetch risk profile for this vehicle's make/model/year
-  const { data: riskProfile } = trpc.vehicle.riskProfile.useQuery(
-    {
-      make: inspection?.vehicle.make || "",
-      model: inspection?.vehicle.model || "",
-      year: inspection?.vehicle.year || 0,
-    },
+  // Fetch dynamic risk profile (stored in RISK_REVIEW step after enrichment)
+  const { data: riskProfile } = trpc.inspection.getRiskProfile.useQuery(
+    { inspectionId: id },
     { enabled: !!inspection }
   );
 
-  const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
-  const [showFindingForm, setShowFindingForm] = useState(false);
-  const [findingForm, setFindingForm] = useState({
-    title: "",
-    description: "",
-    severity: "MODERATE" as (typeof SEVERITY_OPTIONS)[number],
-    category: "OTHER" as (typeof CATEGORY_OPTIONS)[number],
-    repairCostLow: "",
-    repairCostHigh: "",
-    evidence: "",
+  // Fetch risk checklist statuses
+  const { data: checkStatuses } = trpc.inspection.getRiskChecklist.useQuery(
+    { inspectionId: id },
+    { enabled: !!inspection }
+  );
+
+  // Mutations
+  const enrichRiskProfile = trpc.vehicle.enrichRiskProfile.useMutation({
+    onSuccess: () => {
+      utils.inspection.get.invalidate({ id });
+      utils.inspection.getRiskProfile.invalidate({ inspectionId: id });
+    },
   });
 
   const advanceStep = trpc.inspection.advanceStep.useMutation({
@@ -99,6 +101,7 @@ export default function InspectionDetailPage({
     onSuccess: () => {
       utils.inspection.get.invalidate({ id });
       setShowFindingForm(false);
+      setFindingFromRisk(null);
       setFindingForm({
         title: "", description: "", severity: "MODERATE", category: "OTHER",
         repairCostLow: "", repairCostHigh: "", evidence: "",
@@ -106,8 +109,31 @@ export default function InspectionDetailPage({
     },
   });
 
+  const recordRiskCheck = trpc.inspection.recordRiskCheck.useMutation({
+    onSuccess: () => {
+      utils.inspection.getRiskChecklist.invalidate({ inspectionId: id });
+    },
+  });
+
   const generateReport = trpc.report.generate.useMutation({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
+  });
+
+  // Media upload hook
+  const mediaUpload = useMediaUpload(id);
+
+  // UI state
+  const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
+  const [showFindingForm, setShowFindingForm] = useState(false);
+  const [findingFromRisk, setFindingFromRisk] = useState<AggregatedRisk | null>(null);
+  const [findingForm, setFindingForm] = useState({
+    title: "",
+    description: "",
+    severity: "MODERATE" as (typeof SEVERITY_OPTIONS)[number],
+    category: "OTHER" as (typeof CATEGORY_OPTIONS)[number],
+    repairCostLow: "",
+    repairCostHigh: "",
+    evidence: "",
   });
 
   if (isLoading) {
@@ -137,6 +163,7 @@ export default function InspectionDetailPage({
     const s = inspection.steps.find((is) => is.step === step);
     return s && s.status !== "COMPLETED";
   });
+  const currentStep = currentStepIndex >= 0 ? STEP_ORDER[currentStepIndex] : "COMPLETED";
   const isCompleted = inspection.status === "COMPLETED";
   const isCancelled = inspection.status === "CANCELLED";
 
@@ -156,6 +183,45 @@ export default function InspectionDetailPage({
       repairCostHigh: findingForm.repairCostHigh ? Math.round(parseFloat(findingForm.repairCostHigh) * 100) : undefined,
       evidence: findingForm.evidence || undefined,
     });
+  }
+
+  function handleCheckRisk(riskId: string, status: RiskCheckStatus["status"], notes?: string) {
+    recordRiskCheck.mutate({ inspectionId: id, riskId, status, notes });
+  }
+
+  function handleCreateFindingFromRisk(risk: AggregatedRisk) {
+    setFindingFromRisk(risk);
+  }
+
+  function handleSubmitFindingFromRisk(finding: {
+    title: string;
+    description: string;
+    severity: (typeof SEVERITY_OPTIONS)[number];
+    category: (typeof CATEGORY_OPTIONS)[number];
+    repairCostLow?: number;
+    repairCostHigh?: number;
+    evidence?: string;
+    positionX?: number;
+    positionY?: number;
+    positionZ?: number;
+  }) {
+    addFinding.mutate({
+      inspectionId: id,
+      ...finding,
+    });
+  }
+
+  // Normalize check statuses for the RiskChecklist component
+  const normalizedCheckStatuses: Record<string, RiskCheckStatus> = {};
+  if (checkStatuses) {
+    for (const [key, val] of Object.entries(checkStatuses)) {
+      normalizedCheckStatuses[key] = {
+        riskId: val.riskId,
+        status: val.status as RiskCheckStatus["status"],
+        notes: val.notes,
+        checkedAt: val.checkedAt,
+      };
+    }
   }
 
   return (
@@ -192,16 +258,6 @@ export default function InspectionDetailPage({
               <Plus className="h-4 w-4" /> Add Finding
             </Button>
           )}
-          {!inspection.report && completedSteps >= 5 && !isCancelled && (
-            <Button
-              onClick={() => generateReport.mutate({ inspectionId: id })}
-              loading={generateReport.isPending}
-              size="sm"
-              className="bg-brand-gradient text-white hover:opacity-90"
-            >
-              <FileText className="h-4 w-4" /> Generate Report
-            </Button>
-          )}
           {inspection.report && (
             <Badge variant="success">Report Generated</Badge>
           )}
@@ -223,18 +279,15 @@ export default function InspectionDetailPage({
             const Icon = meta.icon;
             const isStepCompleted = step?.status === "COMPLETED";
             const isActive = idx === currentStepIndex;
-            const canAdvance = isActive && !isCompleted && !isCancelled;
 
             return (
               <div key={stepKey} className="text-center">
-                <button
-                  onClick={() => canAdvance && handleAdvanceStep(stepKey)}
-                  disabled={!canAdvance || advanceStep.isPending}
+                <div
                   className={`mx-auto h-10 w-10 rounded-full flex items-center justify-center mb-1 transition-all ${
                     isStepCompleted
                       ? "bg-green-100 text-green-600"
                       : isActive
-                      ? "bg-brand-100 text-brand-600 ring-2 ring-brand-300 cursor-pointer hover:bg-brand-200"
+                      ? "bg-brand-100 text-brand-600 ring-2 ring-brand-300"
                       : "bg-gray-100 text-gray-400"
                   }`}
                 >
@@ -245,35 +298,26 @@ export default function InspectionDetailPage({
                   ) : (
                     <Icon className="h-4 w-4" />
                   )}
-                </button>
+                </div>
                 <p className={`text-xs ${
                   isStepCompleted ? "text-green-700 font-medium" :
                   isActive ? "text-brand-700 font-medium" : "text-gray-500"
                 }`}>
                   {meta.label}
                 </p>
-                {canAdvance && (
-                  <button
-                    onClick={() => handleAdvanceStep(stepKey)}
-                    disabled={advanceStep.isPending}
-                    className="mt-1 text-[10px] font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    {advanceStep.isPending ? "..." : "Complete →"}
-                  </button>
-                )}
               </div>
             );
           })}
         </div>
       </Card>
 
-      {/* 3D Risk Intelligence Viewer */}
-      {riskProfile && riskProfile.risks.length > 0 && (
+      {/* 3D Risk Intelligence Viewer (shown when risk profile exists) */}
+      {riskProfile && riskProfile.aggregatedRisks.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-0 overflow-hidden">
             <Vehicle3D
-              hotspots={riskProfile.risks.map((r, i) => ({
-                id: `risk-${i}`,
+              hotspots={riskProfile.aggregatedRisks.map((r) => ({
+                id: r.id,
                 position: [r.position.x, r.position.y, r.position.z] as [number, number, number],
                 severity: r.severity as "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO",
                 label: r.title,
@@ -287,19 +331,33 @@ export default function InspectionDetailPage({
             <CardHeader>
               <div className="flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-brand-600" />
-                <CardTitle>Known Risk Profile</CardTitle>
+                <CardTitle>Risk Intelligence</CardTitle>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {riskProfile.make} {riskProfile.model} ({riskProfile.yearFrom}–{riskProfile.yearTo}) · {riskProfile.risks.length} known risks · Source: {riskProfile.source}
-              </p>
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {riskProfile.nhtsaData.complaintCount > 0 && (
+                  <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                    {riskProfile.nhtsaData.complaintCount} Complaints
+                  </span>
+                )}
+                {riskProfile.nhtsaData.recallCount > 0 && (
+                  <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                    {riskProfile.nhtsaData.recallCount} Recalls
+                  </span>
+                )}
+                {riskProfile.nhtsaData.investigationCount > 0 && (
+                  <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
+                    {riskProfile.nhtsaData.investigationCount} Investigations
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <div className="space-y-2 max-h-[280px] overflow-y-auto">
-              {riskProfile.risks.map((risk, i) => {
-                const isActive = activeHotspot === `risk-${i}`;
+              {riskProfile.aggregatedRisks.map((risk) => {
+                const isActive = activeHotspot === risk.id;
                 return (
                   <button
-                    key={i}
-                    onClick={() => setActiveHotspot(isActive ? null : `risk-${i}`)}
+                    key={risk.id}
+                    onClick={() => setActiveHotspot(isActive ? null : risk.id)}
                     className={`w-full text-left p-3 rounded-lg border text-sm transition-all ${
                       isActive
                         ? "border-brand-300 bg-brand-50 ring-1 ring-brand-200"
@@ -308,23 +366,30 @@ export default function InspectionDetailPage({
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-xs">{risk.title}</span>
-                      <Badge
-                        variant={
-                          risk.severity === "CRITICAL" ? "danger" :
-                          risk.severity === "MAJOR" ? "warning" : "default"
-                        }
-                      >
-                        {risk.severity}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        {risk.hasActiveRecall && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">RECALL</span>
+                        )}
+                        <Badge
+                          variant={
+                            risk.severity === "CRITICAL" ? "danger" :
+                            risk.severity === "MAJOR" ? "warning" : "default"
+                          }
+                        >
+                          {risk.severity}
+                        </Badge>
+                      </div>
                     </div>
                     {isActive && (
                       <div className="mt-2 space-y-1">
                         <p className="text-xs text-gray-600">{risk.description}</p>
-                        <p className="text-xs font-medium">
-                          Est. repair: {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
-                        </p>
+                        {risk.cost.low > 0 && (
+                          <p className="text-xs font-medium">
+                            Est. repair: {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
+                          </p>
+                        )}
                         {risk.symptoms.length > 0 && (
-                          <div className="mt-1">
+                          <div>
                             <p className="text-[10px] font-medium uppercase text-gray-500">Look for:</p>
                             <ul className="text-[11px] text-gray-600 list-disc list-inside">
                               {risk.symptoms.map((s, si) => <li key={si}>{s}</li>)}
@@ -341,6 +406,37 @@ export default function InspectionDetailPage({
         </div>
       )}
 
+      {/* Active Step Panel */}
+      {!isCompleted && !isCancelled && (
+        <StepPanel
+          activeStep={currentStep}
+          riskProfile={riskProfile}
+          inspection={{
+            id: inspection.id,
+            media: inspection.media || [],
+            report: inspection.report,
+          }}
+          checkStatuses={normalizedCheckStatuses}
+          onStartVerification={() => enrichRiskProfile.mutate({ inspectionId: id })}
+          isEnriching={enrichRiskProfile.isPending}
+          onMediaCapture={(captureType, file) => mediaUpload.upload(file, captureType)}
+          uploadingCaptureType={mediaUpload.currentCaptureType || undefined}
+          onCheckRisk={handleCheckRisk}
+          onCreateFinding={handleCreateFindingFromRisk}
+          onCaptureEvidence={(risk) => {
+            // Scroll to or trigger evidence capture for this risk
+            setActiveHotspot(risk.id);
+          }}
+          onHighlightRisk={setActiveHotspot}
+          activeRiskId={activeHotspot}
+          onAdvanceStep={handleAdvanceStep}
+          onGenerateReport={() => generateReport.mutate({ inspectionId: id })}
+          isGeneratingReport={generateReport.isPending}
+          isAdvancingStep={advanceStep.isPending}
+        />
+      )}
+
+      {/* Vehicle Details + Score + Findings */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Vehicle Details */}
         <Card>
@@ -432,14 +528,6 @@ export default function InspectionDetailPage({
             <div className="text-center py-8 text-gray-400">
               <Wrench className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No findings yet</p>
-              {!isCompleted && (
-                <button
-                  onClick={() => setShowFindingForm(true)}
-                  className="mt-2 text-sm text-brand-600 font-medium hover:text-brand-700"
-                >
-                  Add first finding →
-                </button>
-              )}
             </div>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -472,7 +560,20 @@ export default function InspectionDetailPage({
         </Card>
       </div>
 
-      {/* Add Finding Slide-out Panel */}
+      {/* Finding from Risk slide-out */}
+      {findingFromRisk && (
+        <FindingFromRisk
+          risk={findingFromRisk}
+          onSubmit={handleSubmitFindingFromRisk}
+          onClose={() => setFindingFromRisk(null)}
+          onCaptureEvidence={() => {
+            // Could trigger camera here
+          }}
+          isSubmitting={addFinding.isPending}
+        />
+      )}
+
+      {/* Manual Add Finding Slide-out Panel */}
       {showFindingForm && (
         <>
           <div

@@ -1,5 +1,8 @@
 import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
+import { fetchComplaints, fetchRecalls, fetchInvestigations } from "@/lib/nhtsa";
+import { aggregateRiskProfile } from "@/lib/risk-engine";
+import type { AggregatedRiskProfile } from "@/types/risk";
 
 // NHTSA API base URL
 const NHTSA_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
@@ -148,16 +151,99 @@ export const vehicleRouter = router({
   recalls: protectedProcedure
     .input(z.object({ vin: z.string() }))
     .query(async ({ input }) => {
-      const res = await fetch(
-        `https://api.nhtsa.gov/recalls/recallsByVehicle?vin=${input.vin}`
-      );
-      const data = await res.json();
-      return (data.results || []).map((r: Record<string, string>) => ({
-        campaignNumber: r.NHTSACampaignNumber,
-        component: r.Component,
-        summary: r.Summary,
-        consequence: r.Consequence,
-        remedy: r.Remedy,
-      }));
+      return fetchRecalls(input.vin);
+    }),
+
+  // Enrich risk profile: fetch all NHTSA data + curated data, aggregate into risk profile
+  enrichRiskProfile: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Get inspection with vehicle
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { vehicle: true },
+      });
+      if (!inspection) throw new Error("Inspection not found");
+
+      const { vehicle } = inspection;
+      const { vin, make, model, year } = vehicle;
+
+      // Fetch all NHTSA data in parallel (don't let one failure block others)
+      const [complaintsResult, recallsResult, investigationsResult] =
+        await Promise.allSettled([
+          fetchComplaints(make, model, year),
+          fetchRecalls(vin),
+          fetchInvestigations(make, model, year),
+        ]);
+
+      const complaints =
+        complaintsResult.status === "fulfilled" ? complaintsResult.value : [];
+      const recalls =
+        recallsResult.status === "fulfilled" ? recallsResult.value : [];
+      const investigations =
+        investigationsResult.status === "fulfilled"
+          ? investigationsResult.value
+          : [];
+
+      // Look up curated risk profile
+      const curatedProfile = await ctx.db.riskProfile.findFirst({
+        where: {
+          make: { equals: make, mode: "insensitive" },
+          model: { contains: model, mode: "insensitive" },
+          yearFrom: { lte: year },
+          yearTo: { gte: year },
+        },
+      });
+
+      const curatedRisks = curatedProfile
+        ? (curatedProfile.risks as unknown as Array<{
+            severity: string;
+            title: string;
+            description: string;
+            cost: { low: number; high: number };
+            source: string;
+            position: { x: number; y: number; z: number };
+            symptoms: string[];
+            category: string;
+          }>)
+        : [];
+
+      // Aggregate everything into a unified risk profile
+      const profile = aggregateRiskProfile({
+        vehicleId: vehicle.id,
+        vin,
+        make,
+        model,
+        year,
+        complaints,
+        recalls,
+        investigations,
+        curatedRisks,
+        curatedProfileId: curatedProfile?.id,
+      });
+
+      // Store in the RISK_REVIEW step's data field
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "RISK_REVIEW",
+          },
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          enteredAt: new Date(),
+          data: JSON.parse(JSON.stringify(profile)),
+        },
+      });
+
+      // Advance inspection status
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId },
+        data: { status: "RISK_REVIEWED" },
+      });
+
+      return profile as AggregatedRiskProfile;
     }),
 });

@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef } from "react";
-import { Camera, Video, Mic, CheckCircle, Upload, ImageIcon } from "lucide-react";
+import { Camera, Video, Mic, CheckCircle, Upload, ImageIcon, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { AggregatedRisk } from "@/types/risk";
 
 interface CaptureItem {
   captureType: string;
@@ -15,6 +16,7 @@ interface CaptureGridProps {
   captures: CaptureItem[];
   onCapture: (captureType: string, file: File) => void;
   isUploading?: string;
+  risks?: AggregatedRisk[];
 }
 
 const REQUIRED_CAPTURES = [
@@ -42,6 +44,7 @@ function CaptureCard({
   isUploading,
   onCapture,
   required,
+  riskSeverity,
 }: {
   type: string;
   label: string;
@@ -51,6 +54,7 @@ function CaptureCard({
   isUploading: boolean;
   onCapture: (file: File) => void;
   required: boolean;
+  riskSeverity?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const isCaptured = !!captured?.url;
@@ -67,7 +71,11 @@ function CaptureCard({
         "relative rounded-xl border-2 p-4 transition-all",
         isCaptured
           ? "border-green-300 bg-green-50"
-          : "border-dashed border-brand-200 bg-white hover:border-brand-400 hover:bg-brand-50/30"
+          : riskSeverity === "CRITICAL"
+            ? "border-red-300 bg-red-50/30 hover:border-red-400"
+            : riskSeverity === "MAJOR"
+              ? "border-orange-300 bg-orange-50/30 hover:border-orange-400"
+              : "border-dashed border-brand-200 bg-white hover:border-brand-400 hover:bg-brand-50/30"
       )}
     >
       {/* Status indicator */}
@@ -76,14 +84,21 @@ function CaptureCard({
           <CheckCircle className="h-5 w-5 text-green-600" />
         </div>
       )}
+      {riskSeverity && !isCaptured && (
+        <div className="absolute top-2 right-2">
+          <AlertTriangle className={cn("h-4 w-4",
+            riskSeverity === "CRITICAL" ? "text-red-500" : "text-orange-500"
+          )} />
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex flex-col items-center text-center gap-2">
-        {isCaptured && captured?.thumbnailUrl ? (
+        {isCaptured && captured?.url ? (
           <div className="h-20 w-full rounded-lg bg-gray-100 overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={captured.thumbnailUrl}
+              src={captured.url}
               alt={label}
               className="h-full w-full object-cover"
             />
@@ -91,7 +106,7 @@ function CaptureCard({
         ) : (
           <div className={cn(
             "h-20 w-full rounded-lg flex items-center justify-center",
-            isCaptured ? "bg-green-100" : "bg-brand-50"
+            isCaptured ? "bg-green-100" : riskSeverity ? "bg-gray-50" : "bg-brand-50"
           )}>
             {isUploading ? (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
@@ -106,8 +121,16 @@ function CaptureCard({
           <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
         </div>
 
-        {!required && (
+        {!required && !riskSeverity && (
           <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Optional</span>
+        )}
+        {riskSeverity && (
+          <span className={cn(
+            "text-[10px] uppercase tracking-wider font-medium",
+            riskSeverity === "CRITICAL" ? "text-red-600" : "text-orange-600"
+          )}>
+            {riskSeverity} Risk Area
+          </span>
         )}
 
         <input
@@ -147,9 +170,29 @@ function CaptureCard({
   );
 }
 
-export function CaptureGrid({ inspectionId, captures, onCapture, isUploading }: CaptureGridProps) {
+export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, risks }: CaptureGridProps) {
   const getCaptured = (type: string) => captures.find((c) => c.captureType === type);
   const capturedCount = REQUIRED_CAPTURES.filter((c) => getCaptured(c.type)).length;
+
+  // Build risk-specific capture prompts from aggregated risks
+  const riskCaptures = (risks || []).flatMap((risk) =>
+    risk.capturePrompts.map((prompt, idx) => ({
+      type: `FINDING_EVIDENCE_${risk.id}_${idx}`,
+      label: prompt.split(" — ")[0] || prompt,
+      hint: prompt.split(" — ")[1] || risk.inspectionGuidance?.slice(0, 60) + "..." || "",
+      icon: Camera,
+      severity: risk.severity,
+      riskTitle: risk.title,
+    }))
+  );
+
+  // Deduplicate risk captures by label
+  const seenLabels = new Set<string>();
+  const uniqueRiskCaptures = riskCaptures.filter((cap) => {
+    if (seenLabels.has(cap.label)) return false;
+    seenLabels.add(cap.label);
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -195,6 +238,34 @@ export function CaptureGrid({ inspectionId, captures, onCapture, isUploading }: 
           ))}
         </div>
       </div>
+
+      {/* Risk-specific captures */}
+      {uniqueRiskCaptures.length > 0 && (
+        <div>
+          <h4 className="text-xs uppercase tracking-wider text-gray-500 font-medium mb-3 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" /> Risk-Specific Evidence Photos
+          </h4>
+          <p className="text-xs text-gray-400 mb-3">
+            Based on identified risks, capture these additional photos to document potential problem areas.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {uniqueRiskCaptures.map((cap) => (
+              <CaptureCard
+                key={cap.type}
+                type={cap.type}
+                label={cap.label}
+                hint={cap.hint}
+                icon={cap.icon}
+                captured={getCaptured(cap.type)}
+                isUploading={isUploading === cap.type}
+                onCapture={(file) => onCapture(cap.type, file)}
+                required={false}
+                riskSeverity={cap.severity}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Optional captures */}
       <div>

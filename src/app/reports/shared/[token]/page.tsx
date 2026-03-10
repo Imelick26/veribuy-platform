@@ -1,0 +1,196 @@
+"use client";
+
+import { use } from "react";
+import { Badge } from "@/components/ui/Badge";
+import { Progress } from "@/components/ui/Progress";
+import { trpc } from "@/lib/trpc";
+import { formatCurrency, formatDate, severityColor } from "@/lib/utils";
+import { AlertTriangle, CheckCircle, Camera, Wrench } from "lucide-react";
+
+export default function SharedReportPage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  const { token } = use(params);
+  const { data: report, isLoading, error } = trpc.report.viewShared.useQuery({ token });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+      </div>
+    );
+  }
+
+  if (error || !report || !report.inspection) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Report Not Found</h1>
+          <p className="text-gray-500">
+            {error?.message || "This report link may have expired or is invalid."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const { inspection, org } = report;
+  const { vehicle, findings, media, inspector } = inspection;
+
+  const criticalCount = findings.filter((f) => f.severity === "CRITICAL").length;
+  const majorCount = findings.filter((f) => f.severity === "MAJOR").length;
+  const totalRepairLow = findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
+  const totalRepairHigh = findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+
+          {/* Report Header */}
+          <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-8 py-6 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                {org && <p className="text-brand-200 text-sm font-medium">{org.name}</p>}
+                <p className="text-brand-200 text-xs mt-0.5">Powered by VeriBuy</p>
+                <h2 className="text-2xl font-bold mt-2">
+                  {vehicle.year} {vehicle.make} {vehicle.model}
+                </h2>
+                <p className="text-brand-200 font-mono text-sm mt-1">VIN: {vehicle.vin}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-brand-200 text-sm">Report #{report.number}</p>
+                <p className="text-brand-200 text-sm">{formatDate(report.generatedAt)}</p>
+                {inspector && <p className="text-brand-200 text-sm mt-1">Inspector: {inspector.name}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Executive Summary */}
+          <div className="px-8 py-6 border-b">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Executive Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 rounded-xl bg-gray-50">
+                <p className={`text-4xl font-bold ${
+                  (inspection.overallScore || 0) >= 70 ? "text-green-600" :
+                  (inspection.overallScore || 0) >= 50 ? "text-yellow-600" : "text-red-600"
+                }`}>
+                  {inspection.overallScore ?? "—"}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Overall Score</p>
+              </div>
+              <div className="text-center p-4 rounded-xl bg-red-50">
+                <p className="text-4xl font-bold text-red-600">{criticalCount + majorCount}</p>
+                <p className="text-xs text-gray-500 mt-1">Critical/Major Issues</p>
+              </div>
+              <div className="text-center p-4 rounded-xl bg-blue-50">
+                <p className="text-4xl font-bold text-blue-600">{findings.length}</p>
+                <p className="text-xs text-gray-500 mt-1">Total Findings</p>
+              </div>
+              <div className="text-center p-4 rounded-xl bg-green-50">
+                <p className="text-4xl font-bold text-green-600">{media?.length || 0}</p>
+                <p className="text-xs text-gray-500 mt-1">Photos</p>
+              </div>
+            </div>
+
+            {totalRepairHigh > 0 && (
+              <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-sm font-semibold text-amber-800">
+                  <AlertTriangle className="inline h-4 w-4 mr-1" />
+                  Total Estimated Repair Cost: {formatCurrency(totalRepairLow)} – {formatCurrency(totalRepairHigh)}
+                </p>
+              </div>
+            )}
+
+            {inspection.overallScore != null && (
+              <div className="mt-4 grid grid-cols-3 gap-4">
+                {[
+                  { label: "Structural", score: inspection.structuralScore },
+                  { label: "Cosmetic", score: inspection.cosmeticScore },
+                  { label: "Electronics", score: inspection.electronicsScore },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-500">{item.label}</span>
+                      <span className="font-medium">{item.score}/100</span>
+                    </div>
+                    <Progress value={item.score || 0} size="sm" color={
+                      (item.score || 0) >= 70 ? "green" :
+                      (item.score || 0) >= 50 ? "yellow" : "red"
+                    } />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Findings */}
+          <div className="px-8 py-6 border-b">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">
+              <Wrench className="inline h-5 w-5 mr-1" />
+              Findings ({findings.length})
+            </h3>
+            {findings.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <CheckCircle className="h-8 w-8 mx-auto mb-2" />
+                <p className="text-sm">No issues found during inspection</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {findings.map((f) => (
+                  <div key={f.id} className={`p-4 rounded-xl border ${severityColor(f.severity)}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold text-gray-900">{f.title}</h4>
+                      <Badge variant={
+                        f.severity === "CRITICAL" ? "danger" :
+                        f.severity === "MAJOR" ? "warning" : "default"
+                      }>
+                        {f.severity}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">{f.description}</p>
+                    {(f.repairCostLow || f.repairCostHigh) && (
+                      <p className="text-sm font-medium mt-2">
+                        Estimated repair: {formatCurrency(f.repairCostLow || 0)} – {formatCurrency(f.repairCostHigh || 0)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Media Gallery */}
+          {media && media.length > 0 && (
+            <div className="px-8 py-6 border-b">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
+                <Camera className="inline h-5 w-5 mr-1" />
+                Photo Gallery
+              </h3>
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                {media.filter((m) => m.url).map((m) => (
+                  <div key={m.id} className="rounded-lg bg-gray-100 overflow-hidden aspect-square">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={m.url!} alt={m.captureType || "Photo"} className="h-full w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="px-8 py-4 bg-gray-50 text-center">
+            <p className="text-xs text-gray-400">
+              Report generated by VeriBuy on {formatDate(report.generatedAt)}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              This report is provided for informational purposes. Always consult a qualified mechanic for final assessment.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
