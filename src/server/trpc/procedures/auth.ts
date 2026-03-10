@@ -84,6 +84,44 @@ export const authRouter = router({
     };
   }),
 
+  // List team members in the org
+  teamMembers: protectedProcedure.query(async ({ ctx }) => {
+    const members = await ctx.db.user.findMany({
+      where: { orgId: ctx.orgId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        avatar: true,
+        createdAt: true,
+        _count: { select: { inspections: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return members;
+  }),
+
+  // Remove a team member (owner/manager only)
+  removeUser: managerProcedure
+    .input(z.object({ userId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.userId) {
+        throw new Error("You cannot remove yourself from the team");
+      }
+      const user = await ctx.db.user.findFirst({
+        where: { id: input.userId, orgId: ctx.orgId },
+      });
+      if (!user) {
+        throw new Error("User not found in your organization");
+      }
+      if (user.role === "OWNER") {
+        throw new Error("Cannot remove the organization owner");
+      }
+      await ctx.db.user.delete({ where: { id: input.userId } });
+      return { message: "User removed" };
+    }),
+
   // Invite a team member
   inviteUser: managerProcedure
     .input(
