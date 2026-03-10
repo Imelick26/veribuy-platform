@@ -108,6 +108,42 @@ export const vehicleRouter = router({
       return { vehicles, nextCursor };
     }),
 
+  // Get risk profile for a vehicle (make/model/year)
+  riskProfile: protectedProcedure
+    .input(z.object({ make: z.string(), model: z.string(), year: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const profile = await ctx.db.riskProfile.findFirst({
+        where: {
+          make: { equals: input.make, mode: "insensitive" },
+          model: { contains: input.model, mode: "insensitive" },
+          yearFrom: { lte: input.year },
+          yearTo: { gte: input.year },
+        },
+      });
+
+      if (!profile) return null;
+
+      return {
+        id: profile.id,
+        make: profile.make,
+        model: profile.model,
+        yearFrom: profile.yearFrom,
+        yearTo: profile.yearTo,
+        engine: profile.engine,
+        risks: profile.risks as unknown as Array<{
+          severity: string;
+          title: string;
+          description: string;
+          cost: { low: number; high: number };
+          source: string;
+          position: { x: number; y: number; z: number };
+          symptoms: string[];
+          category: string;
+        }>,
+        source: profile.source,
+      };
+    }),
+
   // Fetch NHTSA recalls for a VIN
   recalls: protectedProcedure
     .input(z.object({ vin: z.string() }))

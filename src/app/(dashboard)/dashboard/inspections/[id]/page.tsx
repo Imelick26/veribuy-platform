@@ -1,13 +1,14 @@
 "use client";
 
 import { use, useState } from "react";
+import dynamic from "next/dynamic";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Progress } from "@/components/ui/Progress";
 import { Input } from "@/components/ui/Input";
 import { trpc } from "@/lib/trpc";
-import { formatDate, severityColor } from "@/lib/utils";
+import { formatCurrency, severityColor } from "@/lib/utils";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -23,7 +24,18 @@ import {
   Plus,
   X,
   Wrench,
+  ShieldAlert,
 } from "lucide-react";
+
+// Dynamic import to avoid SSR issues with Three.js
+const Vehicle3D = dynamic(() => import("@/components/vehicle/Vehicle3D").then(m => ({ default: m.Vehicle3D })), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[350px] bg-gray-900 rounded-xl">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-400" />
+    </div>
+  ),
+});
 
 const STEP_META: Record<string, { label: string; icon: typeof CheckCircle }> = {
   VIN_DECODE: { label: "VIN Decode", icon: Car },
@@ -57,6 +69,17 @@ export default function InspectionDetailPage({
   const utils = trpc.useUtils();
   const { data: inspection, isLoading } = trpc.inspection.get.useQuery({ id });
 
+  // Fetch risk profile for this vehicle's make/model/year
+  const { data: riskProfile } = trpc.vehicle.riskProfile.useQuery(
+    {
+      make: inspection?.vehicle.make || "",
+      model: inspection?.vehicle.model || "",
+      year: inspection?.vehicle.year || 0,
+    },
+    { enabled: !!inspection }
+  );
+
+  const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
   const [showFindingForm, setShowFindingForm] = useState(false);
   const [findingForm, setFindingForm] = useState({
     title: "",
@@ -191,7 +214,7 @@ export default function InspectionDetailPage({
           <p className="text-sm font-medium text-gray-700">Inspection Progress</p>
           <p className="text-sm text-gray-500">{completedSteps}/{inspection.steps.length} steps</p>
         </div>
-        <Progress value={progressPct} color={progressPct === 100 ? "green" : "blue"} />
+        <Progress value={progressPct} color={progressPct === 100 ? "green" : "brand"} />
 
         <div className="mt-5 grid grid-cols-7 gap-2">
           {STEP_ORDER.map((stepKey, idx) => {
@@ -243,6 +266,80 @@ export default function InspectionDetailPage({
           })}
         </div>
       </Card>
+
+      {/* 3D Risk Intelligence Viewer */}
+      {riskProfile && riskProfile.risks.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-0 overflow-hidden">
+            <Vehicle3D
+              hotspots={riskProfile.risks.map((r, i) => ({
+                id: `risk-${i}`,
+                position: [r.position.x, r.position.y, r.position.z] as [number, number, number],
+                severity: r.severity as "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO",
+                label: r.title,
+              }))}
+              onHotspotClick={(hotspotId) => setActiveHotspot(hotspotId === activeHotspot ? null : hotspotId)}
+              activeHotspot={activeHotspot}
+              className="h-[350px]"
+            />
+          </Card>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-brand-600" />
+                <CardTitle>Known Risk Profile</CardTitle>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                {riskProfile.make} {riskProfile.model} ({riskProfile.yearFrom}–{riskProfile.yearTo}) · {riskProfile.risks.length} known risks · Source: {riskProfile.source}
+              </p>
+            </CardHeader>
+            <div className="space-y-2 max-h-[280px] overflow-y-auto">
+              {riskProfile.risks.map((risk, i) => {
+                const isActive = activeHotspot === `risk-${i}`;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setActiveHotspot(isActive ? null : `risk-${i}`)}
+                    className={`w-full text-left p-3 rounded-lg border text-sm transition-all ${
+                      isActive
+                        ? "border-brand-300 bg-brand-50 ring-1 ring-brand-200"
+                        : `${severityColor(risk.severity)} hover:opacity-80`
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-xs">{risk.title}</span>
+                      <Badge
+                        variant={
+                          risk.severity === "CRITICAL" ? "danger" :
+                          risk.severity === "MAJOR" ? "warning" : "default"
+                        }
+                      >
+                        {risk.severity}
+                      </Badge>
+                    </div>
+                    {isActive && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs text-gray-600">{risk.description}</p>
+                        <p className="text-xs font-medium">
+                          Est. repair: {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
+                        </p>
+                        {risk.symptoms.length > 0 && (
+                          <div className="mt-1">
+                            <p className="text-[10px] font-medium uppercase text-gray-500">Look for:</p>
+                            <ul className="text-[11px] text-gray-600 list-disc list-inside">
+                              {risk.symptoms.map((s, si) => <li key={si}>{s}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Vehicle Details */}

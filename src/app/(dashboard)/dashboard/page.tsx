@@ -152,7 +152,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <Link
               href="/dashboard/inspections/new"
-              className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 hover:bg-brand-50 hover:border-blue-200 transition-colors"
+              className="flex items-center gap-4 p-4 rounded-lg border border-gray-100 hover:bg-brand-50 hover:border-brand-200 transition-colors"
             >
               <div className="rounded-lg bg-brand-100 p-2.5">
                 <Plus className="h-5 w-5 text-brand-600" />

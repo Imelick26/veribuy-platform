@@ -2,12 +2,12 @@ import { cn } from "@/lib/utils";
 
 interface ProgressProps {
   value: number; // 0-100
-  color?: "blue" | "green" | "yellow" | "red";
+  color?: "blue" | "green" | "yellow" | "red" | "brand";
   size?: "sm" | "md";
   className?: string;
 }
 
-export function Progress({ value, color = "blue", size = "md", className }: ProgressProps) {
+export function Progress({ value, color = "brand", size = "md", className }: ProgressProps) {
   return (
     <div
       className={cn(
@@ -22,6 +22,7 @@ export function Progress({ value, color = "blue", size = "md", className }: Prog
           "bg-green-500": color === "green",
           "bg-yellow-500": color === "yellow",
           "bg-red-500": color === "red",
+          "bg-brand-600": color === "brand",
         })}
         style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
       />

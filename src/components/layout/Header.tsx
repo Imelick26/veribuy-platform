@@ -17,8 +17,8 @@ export function Header() {
               {(user as Record<string, unknown>).orgName as string}
             </Badge>
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                <span className="text-sm font-semibold text-blue-700">
+              <div className="h-8 w-8 rounded-full bg-brand-100 flex items-center justify-center">
+                <span className="text-sm font-semibold text-brand-700">
                   {user.name?.charAt(0).toUpperCase()}
                 </span>
               </div>
