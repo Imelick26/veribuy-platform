@@ -1,6 +1,9 @@
 import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
-import type { AggregatedRiskProfile } from "@/types/risk";
+import { analyzeRiskMedia } from "@/lib/ai/media-analyzer";
+import { fetchVehicleHistory } from "@/lib/vinaudit";
+import { fetchMarketValue } from "@/lib/vinaudit";
+import type { AggregatedRiskProfile, AIAnalysisResult } from "@/types/risk";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -42,7 +45,7 @@ export const inspectionRouter = router({
                 { step: "VIN_DECODE", status: "COMPLETED", completedAt: new Date() },
                 { step: "RISK_REVIEW" },
                 { step: "MEDIA_CAPTURE" },
-                { step: "PHYSICAL_INSPECTION" },
+                { step: "AI_ANALYSIS" },
                 { step: "VEHICLE_HISTORY" },
                 { step: "MARKET_ANALYSIS" },
                 { step: "REPORT_GENERATION" },
@@ -107,7 +110,7 @@ export const inspectionRouter = router({
         status: z
           .enum([
             "CREATED", "VIN_DECODED", "RISK_REVIEWED", "MEDIA_CAPTURE",
-            "FINDINGS_RECORDED", "MARKET_PRICED", "REVIEWED", "COMPLETED", "CANCELLED",
+            "AI_ANALYZED", "MARKET_PRICED", "REVIEWED", "COMPLETED", "CANCELLED",
           ])
           .optional(),
       })
@@ -144,7 +147,7 @@ export const inspectionRouter = router({
         inspectionId: z.string(),
         step: z.enum([
           "VIN_DECODE", "RISK_REVIEW", "MEDIA_CAPTURE",
-          "PHYSICAL_INSPECTION", "VEHICLE_HISTORY", "MARKET_ANALYSIS",
+          "AI_ANALYSIS", "VEHICLE_HISTORY", "MARKET_ANALYSIS",
           "REPORT_GENERATION",
         ]),
         data: z.record(z.string(), z.unknown()).optional(),
@@ -171,8 +174,8 @@ export const inspectionRouter = router({
         VIN_DECODE: "VIN_DECODED",
         RISK_REVIEW: "RISK_REVIEWED",
         MEDIA_CAPTURE: "MEDIA_CAPTURE",
-        PHYSICAL_INSPECTION: "FINDINGS_RECORDED",
-        VEHICLE_HISTORY: "FINDINGS_RECORDED",
+        AI_ANALYSIS: "AI_ANALYZED",
+        VEHICLE_HISTORY: "AI_ANALYZED",
         MARKET_ANALYSIS: "MARKET_PRICED",
         REPORT_GENERATION: "COMPLETED",
       };
@@ -234,6 +237,274 @@ export const inspectionRouter = router({
       return recalculateScore(ctx.db, input.inspectionId);
     }),
 
+  // Run AI analysis on captured photos against risk items
+  runAIAnalysis: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Get inspection with vehicle and media
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { vehicle: true, media: true },
+      });
+      if (!inspection) throw new Error("Inspection not found");
+
+      // Get risk profile from RISK_REVIEW step
+      const riskStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "RISK_REVIEW",
+          },
+        },
+      });
+      if (!riskStep?.data) throw new Error("No risk profile found — run risk review first");
+      const riskProfile = riskStep.data as unknown as AggregatedRiskProfile;
+
+      // Prepare media for analysis (only items with URLs)
+      const mediaForAnalysis = inspection.media
+        .filter((m) => m.url && m.captureType)
+        .map((m) => ({
+          id: m.id,
+          url: m.url!,
+          captureType: m.captureType!,
+        }));
+
+      if (mediaForAnalysis.length === 0) {
+        throw new Error("No photos captured yet — capture photos before running AI analysis");
+      }
+
+      // Run AI analysis
+      const results = await analyzeRiskMedia(
+        { year: inspection.vehicle.year, make: inspection.vehicle.make, model: inspection.vehicle.model },
+        riskProfile.aggregatedRisks,
+        mediaForAnalysis
+      );
+
+      // Auto-create findings for CONFIRMED risks
+      for (const result of results) {
+        if (result.verdict === "CONFIRMED") {
+          const risk = riskProfile.aggregatedRisks.find((r) => r.id === result.riskId);
+          if (risk) {
+            await ctx.db.finding.create({
+              data: {
+                inspectionId: input.inspectionId,
+                title: risk.title,
+                description: result.explanation,
+                severity: risk.severity as never,
+                category: risk.category as never,
+                evidence: `AI Analysis (${Math.round(result.confidence * 100)}% confidence): ${result.explanation}`,
+                repairCostLow: risk.cost.low,
+                repairCostHigh: risk.cost.high,
+                positionX: risk.position.x,
+                positionY: risk.position.y,
+                positionZ: risk.position.z,
+              },
+            });
+          }
+        }
+      }
+
+      // Recalculate scores after auto-creating findings
+      await recalculateScore(ctx.db, input.inspectionId);
+
+      // Store AI results in the AI_ANALYSIS step data
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_ANALYSIS",
+          },
+        },
+        data: {
+          status: "IN_PROGRESS",
+          enteredAt: new Date(),
+          data: JSON.parse(JSON.stringify({ aiResults: results })),
+        },
+      });
+
+      return results as AIAnalysisResult[];
+    }),
+
+  // Get AI analysis results for an inspection
+  getAIAnalysisResults: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const step = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_ANALYSIS",
+          },
+        },
+      });
+
+      if (!step?.data) return [];
+      const data = step.data as Record<string, unknown>;
+      return (data.aiResults || []) as AIAnalysisResult[];
+    }),
+
+  // Fetch vehicle history from VinAudit API
+  fetchHistory: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { vehicle: true },
+      });
+      if (!inspection) throw new Error("Inspection not found");
+
+      const historyData = await fetchVehicleHistory(inspection.vehicle.vin);
+
+      // Create or update VehicleHistory record
+      const vehicleHistory = await ctx.db.vehicleHistory.upsert({
+        where: { inspectionId: input.inspectionId },
+        create: {
+          inspectionId: input.inspectionId,
+          provider: historyData.provider,
+          titleStatus: historyData.titleStatus,
+          accidentCount: historyData.accidentCount,
+          ownerCount: historyData.ownerCount,
+          serviceRecords: historyData.serviceRecords,
+          structuralDamage: historyData.structuralDamage,
+          floodDamage: historyData.floodDamage,
+          openRecallCount: historyData.openRecallCount,
+          recalls: JSON.parse(JSON.stringify(historyData.recalls)),
+          rawData: JSON.parse(JSON.stringify(historyData.rawData)),
+        },
+        update: {
+          provider: historyData.provider,
+          titleStatus: historyData.titleStatus,
+          accidentCount: historyData.accidentCount,
+          ownerCount: historyData.ownerCount,
+          serviceRecords: historyData.serviceRecords,
+          structuralDamage: historyData.structuralDamage,
+          floodDamage: historyData.floodDamage,
+          openRecallCount: historyData.openRecallCount,
+          recalls: JSON.parse(JSON.stringify(historyData.recalls)),
+          rawData: JSON.parse(JSON.stringify(historyData.rawData)),
+        },
+      });
+
+      // Mark step as completed
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "VEHICLE_HISTORY",
+          },
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          enteredAt: new Date(),
+        },
+      });
+
+      return vehicleHistory;
+    }),
+
+  // Fetch market analysis using VinAudit + AI valuation
+  fetchMarket: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { vehicle: true, findings: true },
+      });
+      if (!inspection) throw new Error("Inspection not found");
+
+      // Fetch market value from VinAudit
+      const marketData = await fetchMarketValue(
+        inspection.vehicle.vin,
+        inspection.odometer || undefined
+      );
+
+      // Build comparables from nearby listings
+      const comparables = marketData.nearbyListings.map((l) => ({
+        title: l.title,
+        price: l.price,
+        mileage: l.mileage,
+        location: l.location,
+        source: l.source,
+        url: l.url,
+      }));
+
+      // Simple condition-based adjustment
+      const basePrice = marketData.estimatedValue;
+      const conditionScore = inspection.overallScore || 70;
+      const conditionMultiplier = conditionScore >= 80 ? 1.0 : conditionScore >= 60 ? 0.92 : conditionScore >= 40 ? 0.82 : 0.70;
+      const adjustedPrice = Math.round(basePrice * conditionMultiplier);
+
+      // Determine recommendation
+      let recommendation: string;
+      if (conditionScore >= 75 && adjustedPrice <= basePrice * 0.95) {
+        recommendation = "STRONG_BUY";
+      } else if (conditionScore >= 60) {
+        recommendation = "FAIR_BUY";
+      } else if (conditionScore >= 40) {
+        recommendation = "OVERPAYING";
+      } else {
+        recommendation = "PASS";
+      }
+
+      // Repair cost exposure
+      const totalRepairLow = inspection.findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
+      const totalRepairHigh = inspection.findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
+
+      // Create or update MarketAnalysis record
+      const marketAnalysis = await ctx.db.marketAnalysis.upsert({
+        where: { inspectionId: input.inspectionId },
+        create: {
+          inspectionId: input.inspectionId,
+          comparables: JSON.parse(JSON.stringify(comparables)),
+          baselinePrice: basePrice,
+          adjustments: JSON.parse(JSON.stringify({
+            mileage: marketData.mileageAdjustment,
+            condition: Math.round(basePrice * (conditionMultiplier - 1)),
+          })),
+          adjustedPrice,
+          recommendation: recommendation as never,
+          strongBuyMax: Math.round(adjustedPrice * 0.90),
+          fairBuyMax: adjustedPrice,
+          estRetailPrice: marketData.valueHigh || Math.round(basePrice * 1.1),
+          estReconCost: Math.round((totalRepairLow + totalRepairHigh) / 2),
+          estGrossProfit: Math.round((marketData.valueHigh || basePrice * 1.1) - adjustedPrice - (totalRepairLow + totalRepairHigh) / 2),
+        },
+        update: {
+          comparables: JSON.parse(JSON.stringify(comparables)),
+          baselinePrice: basePrice,
+          adjustments: JSON.parse(JSON.stringify({
+            mileage: marketData.mileageAdjustment,
+            condition: Math.round(basePrice * (conditionMultiplier - 1)),
+          })),
+          adjustedPrice,
+          recommendation: recommendation as never,
+          strongBuyMax: Math.round(adjustedPrice * 0.90),
+          fairBuyMax: adjustedPrice,
+          estRetailPrice: marketData.valueHigh || Math.round(basePrice * 1.1),
+          estReconCost: Math.round((totalRepairLow + totalRepairHigh) / 2),
+          estGrossProfit: Math.round((marketData.valueHigh || basePrice * 1.1) - adjustedPrice - (totalRepairLow + totalRepairHigh) / 2),
+        },
+      });
+
+      // Mark step as completed
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "MARKET_ANALYSIS",
+          },
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          enteredAt: new Date(),
+        },
+      });
+
+      return marketAnalysis;
+    }),
+
   // Record risk check status during physical inspection
   recordRiskCheck: protectedProcedure
     .input(
@@ -245,12 +516,12 @@ export const inspectionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Get the PHYSICAL_INSPECTION step
+      // Get the AI_ANALYSIS step
       const step = await ctx.db.inspectionStep.findUnique({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "PHYSICAL_INSPECTION",
+            step: "AI_ANALYSIS",
           },
         },
       });
@@ -272,7 +543,7 @@ export const inspectionRouter = router({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "PHYSICAL_INSPECTION",
+            step: "AI_ANALYSIS",
           },
         },
         data: {
@@ -293,7 +564,7 @@ export const inspectionRouter = router({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "PHYSICAL_INSPECTION",
+            step: "AI_ANALYSIS",
           },
         },
       });

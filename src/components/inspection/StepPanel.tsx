@@ -4,19 +4,20 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { CaptureGrid } from "./CaptureGrid";
-import { RiskChecklist } from "./RiskChecklist";
 import {
   ShieldAlert,
   Camera,
-  Wrench,
+  Sparkles,
   Clock,
   BarChart3,
   FileText,
   CheckCircle,
   AlertTriangle,
+  Loader2,
+  Download,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
-import type { AggregatedRiskProfile, AggregatedRisk, RiskCheckStatus } from "@/types/risk";
+import { formatCurrency, cn } from "@/lib/utils";
+import type { AggregatedRiskProfile, AggregatedRisk, RiskCheckStatus, AIAnalysisResult } from "@/types/risk";
 
 interface StepPanelProps {
   activeStep: string;
@@ -25,6 +26,27 @@ interface StepPanelProps {
     id: string;
     media: Array<{ captureType: string | null; url: string | null; thumbnailUrl: string | null }>;
     report?: { id: string; pdfUrl?: string | null; number: string } | null;
+    vehicleHistory?: {
+      provider: string;
+      titleStatus: string;
+      accidentCount: number;
+      ownerCount: number;
+      serviceRecords: number;
+      structuralDamage: boolean;
+      floodDamage: boolean;
+      openRecallCount: number;
+    } | null;
+    marketAnalysis?: {
+      baselinePrice: number;
+      adjustedPrice: number;
+      recommendation: string;
+      strongBuyMax: number | null;
+      fairBuyMax: number | null;
+      estRetailPrice: number | null;
+      estReconCost: number | null;
+      estGrossProfit: number | null;
+      comparables: unknown;
+    } | null;
   };
   checkStatuses: Record<string, RiskCheckStatus>;
   onStartVerification: () => void;
@@ -40,6 +62,18 @@ interface StepPanelProps {
   onGenerateReport: () => void;
   isGeneratingReport: boolean;
   isAdvancingStep: boolean;
+  // AI Analysis
+  onRunAIAnalysis?: () => void;
+  isRunningAIAnalysis?: boolean;
+  aiAnalysisResults?: AIAnalysisResult[];
+  // Vehicle History
+  onFetchHistory?: () => void;
+  isFetchingHistory?: boolean;
+  // Market Analysis
+  onFetchMarket?: () => void;
+  isFetchingMarket?: boolean;
+  // Report
+  onViewReport?: () => void;
 }
 
 export function StepPanel({
@@ -60,6 +94,14 @@ export function StepPanel({
   onGenerateReport,
   isGeneratingReport,
   isAdvancingStep,
+  onRunAIAnalysis,
+  isRunningAIAnalysis,
+  aiAnalysisResults,
+  onFetchHistory,
+  isFetchingHistory,
+  onFetchMarket,
+  isFetchingMarket,
+  onViewReport,
 }: StepPanelProps) {
   switch (activeStep) {
     case "RISK_REVIEW":
@@ -179,52 +221,160 @@ export function StepPanel({
               loading={isAdvancingStep}
               className="w-full bg-brand-gradient text-white"
             >
-              Continue to Physical Inspection
+              Continue to AI Analysis
             </Button>
           </div>
         </Card>
       );
 
-    case "PHYSICAL_INSPECTION":
+    case "AI_ANALYSIS":
       return (
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Wrench className="h-5 w-5 text-brand-600" />
-              <CardTitle>Physical Inspection</CardTitle>
+              <Sparkles className="h-5 w-5 text-brand-600" />
+              <CardTitle>AI Photo Analysis</CardTitle>
             </div>
           </CardHeader>
-          {riskProfile && riskProfile.aggregatedRisks.length > 0 ? (
-            <>
-              <RiskChecklist
-                risks={riskProfile.aggregatedRisks}
-                checkStatuses={checkStatuses}
-                onCheckRisk={onCheckRisk}
-                onCreateFinding={onCreateFinding}
-                onCaptureEvidence={onCaptureEvidence}
-                onHighlightRisk={onHighlightRisk}
-                activeRiskId={activeRiskId}
-              />
+
+          {!aiAnalysisResults || aiAnalysisResults.length === 0 ? (
+            <div className="space-y-4">
+              <div className="text-center py-6">
+                <Sparkles className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+                <h4 className="font-semibold text-gray-900 mb-1">AI-Powered Condition Analysis</h4>
+                <p className="text-sm text-gray-500 mb-1 max-w-md mx-auto">
+                  Our AI will analyze your captured photos against each identified risk, looking for
+                  signs of damage, wear, or confirmed issues.
+                </p>
+                <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                  Photos are sent to GPT-4o Vision for expert-level analysis.
+                </p>
+              </div>
+
+              {/* Show captured media count */}
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                <p className="text-xs font-semibold text-blue-700 mb-1">
+                  <Camera className="inline h-3 w-3 mr-1" />
+                  {(inspection.media || []).filter(m => m.url).length} photos captured
+                </p>
+                <p className="text-xs text-blue-600">
+                  {riskProfile?.aggregatedRisks.length || 0} risk items will be evaluated
+                </p>
+              </div>
+
+              <Button
+                onClick={onRunAIAnalysis}
+                loading={isRunningAIAnalysis}
+                disabled={!riskProfile || (inspection.media || []).filter(m => m.url).length === 0}
+                className="w-full bg-brand-gradient text-white hover:opacity-90"
+              >
+                {isRunningAIAnalysis ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Analyzing Photos...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" /> Run AI Analysis
+                  </span>
+                )}
+              </Button>
+
+              {isRunningAIAnalysis && (
+                <p className="text-xs text-center text-gray-400">
+                  This may take 30-60 seconds depending on photo count...
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Results summary */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center p-3 rounded-lg bg-red-50">
+                  <p className="text-2xl font-bold text-red-600">
+                    {aiAnalysisResults.filter(r => r.verdict === "CONFIRMED").length}
+                  </p>
+                  <p className="text-xs text-gray-500">Confirmed</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-green-50">
+                  <p className="text-2xl font-bold text-green-600">
+                    {aiAnalysisResults.filter(r => r.verdict === "CLEARED").length}
+                  </p>
+                  <p className="text-xs text-gray-500">Cleared</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-yellow-50">
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {aiAnalysisResults.filter(r => r.verdict === "INCONCLUSIVE").length}
+                  </p>
+                  <p className="text-xs text-gray-500">Inconclusive</p>
+                </div>
+              </div>
+
+              {/* Per-risk results */}
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {aiAnalysisResults.map((result) => {
+                  const risk = riskProfile?.aggregatedRisks.find(r => r.id === result.riskId);
+                  return (
+                    <div
+                      key={result.riskId}
+                      className={cn(
+                        "p-3 rounded-lg border text-sm",
+                        result.verdict === "CONFIRMED"
+                          ? "border-red-200 bg-red-50"
+                          : result.verdict === "CLEARED"
+                            ? "border-green-200 bg-green-50"
+                            : "border-yellow-200 bg-yellow-50"
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-xs text-gray-900">
+                          {risk?.title || result.riskId}
+                        </span>
+                        <Badge
+                          variant={
+                            result.verdict === "CONFIRMED" ? "danger" :
+                            result.verdict === "CLEARED" ? "success" : "warning"
+                          }
+                        >
+                          {result.verdict}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-600">{result.explanation}</p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <div className="h-1.5 flex-1 rounded-full bg-gray-200 overflow-hidden">
+                          <div
+                            className={cn(
+                              "h-full rounded-full",
+                              result.confidence > 0.7 ? "bg-green-500" :
+                              result.confidence > 0.4 ? "bg-yellow-500" : "bg-red-500"
+                            )}
+                            style={{ width: `${result.confidence * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-gray-400">
+                          {Math.round(result.confidence * 100)}% confidence
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               <div className="mt-4 pt-4 border-t">
                 <Button
-                  onClick={() => onAdvanceStep("PHYSICAL_INSPECTION")}
+                  onClick={() => onAdvanceStep("AI_ANALYSIS")}
                   loading={isAdvancingStep}
                   className="w-full bg-brand-gradient text-white"
                 >
                   Continue to Vehicle History
                 </Button>
               </div>
-            </>
-          ) : (
-            <div className="text-center py-8 text-gray-400">
-              <Wrench className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Generate a risk profile first to start the inspection checklist.</p>
             </div>
           )}
         </Card>
       );
 
-    case "VEHICLE_HISTORY":
+    case "VEHICLE_HISTORY": {
+      const history = inspection.vehicleHistory;
       return (
         <Card>
           <CardHeader>
@@ -233,22 +383,104 @@ export function StepPanel({
               <CardTitle>Vehicle History</CardTitle>
             </div>
           </CardHeader>
-          <div className="text-center py-8 text-gray-400">
-            <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Vehicle history integration coming soon.</p>
-            <p className="text-xs mt-1">Carfax/AutoCheck data will appear here.</p>
-          </div>
-          <Button
-            onClick={() => onAdvanceStep("VEHICLE_HISTORY")}
-            loading={isAdvancingStep}
-            className="w-full bg-brand-gradient text-white mt-4"
-          >
-            Continue to Market Analysis
-          </Button>
+
+          {!history ? (
+            <div className="space-y-4">
+              <div className="text-center py-6">
+                <Clock className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+                <h4 className="font-semibold text-gray-900 mb-1">Pull Vehicle History Report</h4>
+                <p className="text-sm text-gray-500 mb-4 max-w-md mx-auto">
+                  Fetch title records, accident history, ownership data, and recall status from VinAudit.
+                </p>
+              </div>
+              <Button
+                onClick={onFetchHistory}
+                loading={isFetchingHistory}
+                className="w-full bg-brand-gradient text-white hover:opacity-90"
+              >
+                {isFetchingHistory ? "Fetching History..." : "Fetch Vehicle History (~$5)"}
+              </Button>
+              <div className="text-center">
+                <button
+                  onClick={() => onAdvanceStep("VEHICLE_HISTORY")}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  Skip this step
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Title status */}
+              <div className={cn(
+                "p-3 rounded-lg border",
+                history.titleStatus === "CLEAN"
+                  ? "bg-green-50 border-green-200"
+                  : "bg-red-50 border-red-200"
+              )}>
+                <div className="flex items-center gap-2">
+                  {history.titleStatus === "CLEAN" ? (
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                  )}
+                  <span className={cn(
+                    "font-semibold text-sm",
+                    history.titleStatus === "CLEAN" ? "text-green-800" : "text-red-800"
+                  )}>
+                    Title: {history.titleStatus}
+                  </span>
+                </div>
+              </div>
+
+              {/* Key facts */}
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: "Owners", value: history.ownerCount, icon: "👤" },
+                  { label: "Accidents", value: history.accidentCount, icon: history.accidentCount > 0 ? "⚠️" : "✅" },
+                  { label: "Service Records", value: history.serviceRecords, icon: "🔧" },
+                  { label: "Open Recalls", value: history.openRecallCount, icon: history.openRecallCount > 0 ? "🔴" : "✅" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 text-sm">
+                    <span>{item.icon}</span>
+                    <div>
+                      <p className="font-semibold text-gray-900">{item.value}</p>
+                      <p className="text-xs text-gray-500">{item.label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Damage flags */}
+              {(history.structuralDamage || history.floodDamage) && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-xs font-semibold text-red-700 mb-1">
+                    <AlertTriangle className="inline h-3 w-3 mr-1" /> Damage Flags
+                  </p>
+                  {history.structuralDamage && <p className="text-xs text-red-600">Structural damage reported</p>}
+                  {history.floodDamage && <p className="text-xs text-red-600">Flood damage reported</p>}
+                </div>
+              )}
+
+              <p className="text-[10px] text-gray-400 text-center">
+                Data provided by {history.provider}
+              </p>
+
+              <Button
+                onClick={() => onAdvanceStep("VEHICLE_HISTORY")}
+                loading={isAdvancingStep}
+                className="w-full bg-brand-gradient text-white mt-2"
+              >
+                Continue to Market Analysis
+              </Button>
+            </div>
+          )}
         </Card>
       );
+    }
 
-    case "MARKET_ANALYSIS":
+    case "MARKET_ANALYSIS": {
+      const market = inspection.marketAnalysis;
       return (
         <Card>
           <CardHeader>
@@ -257,20 +489,104 @@ export function StepPanel({
               <CardTitle>Market Analysis</CardTitle>
             </div>
           </CardHeader>
-          <div className="text-center py-8 text-gray-400">
-            <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">Market comps being developed separately.</p>
-            <p className="text-xs mt-1">Pricing analysis will appear here.</p>
-          </div>
-          <Button
-            onClick={() => onAdvanceStep("MARKET_ANALYSIS")}
-            loading={isAdvancingStep}
-            className="w-full bg-brand-gradient text-white mt-4"
-          >
-            Continue to Report Generation
-          </Button>
+
+          {!market ? (
+            <div className="space-y-4">
+              <div className="text-center py-6">
+                <BarChart3 className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+                <h4 className="font-semibold text-gray-900 mb-1">Run Market Analysis</h4>
+                <p className="text-sm text-gray-500 mb-4 max-w-md mx-auto">
+                  Fetch comparable listings and estimate fair market value adjusted for vehicle condition.
+                </p>
+              </div>
+              <Button
+                onClick={onFetchMarket}
+                loading={isFetchingMarket}
+                className="w-full bg-brand-gradient text-white hover:opacity-90"
+              >
+                {isFetchingMarket ? "Analyzing Market..." : "Run Market Analysis"}
+              </Button>
+              <div className="text-center">
+                <button
+                  onClick={() => onAdvanceStep("MARKET_ANALYSIS")}
+                  className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                  Skip this step
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Buy recommendation */}
+              <div className={cn(
+                "p-4 rounded-lg border text-center",
+                market.recommendation === "STRONG_BUY" ? "bg-green-50 border-green-200" :
+                market.recommendation === "FAIR_BUY" ? "bg-blue-50 border-blue-200" :
+                market.recommendation === "OVERPAYING" ? "bg-orange-50 border-orange-200" :
+                "bg-red-50 border-red-200"
+              )}>
+                <Badge
+                  variant={
+                    market.recommendation === "STRONG_BUY" ? "success" :
+                    market.recommendation === "FAIR_BUY" ? "info" :
+                    market.recommendation === "OVERPAYING" ? "warning" : "danger"
+                  }
+                >
+                  {market.recommendation.replace(/_/g, " ")}
+                </Badge>
+                <p className="text-2xl font-bold text-gray-900 mt-2">
+                  {formatCurrency(market.adjustedPrice)}
+                </p>
+                <p className="text-xs text-gray-500">Condition-Adjusted Value</p>
+              </div>
+
+              {/* Price breakdown */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Market Baseline</span>
+                  <span className="font-medium">{formatCurrency(market.baselinePrice)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Condition Adjusted</span>
+                  <span className="font-medium">{formatCurrency(market.adjustedPrice)}</span>
+                </div>
+                {market.strongBuyMax && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Strong Buy Max</span>
+                    <span className="font-medium text-green-600">{formatCurrency(market.strongBuyMax)}</span>
+                  </div>
+                )}
+                {market.estReconCost != null && market.estReconCost > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Est. Recon Cost</span>
+                    <span className="font-medium text-red-600">{formatCurrency(market.estReconCost)}</span>
+                  </div>
+                )}
+                {market.estGrossProfit != null && (
+                  <div className="flex justify-between text-sm border-t pt-2">
+                    <span className="text-gray-500 font-semibold">Est. Gross Profit</span>
+                    <span className={cn(
+                      "font-bold",
+                      market.estGrossProfit > 0 ? "text-green-600" : "text-red-600"
+                    )}>
+                      {formatCurrency(market.estGrossProfit)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <Button
+                onClick={() => onAdvanceStep("MARKET_ANALYSIS")}
+                loading={isAdvancingStep}
+                className="w-full bg-brand-gradient text-white mt-2"
+              >
+                Continue to Report Generation
+              </Button>
+            </div>
+          )}
         </Card>
       );
+    }
 
     case "REPORT_GENERATION":
       return (
@@ -292,9 +608,8 @@ export function StepPanel({
               </div>
               <div className="flex gap-2">
                 <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => window.open(`/dashboard/reports/${inspection.report!.id}`, "_blank")}
+                  className="flex-1 bg-brand-gradient text-white hover:opacity-90"
+                  onClick={onViewReport}
                 >
                   <FileText className="h-4 w-4" /> View Report
                 </Button>
@@ -304,7 +619,7 @@ export function StepPanel({
                     className="flex-1"
                     onClick={() => window.open(inspection.report!.pdfUrl!, "_blank")}
                   >
-                    Download PDF
+                    <Download className="h-4 w-4" /> PDF
                   </Button>
                 )}
               </div>

@@ -39,9 +39,9 @@ export const reportRouter = router({
       // Generate share token
       const shareToken = crypto.randomBytes(16).toString("hex");
 
-      // Extract risk checklist data from PHYSICAL_INSPECTION step
+      // Extract risk checklist data from AI_ANALYSIS step
       const physicalStep = inspection.steps.find(
-        (s) => s.step === "PHYSICAL_INSPECTION"
+        (s) => s.step === "AI_ANALYSIS"
       );
       let riskChecklist: ReportData["riskChecklist"] = undefined;
       if (physicalStep?.data && typeof physicalStep.data === "object") {

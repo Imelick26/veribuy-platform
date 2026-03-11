@@ -22,10 +22,14 @@ interface CaptureGridProps {
 const REQUIRED_CAPTURES = [
   { type: "FRONT_CENTER", label: "Front Center", hint: "6-8 ft, centered, full vehicle visible", icon: Camera },
   { type: "FRONT_34_DRIVER", label: "Front 3/4 Driver", hint: "45° angle from driver side", icon: Camera },
+  { type: "FRONT_34_PASSENGER", label: "Front 3/4 Passenger", hint: "45° angle from passenger side", icon: Camera },
   { type: "DRIVER_SIDE", label: "Driver Side", hint: "Full profile, 8-10 ft distance", icon: Camera },
-  { type: "REAR_34_DRIVER", label: "Rear 3/4 Driver", hint: "45° angle from rear driver side", icon: Camera },
-  { type: "REAR_CENTER", label: "Rear Center", hint: "6-8 ft, centered, full vehicle visible", icon: Camera },
   { type: "PASSENGER_SIDE", label: "Passenger Side", hint: "Full profile, 8-10 ft distance", icon: Camera },
+  { type: "REAR_34_DRIVER", label: "Rear 3/4 Driver", hint: "45° angle from rear driver side", icon: Camera },
+  { type: "REAR_34_PASSENGER", label: "Rear 3/4 Passenger", hint: "45° angle from rear passenger side", icon: Camera },
+  { type: "REAR_CENTER", label: "Rear Center", hint: "6-8 ft, centered, full vehicle visible", icon: Camera },
+  { type: "ROOF", label: "Roof", hint: "Overhead or elevated angle showing full roof", icon: Camera },
+  { type: "UNDERCARRIAGE", label: "Undercarriage", hint: "From ground level, showing underside", icon: Camera },
   { type: "ENGINE_BAY", label: "Engine Bay", hint: "Hood open, overhead angle", icon: Camera },
   { type: "UNDER_HOOD_LABEL", label: "VIN / Hood Label", hint: "Close-up, readable", icon: Camera },
 ];
@@ -174,17 +178,23 @@ export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, ri
   const getCaptured = (type: string) => captures.find((c) => c.captureType === type);
   const capturedCount = REQUIRED_CAPTURES.filter((c) => getCaptured(c.type)).length;
 
-  // Build risk-specific capture prompts from aggregated risks
-  const riskCaptures = (risks || []).flatMap((risk) =>
-    risk.capturePrompts.map((prompt, idx) => ({
+  // Build risk-specific capture prompts — prefer AI-generated prompts, fall back to defaults
+  const riskCaptures = (risks || []).flatMap((risk) => {
+    const prompts = risk.aiCapturePrompts && risk.aiCapturePrompts.length > 0
+      ? risk.aiCapturePrompts
+      : risk.capturePrompts;
+
+    return prompts.map((prompt, idx) => ({
       type: `FINDING_EVIDENCE_${risk.id}_${idx}`,
-      label: prompt.split(" — ")[0] || prompt,
-      hint: prompt.split(" — ")[1] || risk.inspectionGuidance?.slice(0, 60) + "..." || "",
+      label: prompt.length > 40 ? prompt.slice(0, 38) + "…" : prompt,
+      hint: risk.aiSummary
+        ? risk.aiSummary.slice(0, 80) + (risk.aiSummary.length > 80 ? "…" : "")
+        : prompt.split(" — ")[1] || risk.inspectionGuidance?.slice(0, 60) + "..." || "",
       icon: Camera,
       severity: risk.severity,
       riskTitle: risk.title,
-    }))
-  );
+    }));
+  });
 
   // Deduplicate risk captures by label
   const seenLabels = new Set<string>();

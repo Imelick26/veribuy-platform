@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useState } from "react";
-import dynamic from "next/dynamic";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -28,31 +27,24 @@ import {
 } from "lucide-react";
 import { StepPanel } from "@/components/inspection/StepPanel";
 import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
+import { VehicleDiagram } from "@/components/vehicle/VehicleDiagram";
+import { ReportModal } from "@/components/inspection/ReportModal";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
-// Dynamic import to avoid SSR issues with Three.js
-const Vehicle3D = dynamic(() => import("@/components/vehicle/Vehicle3D").then(m => ({ default: m.Vehicle3D })), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-[350px] bg-gray-900 rounded-xl">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-400" />
-    </div>
-  ),
-});
 
 const STEP_META: Record<string, { label: string; icon: typeof CheckCircle }> = {
   VIN_DECODE: { label: "VIN Decode", icon: Car },
   RISK_REVIEW: { label: "Risk Review", icon: AlertTriangle },
   MEDIA_CAPTURE: { label: "Media Capture", icon: Camera },
-  PHYSICAL_INSPECTION: { label: "Inspection", icon: Wrench },
+  AI_ANALYSIS: { label: "AI Analysis", icon: ShieldAlert },
   VEHICLE_HISTORY: { label: "History", icon: Clock },
   MARKET_ANALYSIS: { label: "Market", icon: BarChart3 },
   REPORT_GENERATION: { label: "Report", icon: FileText },
 };
 
 const STEP_ORDER = [
-  "VIN_DECODE", "RISK_REVIEW", "MEDIA_CAPTURE", "PHYSICAL_INSPECTION",
+  "VIN_DECODE", "RISK_REVIEW", "MEDIA_CAPTURE", "AI_ANALYSIS",
   "VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION",
 ];
 
@@ -119,12 +111,36 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
+  // AI Analysis
+  const runAIAnalysis = trpc.inspection.runAIAnalysis.useMutation({
+    onSuccess: () => {
+      utils.inspection.get.invalidate({ id });
+      utils.inspection.getAIAnalysisResults.invalidate({ inspectionId: id });
+    },
+  });
+
+  const { data: aiAnalysisResults } = trpc.inspection.getAIAnalysisResults.useQuery(
+    { inspectionId: id },
+    { enabled: !!inspection }
+  );
+
+  // Vehicle History
+  const fetchHistory = trpc.inspection.fetchHistory.useMutation({
+    onSuccess: () => utils.inspection.get.invalidate({ id }),
+  });
+
+  // Market Analysis
+  const fetchMarket = trpc.inspection.fetchMarket.useMutation({
+    onSuccess: () => utils.inspection.get.invalidate({ id }),
+  });
+
   // Media upload hook
   const mediaUpload = useMediaUpload(id);
 
   // UI state
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
   const [showFindingForm, setShowFindingForm] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [findingFromRisk, setFindingFromRisk] = useState<AggregatedRisk | null>(null);
   const [findingForm, setFindingForm] = useState({
     title: "",
@@ -315,7 +331,7 @@ export default function InspectionDetailPage({
       {riskProfile && riskProfile.aggregatedRisks.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-0 overflow-hidden">
-            <Vehicle3D
+            <VehicleDiagram
               hotspots={riskProfile.aggregatedRisks.map((r) => ({
                 id: r.id,
                 position: [r.position.x, r.position.y, r.position.z] as [number, number, number],
@@ -324,7 +340,6 @@ export default function InspectionDetailPage({
               }))}
               onHotspotClick={(hotspotId) => setActiveHotspot(hotspotId === activeHotspot ? null : hotspotId)}
               activeHotspot={activeHotspot}
-              className="h-[350px]"
             />
           </Card>
           <Card>
@@ -415,6 +430,11 @@ export default function InspectionDetailPage({
             id: inspection.id,
             media: inspection.media || [],
             report: inspection.report,
+            vehicleHistory: inspection.vehicleHistory ? {
+              ...inspection.vehicleHistory,
+              ownerCount: inspection.vehicleHistory.ownerCount ?? 0,
+            } : null,
+            marketAnalysis: inspection.marketAnalysis,
           }}
           checkStatuses={normalizedCheckStatuses}
           onStartVerification={() => enrichRiskProfile.mutate({ inspectionId: id })}
@@ -433,6 +453,14 @@ export default function InspectionDetailPage({
           onGenerateReport={() => generateReport.mutate({ inspectionId: id })}
           isGeneratingReport={generateReport.isPending}
           isAdvancingStep={advanceStep.isPending}
+          onRunAIAnalysis={() => runAIAnalysis.mutate({ inspectionId: id })}
+          isRunningAIAnalysis={runAIAnalysis.isPending}
+          aiAnalysisResults={aiAnalysisResults || undefined}
+          onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
+          isFetchingHistory={fetchHistory.isPending}
+          onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}
+          isFetchingMarket={fetchMarket.isPending}
+          onViewReport={() => setShowReportModal(true)}
         />
       )}
 
@@ -692,6 +720,17 @@ export default function InspectionDetailPage({
             </div>
           </div>
         </>
+      )}
+
+      {/* Report Modal */}
+      {showReportModal && inspection.report && (
+        <ReportModal
+          reportId={inspection.report.id}
+          reportNumber={inspection.report.number}
+          pdfUrl={inspection.report.pdfUrl}
+          shareToken={(inspection.report as { shareToken?: string }).shareToken}
+          onClose={() => setShowReportModal(false)}
+        />
       )}
     </div>
   );

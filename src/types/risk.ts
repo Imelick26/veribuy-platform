@@ -60,6 +60,18 @@ export interface AggregatedRisk {
   hasActiveRecall?: boolean;
   investigationId?: string;
   relatedRecalls?: NHTSARecall[];
+  /** AI-generated specific summary replacing generic description */
+  aiSummary?: string;
+  /** AI-generated specific capture prompts for this exact risk */
+  aiCapturePrompts?: string[];
+}
+
+export interface AIAnalysisResult {
+  riskId: string;
+  verdict: "CONFIRMED" | "CLEARED" | "INCONCLUSIVE";
+  confidence: number;
+  explanation: string;
+  evidenceMediaIds: string[];
 }
 
 export interface AggregatedRiskProfile {

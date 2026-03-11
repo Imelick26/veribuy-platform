@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
 import { fetchComplaints, fetchRecalls, fetchInvestigations } from "@/lib/nhtsa";
 import { aggregateRiskProfile } from "@/lib/risk-engine";
+import { summarizeRisks } from "@/lib/ai/risk-summarizer";
 import type { AggregatedRiskProfile } from "@/types/risk";
 
 // NHTSA API base URL
@@ -221,6 +222,29 @@ export const vehicleRouter = router({
         curatedRisks,
         curatedProfileId: curatedProfile?.id,
       });
+
+      // AI-enrich each risk with specific, actionable details + capture prompts
+      try {
+        const aiResults = await summarizeRisks(
+          { year, make, model, engine: vehicle.engine, trim: vehicle.trim },
+          profile.aggregatedRisks,
+          complaints
+        );
+
+        // Merge AI results back into aggregated risks
+        for (const ai of aiResults) {
+          const risk = profile.aggregatedRisks.find((r) => r.id === ai.riskId);
+          if (risk) {
+            risk.title = ai.aiTitle;
+            risk.aiSummary = ai.aiSummary;
+            risk.symptoms = ai.aiSymptoms;
+            risk.aiCapturePrompts = ai.aiCapturePrompts;
+          }
+        }
+      } catch (err) {
+        // AI enrichment is non-critical — log and continue with base risks
+        console.error("[enrichRiskProfile] AI summarization failed:", err);
+      }
 
       // Store in the RISK_REVIEW step's data field
       await ctx.db.inspectionStep.update({
