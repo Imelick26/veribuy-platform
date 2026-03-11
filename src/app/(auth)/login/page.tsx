@@ -18,16 +18,11 @@ export default function LoginPage() {
     setError("");
 
     startTransition(async () => {
-      try {
-        const result = await loginAction(email, password);
-        if (result?.error) {
-          setError(result.error);
-        }
-        // On success, the server action redirects to /dashboard automatically
-      } catch {
-        // NEXT_REDIRECT errors are re-thrown by Next.js and handled internally
-        // Any other error means something went wrong
-        setError("An error occurred. Please try again.");
+      const result = await loginAction(email, password);
+      // Only set error if the action returned an error
+      // On success, the server action redirects to /dashboard automatically
+      if (result?.error) {
+        setError(result.error);
       }
     });
   }
