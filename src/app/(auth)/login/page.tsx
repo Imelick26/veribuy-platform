@@ -1,43 +1,35 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { loginAction } from "./actions";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
-    try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError("Invalid email or password");
-      } else {
-        router.push("/dashboard");
-        router.refresh();
+    startTransition(async () => {
+      try {
+        const result = await loginAction(email, password);
+        if (result?.error) {
+          setError(result.error);
+        }
+        // On success, the server action redirects to /dashboard automatically
+      } catch {
+        // NEXT_REDIRECT errors are re-thrown by Next.js and handled internally
+        // Any other error means something went wrong
+        setError("An error occurred. Please try again.");
       }
-    } catch {
-      setError("An error occurred. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -77,7 +69,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <Button type="submit" loading={loading} className="w-full" size="lg">
+        <Button type="submit" loading={isPending} className="w-full" size="lg">
           Sign In
         </Button>
       </form>

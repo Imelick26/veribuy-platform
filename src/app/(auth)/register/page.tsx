@@ -1,13 +1,12 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { trpc } from "@/lib/trpc";
+import { loginAction } from "../login/actions";
 
 const ORG_TYPES = [
   { value: "DEALER", label: "Dealership" },
@@ -17,7 +16,6 @@ const ORG_TYPES = [
 ] as const;
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -26,16 +24,21 @@ export default function RegisterPage() {
     orgType: "DEALER" as "DEALER" | "INSPECTOR_FIRM" | "INSURANCE" | "INDIVIDUAL",
   });
   const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
 
   const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: async () => {
-      await signIn("credentials", {
-        email: form.email,
-        password: form.password,
-        redirect: false,
+    onSuccess: () => {
+      // After registration, sign in using server action
+      startTransition(async () => {
+        try {
+          const result = await loginAction(form.email, form.password);
+          if (result?.error) {
+            setError("Account created but sign-in failed. Please go to the login page.");
+          }
+        } catch {
+          // NEXT_REDIRECT is handled by Next.js
+        }
       });
-      router.push("/dashboard");
-      router.refresh();
     },
     onError: (err) => {
       setError(err.message);
@@ -51,6 +54,8 @@ export default function RegisterPage() {
   function update(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
+
+  const isLoading = registerMutation.isPending || isPending;
 
   return (
     <div>
@@ -130,7 +135,7 @@ export default function RegisterPage() {
 
         <Button
           type="submit"
-          loading={registerMutation.isPending}
+          loading={isLoading}
           className="w-full"
           size="lg"
         >
