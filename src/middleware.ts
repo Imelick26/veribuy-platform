@@ -8,8 +8,12 @@ export async function middleware(req: NextRequest) {
   const publicRoutes = ["/login", "/register", "/api/auth", "/api/trpc"];
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
-  // Check for JWT token (doesn't require Prisma/DB in edge runtime)
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  // Check for JWT token — Auth.js v5 uses "authjs.session-token" cookie (not "next-auth.*")
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+    salt: "authjs.session-token",
+  });
   const isLoggedIn = !!token;
 
   // Allow public routes
