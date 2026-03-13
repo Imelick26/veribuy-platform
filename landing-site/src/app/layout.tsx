@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VeriBuy — Vehicle Verification, Reinvented",
+  title: "VeriBuy — AI-Powered Vehicle Verification Infrastructure",
   description:
-    "The enterprise platform for AI-powered vehicle inspections, standardized condition reporting, and complete vehicle confidence.",
+    "VeriBuy standardizes inspections, analyzes vehicle condition data, and surfaces risk intelligence for dealerships, marketplaces, lenders, and insurers.",
   keywords: [
     "vehicle inspection",
     "car verification",
@@ -12,20 +12,21 @@ export const metadata: Metadata = {
     "condition report",
     "dealership software",
     "vehicle risk assessment",
+    "vehicle condition intelligence",
   ],
   openGraph: {
-    title: "VeriBuy — Vehicle Verification, Reinvented",
+    title: "VeriBuy — AI-Powered Vehicle Verification Infrastructure",
     description:
-      "The enterprise platform for AI-powered vehicle inspections and standardized condition reporting.",
+      "Standardized inspections, AI condition scoring, and risk intelligence for the automotive ecosystem.",
     url: "https://getveribuy.com",
     siteName: "VeriBuy",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "VeriBuy — Vehicle Verification, Reinvented",
+    title: "VeriBuy — AI-Powered Vehicle Verification Infrastructure",
     description:
-      "AI-powered vehicle inspections and standardized condition reporting.",
+      "Standardized inspections, AI condition scoring, and risk intelligence for the automotive ecosystem.",
   },
 };
 

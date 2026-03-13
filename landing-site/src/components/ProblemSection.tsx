@@ -42,8 +42,8 @@ export default function ProblemSection() {
             The industry is broken
           </h2>
           <p className="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">
-            Vehicle transactions involve billions in risk — yet the tools for
-            assessing vehicle condition haven&apos;t evolved in decades.
+            Over $1 trillion in vehicle transactions occur annually, yet vehicle
+            condition is still verified using inconsistent manual processes.
           </p>
         </motion.div>
 

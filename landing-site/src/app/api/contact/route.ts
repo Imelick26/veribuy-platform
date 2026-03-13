@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const CONTACT_EMAILS = ["isaac@notibuy.com", "cody@notibuy.com"];
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -22,7 +20,6 @@ export async function POST(request: NextRequest) {
     console.log(`Company: ${company || "N/A"}`);
     console.log(`Phone: ${phone || "N/A"}`);
     console.log(`Message: ${message}`);
-    console.log(`Recipients: ${CONTACT_EMAILS.join(", ")}`);
     console.log("==============================");
 
     // TODO: Integrate with an email service (Resend, SendGrid, etc.)
@@ -33,12 +30,12 @@ export async function POST(request: NextRequest) {
     //
     // await resend.emails.send({
     //   from: 'VeriBuy <noreply@getveribuy.com>',
-    //   to: CONTACT_EMAILS,
+    //   to: [process.env.CONTACT_EMAIL_1, process.env.CONTACT_EMAIL_2],
     //   subject: type === 'demo'
     //     ? `[VeriBuy] Demo Request from ${name} at ${company}`
-    //     : `[VeriBuy] Meeting Request from ${name} at ${company}`,
+    //     : `[VeriBuy] Contact from ${name} at ${company}`,
     //   html: `
-    //     <h2>New ${type === 'demo' ? 'Demo' : 'Meeting'} Request</h2>
+    //     <h2>New ${type === 'demo' ? 'Demo' : 'Contact'} Request</h2>
     //     <p><strong>Name:</strong> ${name}</p>
     //     <p><strong>Email:</strong> ${email}</p>
     //     <p><strong>Company:</strong> ${company || 'N/A'}</p>
