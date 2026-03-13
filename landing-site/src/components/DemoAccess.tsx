@@ -12,13 +12,15 @@ export default function DemoAccess() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(false);
 
     try {
-      await fetch("/api/contact", {
+      const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -27,10 +29,10 @@ export default function DemoAccess() {
           message: `Demo access requested by ${formData.name} from ${formData.company}`,
         }),
       });
+      if (!res.ok) throw new Error("Request failed");
       setSubmitted(true);
     } catch {
-      // Still show success — form data captured
-      setSubmitted(true);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -153,6 +155,12 @@ export default function DemoAccess() {
                         placeholder="Acme Motors"
                       />
                     </div>
+                    {error && (
+                      <p className="text-sm text-red-400 text-center">
+                        Something went wrong. Please try again.
+                      </p>
+                    )}
+
                     <button
                       type="submit"
                       disabled={loading}
