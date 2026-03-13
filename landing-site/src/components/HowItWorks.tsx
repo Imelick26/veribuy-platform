@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Search, ClipboardCheck, BarChart3 } from "lucide-react";
+import { Search, Camera, BarChart3 } from "lucide-react";
 
 const steps = [
   {
@@ -9,21 +9,21 @@ const steps = [
     icon: Search,
     title: "Decode",
     description:
-      "Enter any VIN to instantly decode vehicle specifications, pull recall history, and surface known risk profiles.",
+      "VIN decoding and risk signal analysis. Instantly surface vehicle specifications, recall history, and known risk profiles.",
   },
   {
     number: "02",
-    icon: ClipboardCheck,
-    title: "Inspect",
+    icon: Camera,
+    title: "Capture",
     description:
-      "Follow guided, standardized workflows that ensure thorough and consistent assessments across every vehicle and every inspector.",
+      "Guided inspection workflow with structured photo and video capture. Every inspector follows the same standardized process.",
   },
   {
     number: "03",
     icon: BarChart3,
-    title: "Report",
+    title: "Score",
     description:
-      "Generate comprehensive, professional condition reports with scoring, findings, and actionable insights — in seconds.",
+      "AI generates condition scoring and a verified report. Standardized, shareable, and trusted across all parties.",
   },
 ];
 

@@ -1,35 +1,35 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Zap, ShieldCheck, Handshake, Building2 } from "lucide-react";
+import { ClipboardList, Brain, Share2, Activity } from "lucide-react";
 
 const benefits = [
   {
-    icon: Zap,
-    title: "Save Time",
+    icon: ClipboardList,
+    title: "Standardized Inspections",
     description:
-      "Streamlined workflows cut inspection time dramatically. Spend less time on paperwork, more time closing deals.",
+      "Consistent inspection workflows across every location. Every vehicle, every inspector, every time.",
     gradient: "from-yellow-500/20 to-orange-500/20",
   },
   {
-    icon: ShieldCheck,
-    title: "Reduce Risk",
+    icon: Brain,
+    title: "AI Condition Scoring",
     description:
-      "Catch issues before they become costly surprises. Proactive risk intelligence protects your bottom line.",
+      "AI-powered analysis generates objective condition scores from inspection data, photos, and vehicle history.",
     gradient: "from-brand-600/20 to-accent-magenta/20",
   },
   {
-    icon: Handshake,
-    title: "Build Trust",
+    icon: Share2,
+    title: "Shareable Reports",
     description:
-      "Transparent, standardized reports give buyers and partners confidence. Trust drives repeat business.",
+      "Generate verification reports that can be shared and trusted across buyers, dealers, lenders, and insurers.",
     gradient: "from-emerald-500/20 to-teal-500/20",
   },
   {
-    icon: Building2,
-    title: "Scale Operations",
+    icon: Activity,
+    title: "Real-Time Risk Insights",
     description:
-      "Multi-team, multi-location support with centralized oversight. Grow without sacrificing quality or consistency.",
+      "Surface risk signals, recall data, and condition intelligence in real time — before issues become costly.",
     gradient: "from-blue-500/20 to-indigo-500/20",
   },
 ];

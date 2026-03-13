@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Send, CheckCircle, Mail, ArrowRight } from "lucide-react";
+import { Send, CheckCircle, MessageSquare, ArrowRight } from "lucide-react";
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -62,23 +62,13 @@ export default function Contact() {
             <div className="space-y-6">
               <div className="flex items-start gap-4">
                 <div className="shrink-0 w-10 h-10 rounded-xl bg-brand-gradient flex items-center justify-center">
-                  <Mail size={20} className="text-white" />
+                  <MessageSquare size={20} className="text-white" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-400 mb-1">Email us directly</p>
-                  <a
-                    href="mailto:isaac@notibuy.com"
-                    className="text-white hover:text-accent-pink transition-colors font-medium"
-                  >
-                    isaac@notibuy.com
-                  </a>
-                  <span className="text-gray-600 mx-2">|</span>
-                  <a
-                    href="mailto:cody@notibuy.com"
-                    className="text-white hover:text-accent-pink transition-colors font-medium"
-                  >
-                    cody@notibuy.com
-                  </a>
+                  <p className="text-sm text-gray-400 mb-1">Reach us</p>
+                  <p className="text-white font-medium">
+                    Use the form and we&apos;ll get back to you directly.
+                  </p>
                 </div>
               </div>
 

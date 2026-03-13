@@ -3,8 +3,10 @@ import Hero from "@/components/Hero";
 import TrustBar from "@/components/TrustBar";
 import ProblemSection from "@/components/ProblemSection";
 import SolutionSection from "@/components/SolutionSection";
+import IntelligenceSection from "@/components/IntelligenceSection";
 import HowItWorks from "@/components/HowItWorks";
 import Benefits from "@/components/Benefits";
+import NetworkSection from "@/components/NetworkSection";
 import DemoAccess from "@/components/DemoAccess";
 import Contact from "@/components/Contact";
 import Footer from "@/components/Footer";
@@ -19,9 +21,13 @@ export default function Home() {
       <div className="section-divider" />
       <SolutionSection />
       <div className="section-divider" />
+      <IntelligenceSection />
+      <div className="section-divider" />
       <HowItWorks />
       <div className="section-divider" />
       <Benefits />
+      <div className="section-divider" />
+      <NetworkSection />
       <DemoAccess />
       <Contact />
       <Footer />

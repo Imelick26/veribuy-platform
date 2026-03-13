@@ -35,8 +35,8 @@ export default function Footer() {
               <span className="text-lg font-bold">VeriBuy</span>
             </a>
             <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
-              The enterprise platform for vehicle verification. Built for
-              dealerships, inspectors, and insurers who demand precision.
+              AI-powered vehicle verification infrastructure. Built for
+              dealerships, marketplaces, lenders, and insurers.
             </p>
           </div>
 
