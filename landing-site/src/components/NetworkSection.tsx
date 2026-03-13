@@ -1,13 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Network, Building2, Landmark, ShieldCheck } from "lucide-react";
+import { Building2, Users } from "lucide-react";
 
 const participants = [
   { icon: Building2, label: "Dealers" },
-  { icon: Network, label: "Marketplaces" },
-  { icon: Landmark, label: "Lenders" },
-  { icon: ShieldCheck, label: "Insurers" },
+  { icon: Users, label: "Consumers" },
 ];
 
 export default function NetworkSection() {
@@ -33,7 +31,7 @@ export default function NetworkSection() {
           <p className="mt-4 text-lg text-gray-400 max-w-3xl mx-auto leading-relaxed">
             VeriBuy creates a shared verification layer where inspections
             generate standardized vehicle condition data that can be trusted
-            across buyers, dealers, lenders, and insurers.
+            by dealers and consumers.
           </p>
         </motion.div>
 

@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "VeriBuy — AI-Powered Vehicle Verification Infrastructure",
   description:
-    "VeriBuy standardizes inspections, analyzes vehicle condition data, and surfaces risk intelligence for dealerships, marketplaces, lenders, and insurers.",
+    "VeriBuy standardizes inspections, analyzes vehicle condition data, and surfaces risk intelligence to help dealerships make better acquisition and pricing decisions.",
   keywords: [
     "vehicle inspection",
     "car verification",

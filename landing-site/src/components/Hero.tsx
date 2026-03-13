@@ -49,8 +49,8 @@ export default function Hero() {
               className="max-w-xl text-lg md:text-xl text-gray-400 leading-relaxed mb-12 mx-auto lg:mx-0"
             >
               VeriBuy standardizes inspections, analyzes vehicle condition data,
-              and surfaces risk intelligence for dealerships, marketplaces,
-              lenders, and insurers.
+              and surfaces risk intelligence to help dealerships make better
+              acquisition and pricing decisions.
             </motion.p>
 
             {/* CTAs */}
@@ -78,27 +78,6 @@ export default function Hero() {
               </a>
             </motion.div>
 
-            {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.5 }}
-              className="mt-16 grid grid-cols-2 gap-8 max-w-md mx-auto lg:mx-0"
-            >
-              {[
-                { value: "Minutes", label: "Not Hours Per Inspection" },
-                { value: "99.9%", label: "Uptime" },
-              ].map((stat) => (
-                <div key={stat.label}>
-                  <div className="text-2xl md:text-3xl font-bold text-brand-gradient">
-                    {stat.value}
-                  </div>
-                  <div className="text-xs md:text-sm text-gray-500 mt-1">
-                    {stat.label}
-                  </div>
-                </div>
-              ))}
-            </motion.div>
           </div>
 
           {/* Right — Product Visual */}

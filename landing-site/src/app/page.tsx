@@ -1,15 +1,17 @@
+import dynamic from "next/dynamic";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
-import TrustBar from "@/components/TrustBar";
-import ProblemSection from "@/components/ProblemSection";
-import SolutionSection from "@/components/SolutionSection";
-import IntelligenceSection from "@/components/IntelligenceSection";
-import HowItWorks from "@/components/HowItWorks";
-import Benefits from "@/components/Benefits";
-import NetworkSection from "@/components/NetworkSection";
-import DemoAccess from "@/components/DemoAccess";
-import Contact from "@/components/Contact";
-import Footer from "@/components/Footer";
+
+const TrustBar = dynamic(() => import("@/components/TrustBar"));
+const ProblemSection = dynamic(() => import("@/components/ProblemSection"));
+const SolutionSection = dynamic(() => import("@/components/SolutionSection"));
+const IntelligenceSection = dynamic(() => import("@/components/IntelligenceSection"));
+const HowItWorks = dynamic(() => import("@/components/HowItWorks"));
+const Benefits = dynamic(() => import("@/components/Benefits"));
+const NetworkSection = dynamic(() => import("@/components/NetworkSection"));
+const DemoAccess = dynamic(() => import("@/components/DemoAccess"));
+const Contact = dynamic(() => import("@/components/Contact"));
+const Footer = dynamic(() => import("@/components/Footer"));
 
 export default function Home() {
   return (

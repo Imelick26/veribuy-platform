@@ -36,7 +36,7 @@ export default function Footer() {
             </a>
             <p className="text-gray-500 text-sm leading-relaxed max-w-xs">
               AI-powered vehicle verification infrastructure. Built for
-              dealerships, marketplaces, lenders, and insurers.
+              dealers and consumers.
             </p>
           </div>
 

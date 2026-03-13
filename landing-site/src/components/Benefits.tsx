@@ -22,7 +22,7 @@ const benefits = [
     icon: Share2,
     title: "Shareable Reports",
     description:
-      "Generate verification reports that can be shared and trusted across buyers, dealers, lenders, and insurers.",
+      "Generate verification reports that can be shared and trusted by dealers and consumers.",
     gradient: "from-emerald-500/20 to-teal-500/20",
   },
   {

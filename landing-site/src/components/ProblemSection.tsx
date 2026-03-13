@@ -1,26 +1,26 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlertTriangle, Clock, EyeOff } from "lucide-react";
+import { AlertTriangle, EyeOff, Wrench } from "lucide-react";
 
 const problems = [
   {
     icon: AlertTriangle,
-    title: "Inconsistent Inspections",
+    title: "Hidden Issues After Purchase",
     description:
-      "Every inspector does it differently. Subjective assessments lead to missed issues and unreliable condition reports.",
+      "Vehicles that look clean during a quick walkaround can hide costly mechanical problems. Those issues often surface during reconditioning — wiping out the profit on the deal.",
   },
   {
     icon: EyeOff,
-    title: "Zero Transparency",
+    title: "Limited Visibility at Acquisition",
     description:
-      "Buyers, dealers, and insurers lack a single source of truth. Incomplete data breeds distrust and costly disputes.",
+      "Dealers frequently acquire vehicles with incomplete condition data. Without deeper inspection, real risk stays hidden until it\u2019s too late.",
   },
   {
-    icon: Clock,
-    title: "Manual & Error-Prone",
+    icon: Wrench,
+    title: "Costly Reconditioning Surprises",
     description:
-      "Paper forms, spreadsheets, and disconnected tools waste hours per vehicle — and still miss critical details.",
+      "Unexpected repairs and mechanical failures discovered after purchase can quickly turn a profitable vehicle into a loss.",
   },
 ];
 
@@ -38,12 +38,12 @@ export default function ProblemSection() {
           <p className="text-sm font-medium text-accent-pink uppercase tracking-widest mb-4">
             The Problem
           </p>
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-            The industry is broken
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight max-w-3xl mx-auto">
+            Dealerships often acquire vehicles based on quick walkarounds and incomplete condition data.
           </h2>
           <p className="mt-4 text-lg text-gray-400 max-w-2xl mx-auto">
-            Over $1 trillion in vehicle transactions occur annually, yet vehicle
-            condition is still verified using inconsistent manual processes.
+            Hidden mechanical issues and reconditioning costs discovered later
+            can erase the entire margin.
           </p>
         </motion.div>
 

@@ -57,7 +57,7 @@ export default function Contact() {
               <span className="text-brand-gradient">your needs</span>
             </h2>
             <p className="text-lg text-gray-400 leading-relaxed mb-10">
-              Whether you&apos;re a dealership group, inspection firm, or insurer
+              Whether you&apos;re a dealer or consumer
               — we&apos;d love to understand your challenges and show you how
               VeriBuy can help.
             </p>
