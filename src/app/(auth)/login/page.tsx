@@ -1,43 +1,30 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { loginAction } from "./actions";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
-    try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
+    startTransition(async () => {
+      const result = await loginAction(email, password);
+      // Only set error if the action returned an error
+      // On success, the server action redirects to /dashboard automatically
       if (result?.error) {
-        setError("Invalid email or password");
-      } else {
-        router.push("/dashboard");
-        router.refresh();
+        setError(result.error);
       }
-    } catch {
-      setError("An error occurred. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -48,8 +35,8 @@ export default function LoginPage() {
         <span className="text-xl font-bold text-brand-gradient">VeriBuy</span>
       </div>
 
-      <h2 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">Welcome back</h2>
-      <p className="text-gray-500 mb-8">Sign in to your account to continue</p>
+      <h2 className="text-3xl font-bold text-text-primary mb-2 tracking-tight">Welcome back</h2>
+      <p className="text-text-secondary mb-8">Sign in to your account to continue</p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Input
@@ -72,17 +59,17 @@ export default function LoginPage() {
         />
 
         {error && (
-          <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-100">
+          <div className="rounded-xl bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-500/20">
             {error}
           </div>
         )}
 
-        <Button type="submit" loading={loading} className="w-full" size="lg">
+        <Button type="submit" loading={isPending} className="w-full" size="lg">
           Sign In
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-gray-500">
+      <p className="mt-6 text-center text-sm text-text-secondary">
         Don&apos;t have an account?{" "}
         <Link href="/register" className="font-semibold text-brand-gradient hover:opacity-80 transition-opacity">
           Create one

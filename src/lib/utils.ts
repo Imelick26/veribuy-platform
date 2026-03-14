@@ -23,19 +23,19 @@ export function formatDate(date: Date | string): string {
 
 export function severityColor(severity: string): string {
   switch (severity) {
-    case "CRITICAL": return "text-red-600 bg-red-50 border-red-200";
-    case "MAJOR": return "text-orange-600 bg-orange-50 border-orange-200";
-    case "MODERATE": return "text-yellow-600 bg-yellow-50 border-yellow-200";
-    case "MINOR": return "text-blue-600 bg-blue-50 border-blue-200";
-    default: return "text-gray-600 bg-gray-50 border-gray-200";
+    case "CRITICAL": return "text-red-400 bg-[#2e0a0a] border-red-900/50";
+    case "MAJOR": return "text-red-400 bg-[#2e0a0a] border-red-900/50";
+    case "MODERATE": return "text-text-secondary bg-surface-overlay border-border-strong";
+    case "MINOR": return "text-brand-300 bg-[#1a0a2e] border-brand-800/50";
+    default: return "text-text-secondary bg-surface-overlay border-border-default";
   }
 }
 
 export function statusColor(status: string): string {
   switch (status) {
-    case "COMPLETED": return "text-green-700 bg-green-50";
-    case "CANCELLED": return "text-red-700 bg-red-50";
-    case "CREATED": return "text-gray-700 bg-gray-50";
-    default: return "text-blue-700 bg-blue-50";
+    case "COMPLETED": return "text-green-400 bg-[#0a2e1a]";
+    case "CANCELLED": return "text-red-400 bg-[#2e0a0a]";
+    case "CREATED": return "text-text-secondary bg-surface-overlay";
+    default: return "text-brand-300 bg-[#1a0a2e]";
   }
 }

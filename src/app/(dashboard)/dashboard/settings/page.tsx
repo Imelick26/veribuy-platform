@@ -12,8 +12,8 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Settings</h1>
-        <p className="text-gray-500 mt-1">Manage your account and organization</p>
+        <h1 className="text-2xl font-bold text-text-primary tracking-tight">Settings</h1>
+        <p className="text-text-secondary mt-1">Manage your account and organization</p>
       </div>
 
       {/* Organization */}
@@ -31,20 +31,20 @@ export default function SettingsPage() {
         </CardHeader>
         {user && (
           <div className="space-y-3">
-            <div className="flex justify-between items-center text-sm py-2 border-b border-gray-50">
-              <span className="text-gray-500">Name</span>
+            <div className="flex justify-between items-center text-sm py-2 border-b border-border-default">
+              <span className="text-text-secondary">Name</span>
               <span className="font-medium">{user.org.name}</span>
             </div>
-            <div className="flex justify-between items-center text-sm py-2 border-b border-gray-50">
-              <span className="text-gray-500">Slug</span>
-              <span className="font-mono text-gray-600">{user.org.slug}</span>
+            <div className="flex justify-between items-center text-sm py-2 border-b border-border-default">
+              <span className="text-text-secondary">Slug</span>
+              <span className="font-mono text-text-secondary">{user.org.slug}</span>
             </div>
-            <div className="flex justify-between items-center text-sm py-2 border-b border-gray-50">
-              <span className="text-gray-500">Type</span>
+            <div className="flex justify-between items-center text-sm py-2 border-b border-border-default">
+              <span className="text-text-secondary">Type</span>
               <Badge variant="info">{user.org.type}</Badge>
             </div>
             <div className="flex justify-between items-center text-sm py-2">
-              <span className="text-gray-500">Plan</span>
+              <span className="text-text-secondary">Plan</span>
               <Badge variant="gradient">{user.org.subscription}</Badge>
             </div>
           </div>
@@ -55,8 +55,8 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-brand-50 p-2">
-              <Users className="h-4 w-4 text-brand-600" />
+            <div className="rounded-xl bg-[#1a0a2e] p-2">
+              <Users className="h-4 w-4 text-brand-400" />
             </div>
             <div>
               <CardTitle>Profile</CardTitle>
@@ -66,16 +66,16 @@ export default function SettingsPage() {
         </CardHeader>
         {user && (
           <div className="space-y-3">
-            <div className="flex justify-between items-center text-sm py-2 border-b border-gray-50">
-              <span className="text-gray-500">Name</span>
+            <div className="flex justify-between items-center text-sm py-2 border-b border-border-default">
+              <span className="text-text-secondary">Name</span>
               <span className="font-medium">{user.name}</span>
             </div>
-            <div className="flex justify-between items-center text-sm py-2 border-b border-gray-50">
-              <span className="text-gray-500">Email</span>
-              <span className="text-gray-600">{user.email}</span>
+            <div className="flex justify-between items-center text-sm py-2 border-b border-border-default">
+              <span className="text-text-secondary">Email</span>
+              <span className="text-text-secondary">{user.email}</span>
             </div>
             <div className="flex justify-between items-center text-sm py-2">
-              <span className="text-gray-500">Role</span>
+              <span className="text-text-secondary">Role</span>
               <Badge variant="gradient">{user.role}</Badge>
             </div>
           </div>
@@ -86,8 +86,8 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-brand-50 p-2">
-              <CreditCard className="h-4 w-4 text-brand-600" />
+            <div className="rounded-xl bg-[#1a0a2e] p-2">
+              <CreditCard className="h-4 w-4 text-brand-400" />
             </div>
             <div>
               <CardTitle>Subscription</CardTitle>
@@ -96,7 +96,7 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <div className="text-center py-6">
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-text-secondary mb-4">
             You&apos;re currently on the <strong>Free</strong> plan.
           </p>
           <Button>

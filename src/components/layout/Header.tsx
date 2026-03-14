@@ -8,9 +8,9 @@ export function Header() {
   const user = session?.user;
 
   return (
-    <header className="flex h-16 items-center justify-between bg-white px-6 relative">
+    <header className="flex h-16 items-center justify-between bg-surface-raised px-6 relative">
       {/* Gradient bottom border */}
-      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-brand-200 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-brand-600/40 to-transparent" />
       <div />
       <div className="flex items-center gap-4">
         {user && (
@@ -25,8 +25,8 @@ export function Header() {
                 </span>
               </div>
               <div className="text-sm">
-                <p className="font-medium text-gray-900">{user.name}</p>
-                <p className="text-xs text-gray-500">{(user as Record<string, unknown>).role as string}</p>
+                <p className="font-medium text-text-primary">{user.name}</p>
+                <p className="text-xs text-text-tertiary">{(user as Record<string, unknown>).role as string}</p>
               </div>
             </div>
           </>

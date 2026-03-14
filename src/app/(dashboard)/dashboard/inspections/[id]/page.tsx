@@ -1,7 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
-import dynamic from "next/dynamic";
+import { use, useState, useMemo, useCallback } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -26,29 +25,28 @@ import {
   Wrench,
   ShieldAlert,
 } from "lucide-react";
+import { StepPanel } from "@/components/inspection/StepPanel";
+import { RiskChecklist } from "@/components/inspection/RiskChecklist";
+import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
+import { VehicleDiagram } from "@/components/vehicle/VehicleDiagram";
+import { ReportModal } from "@/components/inspection/ReportModal";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { computeInspectionConfidence } from "@/lib/confidence";
+import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
-// Dynamic import to avoid SSR issues with Three.js
-const Vehicle3D = dynamic(() => import("@/components/vehicle/Vehicle3D").then(m => ({ default: m.Vehicle3D })), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-[350px] bg-gray-900 rounded-xl">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-400" />
-    </div>
-  ),
-});
 
 const STEP_META: Record<string, { label: string; icon: typeof CheckCircle }> = {
   VIN_DECODE: { label: "VIN Decode", icon: Car },
   RISK_REVIEW: { label: "Risk Review", icon: AlertTriangle },
   MEDIA_CAPTURE: { label: "Media Capture", icon: Camera },
-  PHYSICAL_INSPECTION: { label: "Inspection", icon: Wrench },
+  AI_ANALYSIS: { label: "AI Analysis", icon: ShieldAlert },
   VEHICLE_HISTORY: { label: "History", icon: Clock },
   MARKET_ANALYSIS: { label: "Market", icon: BarChart3 },
   REPORT_GENERATION: { label: "Report", icon: FileText },
 };
 
 const STEP_ORDER = [
-  "VIN_DECODE", "RISK_REVIEW", "MEDIA_CAPTURE", "PHYSICAL_INSPECTION",
+  "VIN_DECODE", "RISK_REVIEW", "MEDIA_CAPTURE", "AI_ANALYSIS",
   "VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION",
 ];
 
@@ -69,26 +67,24 @@ export default function InspectionDetailPage({
   const utils = trpc.useUtils();
   const { data: inspection, isLoading } = trpc.inspection.get.useQuery({ id });
 
-  // Fetch risk profile for this vehicle's make/model/year
-  const { data: riskProfile } = trpc.vehicle.riskProfile.useQuery(
-    {
-      make: inspection?.vehicle.make || "",
-      model: inspection?.vehicle.model || "",
-      year: inspection?.vehicle.year || 0,
-    },
+  // Fetch dynamic risk profile (stored in RISK_REVIEW step after enrichment)
+  const { data: riskProfile } = trpc.inspection.getRiskProfile.useQuery(
+    { inspectionId: id },
     { enabled: !!inspection }
   );
 
-  const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
-  const [showFindingForm, setShowFindingForm] = useState(false);
-  const [findingForm, setFindingForm] = useState({
-    title: "",
-    description: "",
-    severity: "MODERATE" as (typeof SEVERITY_OPTIONS)[number],
-    category: "OTHER" as (typeof CATEGORY_OPTIONS)[number],
-    repairCostLow: "",
-    repairCostHigh: "",
-    evidence: "",
+  // Fetch risk checklist statuses
+  const { data: checkStatuses } = trpc.inspection.getRiskChecklist.useQuery(
+    { inspectionId: id },
+    { enabled: !!inspection }
+  );
+
+  // Mutations
+  const enrichRiskProfile = trpc.vehicle.enrichRiskProfile.useMutation({
+    onSuccess: () => {
+      utils.inspection.get.invalidate({ id });
+      utils.inspection.getRiskProfile.invalidate({ inspectionId: id });
+    },
   });
 
   const advanceStep = trpc.inspection.advanceStep.useMutation({
@@ -99,6 +95,7 @@ export default function InspectionDetailPage({
     onSuccess: () => {
       utils.inspection.get.invalidate({ id });
       setShowFindingForm(false);
+      setFindingFromRisk(null);
       setFindingForm({
         title: "", description: "", severity: "MODERATE", category: "OTHER",
         repairCostLow: "", repairCostHigh: "", evidence: "",
@@ -106,8 +103,101 @@ export default function InspectionDetailPage({
     },
   });
 
+  const recordRiskCheck = trpc.inspection.recordRiskCheck.useMutation({
+    onSuccess: () => {
+      utils.inspection.getRiskChecklist.invalidate({ inspectionId: id });
+    },
+  });
+
   const generateReport = trpc.report.generate.useMutation({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
+  });
+
+  // AI Analysis
+  const runAIAnalysis = trpc.inspection.runAIAnalysis.useMutation({
+    onSuccess: () => {
+      utils.inspection.get.invalidate({ id });
+      utils.inspection.getAIAnalysisResults.invalidate({ inspectionId: id });
+    },
+  });
+
+  const { data: aiAnalysisResults } = trpc.inspection.getAIAnalysisResults.useQuery(
+    { inspectionId: id },
+    { enabled: !!inspection }
+  );
+
+  // Vehicle History
+  const fetchHistory = trpc.inspection.fetchHistory.useMutation({
+    onSuccess: () => utils.inspection.get.invalidate({ id }),
+  });
+
+  // Market Analysis
+  const fetchMarket = trpc.inspection.fetchMarket.useMutation({
+    onSuccess: () => utils.inspection.get.invalidate({ id }),
+  });
+
+  // Media upload hook
+  const mediaUpload = useMediaUpload(id);
+
+  // UI state
+  const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
+  const [showFindingForm, setShowFindingForm] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [findingFromRisk, setFindingFromRisk] = useState<AggregatedRisk | null>(null);
+  const [uploadingRiskCapture, setUploadingRiskCapture] = useState<string | null>(null);
+
+  // Build riskMediaMap from inspection.media — parse FINDING_EVIDENCE_${riskId}_${idx} capture types
+  const riskMediaMap = useMemo(() => {
+    const map: Record<string, Array<{ mediaId: string; url: string; captureType: string }>> = {};
+    if (!inspection?.media) return map;
+    for (const m of inspection.media) {
+      if (!m.captureType || !m.url) continue;
+      const match = m.captureType.match(/^FINDING_EVIDENCE_(.+)_(\d+)$/);
+      if (!match) continue;
+      const riskId = match[1];
+      if (!map[riskId]) map[riskId] = [];
+      map[riskId].push({
+        mediaId: (m as { id?: string }).id || m.captureType,
+        url: m.url,
+        captureType: m.captureType,
+      });
+    }
+    return map;
+  }, [inspection?.media]);
+
+  // Handle inline evidence upload from RiskChecklist
+  const handleUploadEvidence = useCallback(async (riskId: string, captureIndex: number, file: File): Promise<string | null> => {
+    const captureType = `FINDING_EVIDENCE_${riskId}_${captureIndex}`;
+    setUploadingRiskCapture(`${riskId}:${captureIndex}`);
+    try {
+      const result = await mediaUpload.upload(file, captureType);
+      if (result) {
+        // Update risk check status with new mediaId
+        const existing = checkStatuses?.[riskId];
+        const existingMediaIds = (existing as { mediaIds?: string[] })?.mediaIds || [];
+        const newMediaIds = [...existingMediaIds, result.mediaItemId];
+        recordRiskCheck.mutate({
+          inspectionId: id,
+          riskId,
+          status: (existing?.status as RiskCheckStatus["status"]) || "NOT_CHECKED",
+          notes: existing?.notes || undefined,
+          mediaIds: newMediaIds,
+        });
+        return result.mediaItemId;
+      }
+      return null;
+    } finally {
+      setUploadingRiskCapture(null);
+    }
+  }, [mediaUpload, checkStatuses, id, recordRiskCheck]);
+  const [findingForm, setFindingForm] = useState({
+    title: "",
+    description: "",
+    severity: "MODERATE" as (typeof SEVERITY_OPTIONS)[number],
+    category: "OTHER" as (typeof CATEGORY_OPTIONS)[number],
+    repairCostLow: "",
+    repairCostHigh: "",
+    evidence: "",
   });
 
   if (isLoading) {
@@ -121,7 +211,7 @@ export default function InspectionDetailPage({
   if (!inspection) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-500">Inspection not found</p>
+        <p className="text-text-secondary">Inspection not found</p>
         <Link href="/dashboard/inspections">
           <Button variant="secondary" className="mt-4">
             <ArrowLeft className="h-4 w-4" /> Back to Inspections
@@ -137,6 +227,7 @@ export default function InspectionDetailPage({
     const s = inspection.steps.find((is) => is.step === step);
     return s && s.status !== "COMPLETED";
   });
+  const currentStep = currentStepIndex >= 0 ? STEP_ORDER[currentStepIndex] : "COMPLETED";
   const isCompleted = inspection.status === "COMPLETED";
   const isCancelled = inspection.status === "CANCELLED";
 
@@ -158,6 +249,60 @@ export default function InspectionDetailPage({
     });
   }
 
+  function handleCheckRisk(riskId: string, status: RiskCheckStatus["status"], notes?: string) {
+    // Preserve existing mediaIds when changing status
+    const existing = checkStatuses?.[riskId] as { mediaIds?: string[] } | undefined;
+    const existingMediaIds = existing?.mediaIds || [];
+    recordRiskCheck.mutate({ inspectionId: id, riskId, status, notes, mediaIds: existingMediaIds });
+  }
+
+  function handleCreateFindingFromRisk(risk: AggregatedRisk) {
+    setFindingFromRisk(risk);
+  }
+
+  function handleSubmitFindingFromRisk(finding: {
+    title: string;
+    description: string;
+    severity: (typeof SEVERITY_OPTIONS)[number];
+    category: (typeof CATEGORY_OPTIONS)[number];
+    repairCostLow?: number;
+    repairCostHigh?: number;
+    evidence?: string;
+    positionX?: number;
+    positionY?: number;
+    positionZ?: number;
+  }) {
+    addFinding.mutate({
+      inspectionId: id,
+      ...finding,
+    });
+  }
+
+  // Normalize check statuses for the RiskChecklist component
+  const normalizedCheckStatuses: Record<string, RiskCheckStatus> = {};
+  if (checkStatuses) {
+    for (const [key, val] of Object.entries(checkStatuses)) {
+      const v = val as Record<string, unknown>;
+      normalizedCheckStatuses[key] = {
+        riskId: val.riskId,
+        status: val.status as RiskCheckStatus["status"],
+        notes: val.notes,
+        checkedAt: val.checkedAt,
+        mediaIds: (v.mediaIds as string[]) || [],
+        hasPhotoEvidence: !!v.hasPhotoEvidence,
+      };
+    }
+  }
+
+  // Compute inspection confidence for StepPanel (not a hook — after early returns)
+  const inspectionConfidence = riskProfile
+    ? computeInspectionConfidence(
+        riskProfile.aggregatedRisks,
+        normalizedCheckStatuses,
+        aiAnalysisResults || [],
+      )
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -169,7 +314,7 @@ export default function InspectionDetailPage({
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-text-primary">
               {inspection.vehicle.year} {inspection.vehicle.make} {inspection.vehicle.model}
             </h1>
             <Badge
@@ -178,7 +323,7 @@ export default function InspectionDetailPage({
               {inspection.status.replace(/_/g, " ")}
             </Badge>
           </div>
-          <p className="text-gray-500 font-mono text-sm">
+          <p className="text-text-secondary font-mono text-sm">
             {inspection.number} &middot; VIN: {inspection.vehicle.vin}
           </p>
         </div>
@@ -192,16 +337,6 @@ export default function InspectionDetailPage({
               <Plus className="h-4 w-4" /> Add Finding
             </Button>
           )}
-          {!inspection.report && completedSteps >= 5 && !isCancelled && (
-            <Button
-              onClick={() => generateReport.mutate({ inspectionId: id })}
-              loading={generateReport.isPending}
-              size="sm"
-              className="bg-brand-gradient text-white hover:opacity-90"
-            >
-              <FileText className="h-4 w-4" /> Generate Report
-            </Button>
-          )}
           {inspection.report && (
             <Badge variant="success">Report Generated</Badge>
           )}
@@ -211,8 +346,8 @@ export default function InspectionDetailPage({
       {/* Workflow Stepper */}
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-gray-700">Inspection Progress</p>
-          <p className="text-sm text-gray-500">{completedSteps}/{inspection.steps.length} steps</p>
+          <p className="text-sm font-medium text-text-secondary">Inspection Progress</p>
+          <p className="text-sm text-text-secondary">{completedSteps}/{inspection.steps.length} steps</p>
         </div>
         <Progress value={progressPct} color={progressPct === 100 ? "green" : "brand"} />
 
@@ -223,19 +358,16 @@ export default function InspectionDetailPage({
             const Icon = meta.icon;
             const isStepCompleted = step?.status === "COMPLETED";
             const isActive = idx === currentStepIndex;
-            const canAdvance = isActive && !isCompleted && !isCancelled;
 
             return (
               <div key={stepKey} className="text-center">
-                <button
-                  onClick={() => canAdvance && handleAdvanceStep(stepKey)}
-                  disabled={!canAdvance || advanceStep.isPending}
+                <div
                   className={`mx-auto h-10 w-10 rounded-full flex items-center justify-center mb-1 transition-all ${
                     isStepCompleted
-                      ? "bg-green-100 text-green-600"
+                      ? "bg-[#0a2e1a] text-green-400"
                       : isActive
-                      ? "bg-brand-100 text-brand-600 ring-2 ring-brand-300 cursor-pointer hover:bg-brand-200"
-                      : "bg-gray-100 text-gray-400"
+                      ? "bg-[#1a0a2e] text-brand-400 ring-2 ring-brand-500/40"
+                      : "bg-surface-overlay text-text-tertiary"
                   }`}
                 >
                   {isStepCompleted ? (
@@ -245,102 +377,97 @@ export default function InspectionDetailPage({
                   ) : (
                     <Icon className="h-4 w-4" />
                   )}
-                </button>
+                </div>
                 <p className={`text-xs ${
-                  isStepCompleted ? "text-green-700 font-medium" :
-                  isActive ? "text-brand-700 font-medium" : "text-gray-500"
+                  isStepCompleted ? "text-green-400 font-medium" :
+                  isActive ? "text-brand-300 font-medium" : "text-text-tertiary"
                 }`}>
                   {meta.label}
                 </p>
-                {canAdvance && (
-                  <button
-                    onClick={() => handleAdvanceStep(stepKey)}
-                    disabled={advanceStep.isPending}
-                    className="mt-1 text-[10px] font-medium text-brand-600 hover:text-brand-700"
-                  >
-                    {advanceStep.isPending ? "..." : "Complete →"}
-                  </button>
-                )}
               </div>
             );
           })}
         </div>
       </Card>
 
-      {/* 3D Risk Intelligence Viewer */}
-      {riskProfile && riskProfile.risks.length > 0 && (
+      {/* 3D Risk Intelligence Viewer (shown when risk profile exists) */}
+      {riskProfile && riskProfile.aggregatedRisks.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-0 overflow-hidden">
-            <Vehicle3D
-              hotspots={riskProfile.risks.map((r, i) => ({
-                id: `risk-${i}`,
+            <VehicleDiagram
+              hotspots={riskProfile.aggregatedRisks.map((r) => ({
+                id: r.id,
                 position: [r.position.x, r.position.y, r.position.z] as [number, number, number],
                 severity: r.severity as "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO",
                 label: r.title,
               }))}
               onHotspotClick={(hotspotId) => setActiveHotspot(hotspotId === activeHotspot ? null : hotspotId)}
               activeHotspot={activeHotspot}
-              className="h-[350px]"
             />
           </Card>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-brand-600" />
-                <CardTitle>Known Risk Profile</CardTitle>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {riskProfile.make} {riskProfile.model} ({riskProfile.yearFrom}–{riskProfile.yearTo}) · {riskProfile.risks.length} known risks · Source: {riskProfile.source}
-              </p>
-            </CardHeader>
-            <div className="space-y-2 max-h-[280px] overflow-y-auto">
-              {riskProfile.risks.map((risk, i) => {
-                const isActive = activeHotspot === `risk-${i}`;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setActiveHotspot(isActive ? null : `risk-${i}`)}
-                    className={`w-full text-left p-3 rounded-lg border text-sm transition-all ${
-                      isActive
-                        ? "border-brand-300 bg-brand-50 ring-1 ring-brand-200"
-                        : `${severityColor(risk.severity)} hover:opacity-80`
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-xs">{risk.title}</span>
-                      <Badge
-                        variant={
-                          risk.severity === "CRITICAL" ? "danger" :
-                          risk.severity === "MAJOR" ? "warning" : "default"
-                        }
-                      >
-                        {risk.severity}
-                      </Badge>
-                    </div>
-                    {isActive && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-xs text-gray-600">{risk.description}</p>
-                        <p className="text-xs font-medium">
-                          Est. repair: {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
-                        </p>
-                        {risk.symptoms.length > 0 && (
-                          <div className="mt-1">
-                            <p className="text-[10px] font-medium uppercase text-gray-500">Look for:</p>
-                            <ul className="text-[11px] text-gray-600 list-disc list-inside">
-                              {risk.symptoms.map((s, si) => <li key={si}>{s}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          <Card className="p-4">
+            <RiskChecklist
+              risks={riskProfile.aggregatedRisks}
+              checkStatuses={normalizedCheckStatuses}
+              onCheckRisk={handleCheckRisk}
+              onCreateFinding={handleCreateFindingFromRisk}
+              onCaptureEvidence={(risk) => setActiveHotspot(risk.id)}
+              onHighlightRisk={setActiveHotspot}
+              activeRiskId={activeHotspot}
+              onUploadEvidence={handleUploadEvidence}
+              uploadingRiskCapture={uploadingRiskCapture}
+              riskMediaMap={riskMediaMap}
+              aiResults={aiAnalysisResults || []}
+            />
           </Card>
         </div>
       )}
 
+      {/* Active Step Panel */}
+      {!isCompleted && !isCancelled && (
+        <StepPanel
+          activeStep={currentStep}
+          riskProfile={riskProfile}
+          inspection={{
+            id: inspection.id,
+            media: inspection.media || [],
+            report: inspection.report,
+            vehicleHistory: inspection.vehicleHistory ? {
+              ...inspection.vehicleHistory,
+              ownerCount: inspection.vehicleHistory.ownerCount ?? 0,
+            } : null,
+            marketAnalysis: inspection.marketAnalysis,
+          }}
+          checkStatuses={normalizedCheckStatuses}
+          onStartVerification={() => enrichRiskProfile.mutate({ inspectionId: id })}
+          isEnriching={enrichRiskProfile.isPending}
+          onMediaCapture={(captureType, file) => mediaUpload.upload(file, captureType)}
+          uploadingCaptureType={mediaUpload.currentCaptureType || undefined}
+          onCheckRisk={handleCheckRisk}
+          onCreateFinding={handleCreateFindingFromRisk}
+          onCaptureEvidence={(risk) => {
+            // Scroll to or trigger evidence capture for this risk
+            setActiveHotspot(risk.id);
+          }}
+          onHighlightRisk={setActiveHotspot}
+          activeRiskId={activeHotspot}
+          onAdvanceStep={handleAdvanceStep}
+          onGenerateReport={() => generateReport.mutate({ inspectionId: id })}
+          isGeneratingReport={generateReport.isPending}
+          isAdvancingStep={advanceStep.isPending}
+          onRunAIAnalysis={() => runAIAnalysis.mutate({ inspectionId: id })}
+          isRunningAIAnalysis={runAIAnalysis.isPending}
+          aiAnalysisResults={aiAnalysisResults || undefined}
+          onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
+          isFetchingHistory={fetchHistory.isPending}
+          onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}
+          isFetchingMarket={fetchMarket.isPending}
+          onViewReport={() => setShowReportModal(true)}
+          inspectionConfidence={inspectionConfidence}
+        />
+      )}
+
+      {/* Vehicle Details + Score + Findings */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Vehicle Details */}
         <Card>
@@ -360,8 +487,8 @@ export default function InspectionDetailPage({
               ["Location", inspection.location || "—"],
             ].map(([label, value]) => (
               <div key={label as string} className="flex justify-between text-sm">
-                <span className="text-gray-500">{label}</span>
-                <span className="font-medium text-gray-900">{value}</span>
+                <span className="text-text-secondary">{label}</span>
+                <span className="font-medium text-text-primary">{value}</span>
               </div>
             ))}
           </div>
@@ -376,12 +503,12 @@ export default function InspectionDetailPage({
             <div className="space-y-4">
               <div className="text-center">
                 <p className={`text-5xl font-bold ${
-                  inspection.overallScore >= 70 ? "text-green-600" :
-                  inspection.overallScore >= 50 ? "text-yellow-600" : "text-red-600"
+                  inspection.overallScore >= 70 ? "text-green-400" :
+                  inspection.overallScore >= 50 ? "text-text-secondary" : "text-red-400"
                 }`}>
                   {inspection.overallScore}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">out of 100</p>
+                <p className="text-sm text-text-secondary mt-1">out of 100</p>
               </div>
               <div className="space-y-2">
                 {[
@@ -391,7 +518,7 @@ export default function InspectionDetailPage({
                 ].map((item) => (
                   <div key={item.label}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-500">{item.label}</span>
+                      <span className="text-text-secondary">{item.label}</span>
                       <span className="font-medium">{item.score}/100</span>
                     </div>
                     <Progress value={item.score || 0} size="sm" color={
@@ -403,7 +530,7 @@ export default function InspectionDetailPage({
               </div>
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-400">
+            <div className="text-center py-8 text-text-tertiary">
               <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">Add findings to calculate score</p>
             </div>
@@ -420,7 +547,7 @@ export default function InspectionDetailPage({
                 {!isCompleted && !isCancelled && (
                   <button
                     onClick={() => setShowFindingForm(true)}
-                    className="rounded-full h-6 w-6 flex items-center justify-center bg-brand-100 text-brand-600 hover:bg-brand-200 transition-colors"
+                    className="rounded-full h-6 w-6 flex items-center justify-center bg-[#1a0a2e] text-brand-400 hover:bg-brand-800 transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>
@@ -429,17 +556,9 @@ export default function InspectionDetailPage({
             </div>
           </CardHeader>
           {inspection.findings.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
+            <div className="text-center py-8 text-text-tertiary">
               <Wrench className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No findings yet</p>
-              {!isCompleted && (
-                <button
-                  onClick={() => setShowFindingForm(true)}
-                  className="mt-2 text-sm text-brand-600 font-medium hover:text-brand-700"
-                >
-                  Add first finding →
-                </button>
-              )}
             </div>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -472,22 +591,35 @@ export default function InspectionDetailPage({
         </Card>
       </div>
 
-      {/* Add Finding Slide-out Panel */}
+      {/* Finding from Risk slide-out */}
+      {findingFromRisk && (
+        <FindingFromRisk
+          risk={findingFromRisk}
+          onSubmit={handleSubmitFindingFromRisk}
+          onClose={() => setFindingFromRisk(null)}
+          onCaptureEvidence={() => {
+            // Could trigger camera here
+          }}
+          isSubmitting={addFinding.isPending}
+        />
+      )}
+
+      {/* Manual Add Finding Slide-out Panel */}
       {showFindingForm && (
         <>
           <div
             className="fixed inset-0 bg-black/30 z-40"
             onClick={() => setShowFindingForm(false)}
           />
-          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto">
+          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-surface-overlay shadow-2xl z-50 overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">Add Finding</h3>
+                <h3 className="text-lg font-bold text-text-primary">Add Finding</h3>
                 <button
                   onClick={() => setShowFindingForm(false)}
-                  className="rounded-lg p-1.5 hover:bg-gray-100"
+                  className="rounded-lg p-1.5 hover:bg-surface-hover"
                 >
-                  <X className="h-5 w-5 text-gray-500" />
+                  <X className="h-5 w-5 text-text-tertiary" />
                 </button>
               </div>
 
@@ -502,24 +634,24 @@ export default function InspectionDetailPage({
                 />
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <label className="block text-sm font-medium text-text-secondary">Description</label>
                   <textarea
                     placeholder="Describe the finding in detail..."
                     value={findingForm.description}
                     onChange={(e) => setFindingForm((p) => ({ ...p, description: e.target.value }))}
                     required
                     rows={3}
-                    className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-700">Severity</label>
+                    <label className="block text-sm font-medium text-text-secondary">Severity</label>
                     <select
                       value={findingForm.severity}
                       onChange={(e) => setFindingForm((p) => ({ ...p, severity: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                     >
                       {SEVERITY_OPTIONS.map((s) => (
                         <option key={s} value={s}>{s}</option>
@@ -527,11 +659,11 @@ export default function InspectionDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-700">Category</label>
+                    <label className="block text-sm font-medium text-text-secondary">Category</label>
                     <select
                       value={findingForm.category}
                       onChange={(e) => setFindingForm((p) => ({ ...p, category: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                     >
                       {CATEGORY_OPTIONS.map((c) => (
                         <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
@@ -560,13 +692,13 @@ export default function InspectionDetailPage({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-gray-700">Evidence Notes (optional)</label>
+                  <label className="block text-sm font-medium text-text-secondary">Evidence Notes (optional)</label>
                   <textarea
                     placeholder="What was observed during inspection..."
                     value={findingForm.evidence}
                     onChange={(e) => setFindingForm((p) => ({ ...p, evidence: e.target.value }))}
                     rows={2}
-                    className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
                   />
                 </div>
 
@@ -591,6 +723,17 @@ export default function InspectionDetailPage({
             </div>
           </div>
         </>
+      )}
+
+      {/* Report Modal */}
+      {showReportModal && inspection.report && (
+        <ReportModal
+          reportId={inspection.report.id}
+          reportNumber={inspection.report.number}
+          pdfUrl={inspection.report.pdfUrl}
+          shareToken={(inspection.report as { shareToken?: string }).shareToken}
+          onClose={() => setShowReportModal(false)}
+        />
       )}
     </div>
   );

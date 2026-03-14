@@ -11,7 +11,7 @@ export function Progress({ value, color = "brand", size = "md", className }: Pro
   return (
     <div
       className={cn(
-        "w-full rounded-full bg-gray-100 overflow-hidden",
+        "w-full rounded-full bg-surface-sunken overflow-hidden",
         size === "sm" ? "h-1.5" : "h-2.5",
         className
       )}
@@ -20,7 +20,7 @@ export function Progress({ value, color = "brand", size = "md", className }: Pro
         className={cn("h-full rounded-full transition-all duration-500", {
           "bg-blue-500": color === "blue",
           "bg-green-500": color === "green",
-          "bg-yellow-500": color === "yellow",
+          "bg-gray-500": color === "yellow",
           "bg-red-500": color === "red",
           "bg-gradient-progress": color === "brand",
         })}
