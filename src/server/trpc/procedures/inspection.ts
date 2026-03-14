@@ -513,6 +513,7 @@ export const inspectionRouter = router({
         riskId: z.string(),
         status: z.enum(["NOT_CHECKED", "CONFIRMED", "NOT_FOUND", "UNABLE_TO_INSPECT"]),
         notes: z.string().optional(),
+        mediaIds: z.array(z.string()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -531,10 +532,13 @@ export const inspectionRouter = router({
       const checkStatuses = (existingData.checkStatuses as Record<string, unknown>) || {};
 
       // Update the risk check status
+      const mediaIds = input.mediaIds || [];
       checkStatuses[input.riskId] = {
         riskId: input.riskId,
         status: input.status,
         notes: input.notes || null,
+        mediaIds,
+        hasPhotoEvidence: mediaIds.length > 0,
         checkedAt: new Date().toISOString(),
       };
 
@@ -571,7 +575,7 @@ export const inspectionRouter = router({
 
       if (!step?.data) return {};
       const data = step.data as Record<string, unknown>;
-      return (data.checkStatuses || {}) as Record<string, { riskId: string; status: string; notes?: string; checkedAt?: string }>;
+      return (data.checkStatuses || {}) as Record<string, { riskId: string; status: string; notes?: string; mediaIds?: string[]; hasPhotoEvidence?: boolean; checkedAt?: string }>;
     }),
 });
 

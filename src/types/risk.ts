@@ -39,10 +39,13 @@ export type Severity = "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO";
 
 export type RiskSource =
   | "CURATED"
+  | "AI_GENERATED"
   | "NHTSA_COMPLAINTS"
   | "NHTSA_RECALLS"
   | "NHTSA_INVESTIGATIONS"
   | "MERGED";
+
+export type Likelihood = "VERY_COMMON" | "COMMON" | "OCCASIONAL" | "RARE";
 
 export interface AggregatedRisk {
   id: string;
@@ -64,6 +67,20 @@ export interface AggregatedRisk {
   aiSummary?: string;
   /** AI-generated specific capture prompts for this exact risk */
   aiCapturePrompts?: string[];
+
+  // Structured inspection guidance (AI-generated known issues)
+  /** Specific component/system to check */
+  whatToCheck?: string;
+  /** Exact location on the vehicle */
+  whereToLook?: string;
+  /** Step-by-step inspection method */
+  howToInspect?: string;
+  /** Observable indicators of the failure */
+  signsOfFailure?: string[];
+  /** Consequence if overlooked + cost context */
+  whyItMatters?: string;
+  /** How commonly this issue occurs on this vehicle */
+  likelihood?: Likelihood;
 }
 
 export interface AIAnalysisResult {
@@ -97,5 +114,6 @@ export interface RiskCheckStatus {
   notes?: string;
   findingId?: string;
   mediaIds?: string[];
+  hasPhotoEvidence?: boolean;
   checkedAt?: string;
 }

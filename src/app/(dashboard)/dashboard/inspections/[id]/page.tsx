@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useMemo, useCallback } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -26,10 +26,12 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { StepPanel } from "@/components/inspection/StepPanel";
+import { RiskChecklist } from "@/components/inspection/RiskChecklist";
 import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
 import { VehicleDiagram } from "@/components/vehicle/VehicleDiagram";
 import { ReportModal } from "@/components/inspection/ReportModal";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
+import { computeInspectionConfidence } from "@/lib/confidence";
 import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
 
@@ -142,6 +144,52 @@ export default function InspectionDetailPage({
   const [showFindingForm, setShowFindingForm] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [findingFromRisk, setFindingFromRisk] = useState<AggregatedRisk | null>(null);
+  const [uploadingRiskCapture, setUploadingRiskCapture] = useState<string | null>(null);
+
+  // Build riskMediaMap from inspection.media — parse FINDING_EVIDENCE_${riskId}_${idx} capture types
+  const riskMediaMap = useMemo(() => {
+    const map: Record<string, Array<{ mediaId: string; url: string; captureType: string }>> = {};
+    if (!inspection?.media) return map;
+    for (const m of inspection.media) {
+      if (!m.captureType || !m.url) continue;
+      const match = m.captureType.match(/^FINDING_EVIDENCE_(.+)_(\d+)$/);
+      if (!match) continue;
+      const riskId = match[1];
+      if (!map[riskId]) map[riskId] = [];
+      map[riskId].push({
+        mediaId: (m as { id?: string }).id || m.captureType,
+        url: m.url,
+        captureType: m.captureType,
+      });
+    }
+    return map;
+  }, [inspection?.media]);
+
+  // Handle inline evidence upload from RiskChecklist
+  const handleUploadEvidence = useCallback(async (riskId: string, captureIndex: number, file: File): Promise<string | null> => {
+    const captureType = `FINDING_EVIDENCE_${riskId}_${captureIndex}`;
+    setUploadingRiskCapture(`${riskId}:${captureIndex}`);
+    try {
+      const result = await mediaUpload.upload(file, captureType);
+      if (result) {
+        // Update risk check status with new mediaId
+        const existing = checkStatuses?.[riskId];
+        const existingMediaIds = (existing as { mediaIds?: string[] })?.mediaIds || [];
+        const newMediaIds = [...existingMediaIds, result.mediaItemId];
+        recordRiskCheck.mutate({
+          inspectionId: id,
+          riskId,
+          status: existing?.status || "NOT_CHECKED",
+          notes: existing?.notes || undefined,
+          mediaIds: newMediaIds,
+        });
+        return result.mediaItemId;
+      }
+      return null;
+    } finally {
+      setUploadingRiskCapture(null);
+    }
+  }, [mediaUpload, checkStatuses, id, recordRiskCheck]);
   const [findingForm, setFindingForm] = useState({
     title: "",
     description: "",
@@ -202,7 +250,10 @@ export default function InspectionDetailPage({
   }
 
   function handleCheckRisk(riskId: string, status: RiskCheckStatus["status"], notes?: string) {
-    recordRiskCheck.mutate({ inspectionId: id, riskId, status, notes });
+    // Preserve existing mediaIds when changing status
+    const existing = checkStatuses?.[riskId] as { mediaIds?: string[] } | undefined;
+    const existingMediaIds = existing?.mediaIds || [];
+    recordRiskCheck.mutate({ inspectionId: id, riskId, status, notes, mediaIds: existingMediaIds });
   }
 
   function handleCreateFindingFromRisk(risk: AggregatedRisk) {
@@ -231,14 +282,26 @@ export default function InspectionDetailPage({
   const normalizedCheckStatuses: Record<string, RiskCheckStatus> = {};
   if (checkStatuses) {
     for (const [key, val] of Object.entries(checkStatuses)) {
+      const v = val as Record<string, unknown>;
       normalizedCheckStatuses[key] = {
         riskId: val.riskId,
         status: val.status as RiskCheckStatus["status"],
         notes: val.notes,
         checkedAt: val.checkedAt,
+        mediaIds: (v.mediaIds as string[]) || [],
+        hasPhotoEvidence: !!v.hasPhotoEvidence,
       };
     }
   }
+
+  // Compute inspection confidence for StepPanel (not a hook — after early returns)
+  const inspectionConfidence = riskProfile
+    ? computeInspectionConfidence(
+        riskProfile.aggregatedRisks,
+        normalizedCheckStatuses,
+        aiAnalysisResults || [],
+      )
+    : null;
 
   return (
     <div className="space-y-6">
@@ -342,81 +405,20 @@ export default function InspectionDetailPage({
               activeHotspot={activeHotspot}
             />
           </Card>
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-brand-600" />
-                <CardTitle>Risk Intelligence</CardTitle>
-              </div>
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {riskProfile.nhtsaData.complaintCount > 0 && (
-                  <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
-                    {riskProfile.nhtsaData.complaintCount} Complaints
-                  </span>
-                )}
-                {riskProfile.nhtsaData.recallCount > 0 && (
-                  <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
-                    {riskProfile.nhtsaData.recallCount} Recalls
-                  </span>
-                )}
-                {riskProfile.nhtsaData.investigationCount > 0 && (
-                  <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
-                    {riskProfile.nhtsaData.investigationCount} Investigations
-                  </span>
-                )}
-              </div>
-            </CardHeader>
-            <div className="space-y-2 max-h-[280px] overflow-y-auto">
-              {riskProfile.aggregatedRisks.map((risk) => {
-                const isActive = activeHotspot === risk.id;
-                return (
-                  <button
-                    key={risk.id}
-                    onClick={() => setActiveHotspot(isActive ? null : risk.id)}
-                    className={`w-full text-left p-3 rounded-lg border text-sm transition-all ${
-                      isActive
-                        ? "border-brand-300 bg-brand-50 ring-1 ring-brand-200"
-                        : `${severityColor(risk.severity)} hover:opacity-80`
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-xs">{risk.title}</span>
-                      <div className="flex items-center gap-1.5">
-                        {risk.hasActiveRecall && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">RECALL</span>
-                        )}
-                        <Badge
-                          variant={
-                            risk.severity === "CRITICAL" ? "danger" :
-                            risk.severity === "MAJOR" ? "warning" : "default"
-                          }
-                        >
-                          {risk.severity}
-                        </Badge>
-                      </div>
-                    </div>
-                    {isActive && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-xs text-gray-600">{risk.description}</p>
-                        {risk.cost.low > 0 && (
-                          <p className="text-xs font-medium">
-                            Est. repair: {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
-                          </p>
-                        )}
-                        {risk.symptoms.length > 0 && (
-                          <div>
-                            <p className="text-[10px] font-medium uppercase text-gray-500">Look for:</p>
-                            <ul className="text-[11px] text-gray-600 list-disc list-inside">
-                              {risk.symptoms.map((s, si) => <li key={si}>{s}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          <Card className="p-4">
+            <RiskChecklist
+              risks={riskProfile.aggregatedRisks}
+              checkStatuses={normalizedCheckStatuses}
+              onCheckRisk={handleCheckRisk}
+              onCreateFinding={handleCreateFindingFromRisk}
+              onCaptureEvidence={(risk) => setActiveHotspot(risk.id)}
+              onHighlightRisk={setActiveHotspot}
+              activeRiskId={activeHotspot}
+              onUploadEvidence={handleUploadEvidence}
+              uploadingRiskCapture={uploadingRiskCapture}
+              riskMediaMap={riskMediaMap}
+              aiResults={aiAnalysisResults || []}
+            />
           </Card>
         </div>
       )}
@@ -461,6 +463,7 @@ export default function InspectionDetailPage({
           onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}
           isFetchingMarket={fetchMarket.isPending}
           onViewReport={() => setShowReportModal(true)}
+          inspectionConfidence={inspectionConfidence}
         />
       )}
 

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import type { AggregatedRiskProfile, AggregatedRisk, RiskCheckStatus, AIAnalysisResult } from "@/types/risk";
+import type { InspectionConfidence } from "@/lib/confidence";
 
 interface StepPanelProps {
   activeStep: string;
@@ -74,6 +75,8 @@ interface StepPanelProps {
   isFetchingMarket?: boolean;
   // Report
   onViewReport?: () => void;
+  // Confidence
+  inspectionConfidence?: InspectionConfidence | null;
 }
 
 export function StepPanel({
@@ -102,6 +105,7 @@ export function StepPanel({
   onFetchMarket,
   isFetchingMarket,
   onViewReport,
+  inspectionConfidence,
 }: StepPanelProps) {
   switch (activeStep) {
     case "RISK_REVIEW":
@@ -183,6 +187,32 @@ export function StepPanel({
                 ) : null;
               })()}
 
+              {/* Assessment Confidence */}
+              {inspectionConfidence && inspectionConfidence.overall > 0 && (
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-semibold text-gray-700">Assessment Confidence</span>
+                    <span className="text-xs font-bold text-gray-900">{Math.round(inspectionConfidence.overall * 100)}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
+                        inspectionConfidence.overall >= 0.7 ? "bg-green-500" :
+                        inspectionConfidence.overall >= 0.45 ? "bg-amber-500" : "bg-gray-400"
+                      )}
+                      style={{ width: `${inspectionConfidence.overall * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1.5">{inspectionConfidence.summary}</p>
+                  {inspectionConfidence.evidenceCoverage < 1 && (
+                    <p className="text-[11px] text-amber-600 mt-0.5">
+                      {Math.round(inspectionConfidence.evidenceCoverage * 100)}% of checked items have photo evidence
+                    </p>
+                  )}
+                </div>
+              )}
+
               <Button
                 onClick={() => onAdvanceStep("RISK_REVIEW")}
                 loading={isAdvancingStep}
@@ -252,38 +282,52 @@ export function StepPanel({
               </div>
 
               {/* Show captured media count */}
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                <p className="text-xs font-semibold text-blue-700 mb-1">
-                  <Camera className="inline h-3 w-3 mr-1" />
-                  {(inspection.media || []).filter(m => m.url).length} photos captured
-                </p>
-                <p className="text-xs text-blue-600">
-                  {riskProfile?.aggregatedRisks.length || 0} risk items will be evaluated
-                </p>
-              </div>
+              {(() => {
+                const photoCount = (inspection.media || []).filter(m => m.url).length;
+                const isDisabled = !riskProfile || photoCount === 0;
+                return (
+                  <>
+                    <div className={`p-3 rounded-lg border ${photoCount > 0 ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"}`}>
+                      <p className={`text-xs font-semibold mb-1 ${photoCount > 0 ? "text-blue-700" : "text-amber-700"}`}>
+                        <Camera className="inline h-3 w-3 mr-1" />
+                        {photoCount} photos captured
+                      </p>
+                      {photoCount === 0 ? (
+                        <p className="text-xs text-amber-600">
+                          Capture photos in the Media Capture step before running analysis.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-blue-600">
+                          {riskProfile?.aggregatedRisks.length || 0} risk items will be evaluated
+                        </p>
+                      )}
+                    </div>
 
-              <Button
-                onClick={onRunAIAnalysis}
-                loading={isRunningAIAnalysis}
-                disabled={!riskProfile || (inspection.media || []).filter(m => m.url).length === 0}
-                className="w-full bg-brand-gradient text-white hover:opacity-90"
-              >
-                {isRunningAIAnalysis ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Analyzing Photos...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" /> Run AI Analysis
-                  </span>
-                )}
-              </Button>
+                    <Button
+                      onClick={onRunAIAnalysis}
+                      loading={isRunningAIAnalysis}
+                      disabled={isDisabled}
+                      className={`w-full ${isDisabled ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-brand-gradient text-white hover:opacity-90"}`}
+                    >
+                      {isRunningAIAnalysis ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Analyzing Photos...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4" /> Run AI Analysis
+                        </span>
+                      )}
+                    </Button>
 
-              {isRunningAIAnalysis && (
-                <p className="text-xs text-center text-gray-400">
-                  This may take 30-60 seconds depending on photo count...
-                </p>
-              )}
+                    {isRunningAIAnalysis && (
+                      <p className="text-xs text-center text-gray-400">
+                        This may take 30-60 seconds depending on photo count...
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           ) : (
             <div className="space-y-3">

@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
 import { fetchComplaints, fetchRecalls, fetchInvestigations } from "@/lib/nhtsa";
-import { aggregateRiskProfile } from "@/lib/risk-engine";
-import { summarizeRisks } from "@/lib/ai/risk-summarizer";
+import { buildRiskProfile } from "@/lib/risk-engine";
+import { generateKnownIssues } from "@/lib/ai/risk-summarizer";
 import type { AggregatedRiskProfile } from "@/types/risk";
 
 // NHTSA API base URL
@@ -148,14 +148,14 @@ export const vehicleRouter = router({
       };
     }),
 
-  // Fetch NHTSA recalls for a VIN
+  // Fetch NHTSA recalls for a make/model/year
   recalls: protectedProcedure
-    .input(z.object({ vin: z.string() }))
+    .input(z.object({ make: z.string(), model: z.string(), year: z.number() }))
     .query(async ({ input }) => {
-      return fetchRecalls(input.vin);
+      return fetchRecalls(input.make, input.model, input.year);
     }),
 
-  // Enrich risk profile: fetch all NHTSA data + curated data, aggregate into risk profile
+  // Enrich risk profile: generate AI-powered known issues + NHTSA data
   enrichRiskProfile: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -173,7 +173,7 @@ export const vehicleRouter = router({
       const [complaintsResult, recallsResult, investigationsResult] =
         await Promise.allSettled([
           fetchComplaints(make, model, year),
-          fetchRecalls(vin),
+          fetchRecalls(make, model, year),
           fetchInvestigations(make, model, year),
         ]);
 
@@ -186,7 +186,7 @@ export const vehicleRouter = router({
           ? investigationsResult.value
           : [];
 
-      // Look up curated risk profile
+      // Look up curated risk profile (used as seeds for AI generation)
       const curatedProfile = await ctx.db.riskProfile.findFirst({
         where: {
           make: { equals: make, mode: "insensitive" },
@@ -201,50 +201,45 @@ export const vehicleRouter = router({
             severity: string;
             title: string;
             description: string;
-            cost: { low: number; high: number };
-            source: string;
-            position: { x: number; y: number; z: number };
             symptoms: string[];
             category: string;
           }>)
         : [];
 
-      // Aggregate everything into a unified risk profile
-      const profile = aggregateRiskProfile({
+      // AI generates the full known-issues checklist for this vehicle
+      // NHTSA data + curated risks are fed as context, not as the foundation
+      let knownIssues: Awaited<ReturnType<typeof generateKnownIssues>> = [];
+      try {
+        knownIssues = await generateKnownIssues({
+          year,
+          make,
+          model,
+          trim: vehicle.trim,
+          engine: vehicle.engine,
+          transmission: vehicle.transmission,
+          drivetrain: vehicle.drivetrain,
+          complaints,
+          recalls,
+          investigations,
+          curatedRisks,
+        });
+      } catch (err) {
+        console.error("[enrichRiskProfile] AI known issues generation failed:", err);
+      }
+
+      // Build unified risk profile: AI issues + recalls + investigations
+      const profile = buildRiskProfile({
         vehicleId: vehicle.id,
         vin,
         make,
         model,
         year,
-        complaints,
+        knownIssues,
         recalls,
         investigations,
-        curatedRisks,
+        complaintCount: complaints.length,
         curatedProfileId: curatedProfile?.id,
       });
-
-      // AI-enrich each risk with specific, actionable details + capture prompts
-      try {
-        const aiResults = await summarizeRisks(
-          { year, make, model, engine: vehicle.engine, trim: vehicle.trim },
-          profile.aggregatedRisks,
-          complaints
-        );
-
-        // Merge AI results back into aggregated risks
-        for (const ai of aiResults) {
-          const risk = profile.aggregatedRisks.find((r) => r.id === ai.riskId);
-          if (risk) {
-            risk.title = ai.aiTitle;
-            risk.aiSummary = ai.aiSummary;
-            risk.symptoms = ai.aiSymptoms;
-            risk.aiCapturePrompts = ai.aiCapturePrompts;
-          }
-        }
-      } catch (err) {
-        // AI enrichment is non-critical — log and continue with base risks
-        console.error("[enrichRiskProfile] AI summarization failed:", err);
-      }
 
       // Store in the RISK_REVIEW step's data field
       await ctx.db.inspectionStep.update({
