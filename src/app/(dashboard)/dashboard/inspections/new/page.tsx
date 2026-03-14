@@ -60,8 +60,8 @@ export default function NewInspectionPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">New Inspection</h1>
-        <p className="text-gray-500 mt-1">Start by entering the vehicle&apos;s VIN</p>
+        <h1 className="text-2xl font-bold text-text-primary tracking-tight">New Inspection</h1>
+        <p className="text-text-secondary mt-1">Start by entering the vehicle&apos;s VIN</p>
       </div>
 
       {/* Step 1: VIN Decode */}
@@ -92,7 +92,7 @@ export default function NewInspectionPage() {
         </form>
 
         {decodeMutation.error && (
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-100">
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-900/50">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             {decodeMutation.error.message}
           </div>
@@ -100,10 +100,10 @@ export default function NewInspectionPage() {
 
         {/* Decoded vehicle info */}
         {decodedVehicle && (
-          <div className="mt-6 p-4 rounded-xl bg-green-50 border border-green-200">
+          <div className="mt-6 p-4 rounded-xl bg-[#0a2e1a] border border-green-900/50">
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <span className="font-semibold text-green-800">Vehicle Decoded</span>
+              <CheckCircle className="h-5 w-5 text-green-400" />
+              <span className="font-semibold text-green-300">Vehicle Decoded</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -116,8 +116,8 @@ export default function NewInspectionPage() {
                 ["Engine", decodedVehicle.engine || "\u2014"],
               ].map(([label, value]) => (
                 <div key={label as string}>
-                  <p className="text-xs text-green-600 uppercase font-medium">{label}</p>
-                  <p className="text-sm font-medium text-green-900">{value}</p>
+                  <p className="text-xs text-green-400 uppercase font-medium">{label}</p>
+                  <p className="text-sm font-medium text-green-200">{value}</p>
                 </div>
               ))}
             </div>

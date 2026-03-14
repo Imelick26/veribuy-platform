@@ -74,24 +74,24 @@ function CaptureCard({
       className={cn(
         "relative rounded-xl border-2 p-4 transition-all",
         isCaptured
-          ? "border-green-300 bg-green-50"
+          ? "border-green-800/50 bg-[#0a2e1a]"
           : riskSeverity === "CRITICAL"
-            ? "border-red-300 bg-red-50/30 hover:border-red-400"
+            ? "border-red-900/50 bg-[#2e0a0a]/30 hover:border-red-700"
             : riskSeverity === "MAJOR"
-              ? "border-orange-300 bg-orange-50/30 hover:border-orange-400"
-              : "border-dashed border-brand-200 bg-white hover:border-brand-400 hover:bg-brand-50/30"
+              ? "border-red-900/50 bg-[#2e0a0a]/30 hover:border-red-700"
+              : "border-dashed border-border-strong bg-surface-raised hover:border-brand-400 hover:bg-surface-hover"
       )}
     >
       {/* Status indicator */}
       {isCaptured && (
         <div className="absolute top-2 right-2">
-          <CheckCircle className="h-5 w-5 text-green-600" />
+          <CheckCircle className="h-5 w-5 text-green-400" />
         </div>
       )}
       {riskSeverity && !isCaptured && (
         <div className="absolute top-2 right-2">
           <AlertTriangle className={cn("h-4 w-4",
-            riskSeverity === "CRITICAL" ? "text-red-500" : "text-orange-500"
+            riskSeverity === "CRITICAL" ? "text-red-400" : "text-red-400"
           )} />
         </div>
       )}
@@ -99,7 +99,7 @@ function CaptureCard({
       {/* Content */}
       <div className="flex flex-col items-center text-center gap-2">
         {isCaptured && captured?.url ? (
-          <div className="h-20 w-full rounded-lg bg-gray-100 overflow-hidden">
+          <div className="h-20 w-full rounded-lg bg-surface-sunken overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={captured.url}
@@ -110,7 +110,7 @@ function CaptureCard({
         ) : (
           <div className={cn(
             "h-20 w-full rounded-lg flex items-center justify-center",
-            isCaptured ? "bg-green-100" : riskSeverity ? "bg-gray-50" : "bg-brand-50"
+            isCaptured ? "bg-[#0a2e1a]" : riskSeverity ? "bg-surface-sunken" : "bg-[#1a0a2e]"
           )}>
             {isUploading ? (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
@@ -121,17 +121,17 @@ function CaptureCard({
         )}
 
         <div>
-          <p className="text-sm font-semibold text-gray-900">{label}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
+          <p className="text-sm font-semibold text-text-primary">{label}</p>
+          <p className="text-xs text-text-tertiary mt-0.5">{hint}</p>
         </div>
 
         {!required && !riskSeverity && (
-          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Optional</span>
+          <span className="text-[10px] uppercase tracking-wider text-text-tertiary font-medium">Optional</span>
         )}
         {riskSeverity && (
           <span className={cn(
             "text-[10px] uppercase tracking-wider font-medium",
-            riskSeverity === "CRITICAL" ? "text-red-600" : "text-orange-600"
+            riskSeverity === "CRITICAL" ? "text-red-400" : "text-red-400"
           )}>
             {riskSeverity} Risk Area
           </span>
@@ -152,7 +152,7 @@ function CaptureCard({
           className={cn(
             "w-full rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
             isCaptured
-              ? "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              ? "bg-surface-overlay text-text-secondary hover:bg-surface-hover"
               : "bg-brand-600 text-white hover:bg-brand-700",
             isUploading && "opacity-50 cursor-not-allowed"
           )}
@@ -209,13 +209,13 @@ export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, ri
       {/* Progress */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Photo Capture</h3>
-          <p className="text-sm text-gray-500">
+          <h3 className="text-lg font-semibold text-text-primary">Photo Capture</h3>
+          <p className="text-sm text-text-secondary">
             {capturedCount} of {REQUIRED_CAPTURES.length} required photos captured
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-2 w-32 rounded-full bg-brand-100 overflow-hidden">
+          <div className="h-2 w-32 rounded-full bg-surface-sunken overflow-hidden">
             <div
               className="h-full bg-brand-gradient rounded-full transition-all duration-500"
               style={{ width: `${(capturedCount / REQUIRED_CAPTURES.length) * 100}%` }}
@@ -229,7 +229,7 @@ export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, ri
 
       {/* Required captures */}
       <div>
-        <h4 className="text-xs uppercase tracking-wider text-gray-500 font-medium mb-3 flex items-center gap-1.5">
+        <h4 className="text-xs uppercase tracking-wider text-text-tertiary font-medium mb-3 flex items-center gap-1.5">
           <ImageIcon className="h-3.5 w-3.5" /> Required Photos
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -252,10 +252,10 @@ export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, ri
       {/* Risk-specific captures */}
       {uniqueRiskCaptures.length > 0 && (
         <div>
-          <h4 className="text-xs uppercase tracking-wider text-gray-500 font-medium mb-3 flex items-center gap-1.5">
+          <h4 className="text-xs uppercase tracking-wider text-text-tertiary font-medium mb-3 flex items-center gap-1.5">
             <AlertTriangle className="h-3.5 w-3.5" /> Risk-Specific Evidence Photos
           </h4>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs text-text-tertiary mb-3">
             Based on identified risks, capture these additional photos to document potential problem areas.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -279,7 +279,7 @@ export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, ri
 
       {/* Optional captures */}
       <div>
-        <h4 className="text-xs uppercase tracking-wider text-gray-500 font-medium mb-3 flex items-center gap-1.5">
+        <h4 className="text-xs uppercase tracking-wider text-text-tertiary font-medium mb-3 flex items-center gap-1.5">
           <Video className="h-3.5 w-3.5" /> Optional Media
         </h4>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

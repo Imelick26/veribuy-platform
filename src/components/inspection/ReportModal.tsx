@@ -31,14 +31,14 @@ export function ReportModal({ reportId, reportNumber, pdfUrl, shareToken, onClos
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-16 bg-white rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden">
+      <div className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-16 bg-surface-overlay rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface-raised">
           <div className="flex items-center gap-3">
             <FileText className="h-5 w-5 text-brand-600" />
             <div>
-              <h3 className="font-semibold text-gray-900">Inspection Report</h3>
-              <p className="text-xs text-gray-500">{reportNumber}</p>
+              <h3 className="font-semibold text-text-primary">Inspection Report</h3>
+              <p className="text-xs text-text-tertiary">{reportNumber}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -69,9 +69,9 @@ export function ReportModal({ reportId, reportNumber, pdfUrl, shareToken, onClos
             </Button>
             <button
               onClick={onClose}
-              className="rounded-lg p-1.5 hover:bg-gray-200 transition-colors"
+              className="rounded-lg p-1.5 hover:bg-surface-hover transition-colors"
             >
-              <X className="h-5 w-5 text-gray-500" />
+              <X className="h-5 w-5 text-text-tertiary" />
             </button>
           </div>
         </div>

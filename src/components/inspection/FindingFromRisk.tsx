@@ -68,22 +68,22 @@ export function FindingFromRisk({
   return (
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto">
+      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-surface-overlay shadow-2xl z-50 overflow-y-auto">
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">Create Finding from Risk</h3>
-            <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">
-              <X className="h-5 w-5 text-gray-500" />
+            <h3 className="text-lg font-bold text-text-primary">Create Finding from Risk</h3>
+            <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-surface-hover">
+              <X className="h-5 w-5 text-text-tertiary" />
             </button>
           </div>
 
           {/* Risk context banner */}
-          <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
+          <div className="mb-4 p-3 rounded-lg bg-[#1a0a2e] border border-brand-800/50">
             <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <p className="text-xs font-bold text-amber-700">Pre-populated from risk profile</p>
+              <AlertTriangle className="h-4 w-4 text-brand-400" />
+              <p className="text-xs font-bold text-brand-300">Pre-populated from risk profile</p>
             </div>
-            <p className="text-[11px] text-amber-600">
+            <p className="text-[11px] text-brand-200">
               Review and modify the details below before submitting. Add your specific observations in the evidence notes.
             </p>
           </div>
@@ -98,19 +98,19 @@ export function FindingFromRisk({
             />
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-text-secondary">Description</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
                 required
                 rows={3}
-                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-700">Severity</label>
+                <label className="block text-sm font-medium text-text-secondary">Severity</label>
                 <select
                   value={form.severity}
                   onChange={(e) => setForm((p) => ({ ...p, severity: e.target.value as never }))}
@@ -122,7 +122,7 @@ export function FindingFromRisk({
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-gray-700">Category</label>
+                <label className="block text-sm font-medium text-text-secondary">Category</label>
                 <select
                   value={form.category}
                   onChange={(e) => setForm((p) => ({ ...p, category: e.target.value as never }))}
@@ -155,13 +155,13 @@ export function FindingFromRisk({
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">Evidence Notes</label>
+              <label className="block text-sm font-medium text-text-secondary">Evidence Notes</label>
               <textarea
                 placeholder="Describe what you observed during inspection..."
                 value={form.evidence}
                 onChange={(e) => setForm((p) => ({ ...p, evidence: e.target.value }))}
                 rows={2}
-                className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
               />
             </div>
 

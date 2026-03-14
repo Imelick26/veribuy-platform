@@ -54,8 +54,8 @@ export default function TeamPage() {
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Team</h1>
-          <p className="text-gray-500 mt-1">Manage your organization&apos;s team members</p>
+          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Team</h1>
+          <p className="text-text-secondary mt-1">Manage your organization&apos;s team members</p>
         </div>
         {isManager && (
           <Button onClick={() => setShowInvite(!showInvite)} size="sm">
@@ -100,7 +100,7 @@ export default function TeamPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-gray-700">Role</label>
+              <label className="block text-sm font-medium text-text-secondary">Role</label>
               <select
                 value={inviteForm.role}
                 onChange={(e) =>
@@ -109,7 +109,7 @@ export default function TeamPage() {
                     role: e.target.value as "MANAGER" | "INSPECTOR" | "VIEWER",
                   })
                 }
-                className="block w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-1 hover:border-brand-200 transition-all duration-200"
+                className="block w-full rounded-xl border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay transition-all duration-200"
               >
                 <option value="INSPECTOR">Inspector</option>
                 <option value="MANAGER">Manager</option>
@@ -125,7 +125,7 @@ export default function TeamPage() {
               </Button>
             </div>
             {inviteMutation.error && (
-              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-100">
+              <div className="rounded-xl bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-500/20">
                 {inviteMutation.error.message}
               </div>
             )}
@@ -137,14 +137,14 @@ export default function TeamPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-brand-50 p-2">
-              <Users className="h-4 w-4 text-brand-600" />
+            <div className="rounded-xl bg-[#1a0a2e] p-2">
+              <Users className="h-4 w-4 text-brand-400" />
             </div>
             <div>
               <CardTitle>
                 Members{" "}
                 {members && (
-                  <span className="text-gray-400 font-normal">({members.length})</span>
+                  <span className="text-text-tertiary font-normal">({members.length})</span>
                 )}
               </CardTitle>
               <CardDescription>People with access to your organization</CardDescription>
@@ -157,7 +157,7 @@ export default function TeamPage() {
             <div className="spinner-gradient" />
           </div>
         ) : members && members.length > 0 ? (
-          <div className="divide-y divide-gray-50 -mx-6">
+          <div className="divide-y divide-border-default -mx-6">
             {members.map((member) => (
               <div
                 key={member.id}
@@ -171,12 +171,12 @@ export default function TeamPage() {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-gray-900 truncate">{member.name}</p>
+                      <p className="text-sm font-medium text-text-primary truncate">{member.name}</p>
                       {member.id === me?.id && (
-                        <span className="text-xs text-gray-400">(You)</span>
+                        <span className="text-xs text-text-tertiary">(You)</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-2 text-xs text-text-secondary">
                       <Mail className="h-3 w-3" />
                       <span className="truncate">{member.email}</span>
                     </div>
@@ -184,7 +184,7 @@ export default function TeamPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right mr-2 hidden sm:block">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-text-secondary">
                       {member._count.inspections} inspection
                       {member._count.inspections !== 1 ? "s" : ""}
                     </p>
@@ -200,7 +200,7 @@ export default function TeamPage() {
                           removeMutation.mutate({ userId: member.id });
                         }
                       }}
-                      className="p-1.5 rounded-xl text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200 cursor-pointer"
+                      className="p-1.5 rounded-xl text-text-tertiary hover:text-red-400 hover:bg-[#2e0a0a] transition-all duration-200 cursor-pointer"
                       title="Remove member"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -212,10 +212,10 @@ export default function TeamPage() {
           </div>
         ) : (
           <div className="text-center py-8">
-            <div className="mx-auto mb-3 h-12 w-12 rounded-2xl bg-brand-50 flex items-center justify-center">
+            <div className="mx-auto mb-3 h-12 w-12 rounded-2xl bg-[#1a0a2e] flex items-center justify-center">
               <Users className="h-6 w-6 text-brand-400" />
             </div>
-            <p className="text-sm text-gray-500">No team members yet</p>
+            <p className="text-sm text-text-secondary">No team members yet</p>
             {isManager && (
               <Button size="sm" className="mt-3" onClick={() => setShowInvite(true)}>
                 Invite your first member

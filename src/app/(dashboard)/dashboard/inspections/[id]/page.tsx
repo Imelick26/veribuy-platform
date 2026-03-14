@@ -211,7 +211,7 @@ export default function InspectionDetailPage({
   if (!inspection) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-500">Inspection not found</p>
+        <p className="text-text-secondary">Inspection not found</p>
         <Link href="/dashboard/inspections">
           <Button variant="secondary" className="mt-4">
             <ArrowLeft className="h-4 w-4" /> Back to Inspections
@@ -314,7 +314,7 @@ export default function InspectionDetailPage({
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-text-primary">
               {inspection.vehicle.year} {inspection.vehicle.make} {inspection.vehicle.model}
             </h1>
             <Badge
@@ -323,7 +323,7 @@ export default function InspectionDetailPage({
               {inspection.status.replace(/_/g, " ")}
             </Badge>
           </div>
-          <p className="text-gray-500 font-mono text-sm">
+          <p className="text-text-secondary font-mono text-sm">
             {inspection.number} &middot; VIN: {inspection.vehicle.vin}
           </p>
         </div>
@@ -346,8 +346,8 @@ export default function InspectionDetailPage({
       {/* Workflow Stepper */}
       <Card>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-medium text-gray-700">Inspection Progress</p>
-          <p className="text-sm text-gray-500">{completedSteps}/{inspection.steps.length} steps</p>
+          <p className="text-sm font-medium text-text-secondary">Inspection Progress</p>
+          <p className="text-sm text-text-secondary">{completedSteps}/{inspection.steps.length} steps</p>
         </div>
         <Progress value={progressPct} color={progressPct === 100 ? "green" : "brand"} />
 
@@ -364,10 +364,10 @@ export default function InspectionDetailPage({
                 <div
                   className={`mx-auto h-10 w-10 rounded-full flex items-center justify-center mb-1 transition-all ${
                     isStepCompleted
-                      ? "bg-green-100 text-green-600"
+                      ? "bg-[#0a2e1a] text-green-400"
                       : isActive
-                      ? "bg-brand-100 text-brand-600 ring-2 ring-brand-300"
-                      : "bg-gray-100 text-gray-400"
+                      ? "bg-[#1a0a2e] text-brand-400 ring-2 ring-brand-500/40"
+                      : "bg-surface-overlay text-text-tertiary"
                   }`}
                 >
                   {isStepCompleted ? (
@@ -379,8 +379,8 @@ export default function InspectionDetailPage({
                   )}
                 </div>
                 <p className={`text-xs ${
-                  isStepCompleted ? "text-green-700 font-medium" :
-                  isActive ? "text-brand-700 font-medium" : "text-gray-500"
+                  isStepCompleted ? "text-green-400 font-medium" :
+                  isActive ? "text-brand-300 font-medium" : "text-text-tertiary"
                 }`}>
                   {meta.label}
                 </p>
@@ -487,8 +487,8 @@ export default function InspectionDetailPage({
               ["Location", inspection.location || "—"],
             ].map(([label, value]) => (
               <div key={label as string} className="flex justify-between text-sm">
-                <span className="text-gray-500">{label}</span>
-                <span className="font-medium text-gray-900">{value}</span>
+                <span className="text-text-secondary">{label}</span>
+                <span className="font-medium text-text-primary">{value}</span>
               </div>
             ))}
           </div>
@@ -503,12 +503,12 @@ export default function InspectionDetailPage({
             <div className="space-y-4">
               <div className="text-center">
                 <p className={`text-5xl font-bold ${
-                  inspection.overallScore >= 70 ? "text-green-600" :
-                  inspection.overallScore >= 50 ? "text-yellow-600" : "text-red-600"
+                  inspection.overallScore >= 70 ? "text-green-400" :
+                  inspection.overallScore >= 50 ? "text-text-secondary" : "text-red-400"
                 }`}>
                   {inspection.overallScore}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">out of 100</p>
+                <p className="text-sm text-text-secondary mt-1">out of 100</p>
               </div>
               <div className="space-y-2">
                 {[
@@ -518,7 +518,7 @@ export default function InspectionDetailPage({
                 ].map((item) => (
                   <div key={item.label}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-gray-500">{item.label}</span>
+                      <span className="text-text-secondary">{item.label}</span>
                       <span className="font-medium">{item.score}/100</span>
                     </div>
                     <Progress value={item.score || 0} size="sm" color={
@@ -530,7 +530,7 @@ export default function InspectionDetailPage({
               </div>
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-400">
+            <div className="text-center py-8 text-text-tertiary">
               <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">Add findings to calculate score</p>
             </div>
@@ -547,7 +547,7 @@ export default function InspectionDetailPage({
                 {!isCompleted && !isCancelled && (
                   <button
                     onClick={() => setShowFindingForm(true)}
-                    className="rounded-full h-6 w-6 flex items-center justify-center bg-brand-100 text-brand-600 hover:bg-brand-200 transition-colors"
+                    className="rounded-full h-6 w-6 flex items-center justify-center bg-[#1a0a2e] text-brand-400 hover:bg-brand-800 transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>
@@ -556,7 +556,7 @@ export default function InspectionDetailPage({
             </div>
           </CardHeader>
           {inspection.findings.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
+            <div className="text-center py-8 text-text-tertiary">
               <Wrench className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No findings yet</p>
             </div>
@@ -611,15 +611,15 @@ export default function InspectionDetailPage({
             className="fixed inset-0 bg-black/30 z-40"
             onClick={() => setShowFindingForm(false)}
           />
-          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 overflow-y-auto">
+          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-surface-overlay shadow-2xl z-50 overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900">Add Finding</h3>
+                <h3 className="text-lg font-bold text-text-primary">Add Finding</h3>
                 <button
                   onClick={() => setShowFindingForm(false)}
-                  className="rounded-lg p-1.5 hover:bg-gray-100"
+                  className="rounded-lg p-1.5 hover:bg-surface-hover"
                 >
-                  <X className="h-5 w-5 text-gray-500" />
+                  <X className="h-5 w-5 text-text-tertiary" />
                 </button>
               </div>
 
@@ -634,24 +634,24 @@ export default function InspectionDetailPage({
                 />
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <label className="block text-sm font-medium text-text-secondary">Description</label>
                   <textarea
                     placeholder="Describe the finding in detail..."
                     value={findingForm.description}
                     onChange={(e) => setFindingForm((p) => ({ ...p, description: e.target.value }))}
                     required
                     rows={3}
-                    className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-700">Severity</label>
+                    <label className="block text-sm font-medium text-text-secondary">Severity</label>
                     <select
                       value={findingForm.severity}
                       onChange={(e) => setFindingForm((p) => ({ ...p, severity: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                     >
                       {SEVERITY_OPTIONS.map((s) => (
                         <option key={s} value={s}>{s}</option>
@@ -659,11 +659,11 @@ export default function InspectionDetailPage({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-700">Category</label>
+                    <label className="block text-sm font-medium text-text-secondary">Category</label>
                     <select
                       value={findingForm.category}
                       onChange={(e) => setFindingForm((p) => ({ ...p, category: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                     >
                       {CATEGORY_OPTIONS.map((c) => (
                         <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
@@ -692,13 +692,13 @@ export default function InspectionDetailPage({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-gray-700">Evidence Notes (optional)</label>
+                  <label className="block text-sm font-medium text-text-secondary">Evidence Notes (optional)</label>
                   <textarea
                     placeholder="What was observed during inspection..."
                     value={findingForm.evidence}
                     onChange={(e) => setFindingForm((p) => ({ ...p, evidence: e.target.value }))}
                     rows={2}
-                    className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
                   />
                 </div>
 

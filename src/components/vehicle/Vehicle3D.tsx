@@ -21,9 +21,9 @@ interface Vehicle3DProps {
 
 const SEVERITY_COLORS: Record<string, string> = {
   CRITICAL: "#b91c1c",
-  MAJOR: "#ea580c",
-  MODERATE: "#ca8a04",
-  MINOR: "#16a34a",
+  MAJOR: "#dc2626",
+  MODERATE: "#9898b0",
+  MINOR: "#ab6dd9",
   INFO: "#2563eb",
 };
 
@@ -33,21 +33,21 @@ function CarBody() {
       {/* Main body */}
       <mesh position={[0, 0.35, 0]}>
         <boxGeometry args={[2.4, 0.5, 1.1]} />
-        <meshStandardMaterial color="#5c0099" transparent opacity={0.12} />
+        <meshStandardMaterial color="#5c0099" transparent opacity={0.2} />
       </mesh>
       <mesh position={[0, 0.35, 0]}>
         <boxGeometry args={[2.4, 0.5, 1.1]} />
-        <meshStandardMaterial color="#ffffff" wireframe />
+        <meshStandardMaterial color="#4a4a68" wireframe />
       </mesh>
 
       {/* Cabin */}
       <mesh position={[0.1, 0.72, 0]}>
         <boxGeometry args={[1.4, 0.4, 1.0]} />
-        <meshStandardMaterial color="#5c0099" transparent opacity={0.08} />
+        <meshStandardMaterial color="#5c0099" transparent opacity={0.15} />
       </mesh>
       <mesh position={[0.1, 0.72, 0]}>
         <boxGeometry args={[1.4, 0.4, 1.0]} />
-        <meshStandardMaterial color="#ffffff" wireframe />
+        <meshStandardMaterial color="#4a4a68" wireframe />
       </mesh>
 
       {/* Hood */}
@@ -173,7 +173,7 @@ function Scene({
       ))}
 
       {/* Ground grid */}
-      <gridHelper args={[6, 20, "#d4bfe8", "#e4d4f4"]} position={[0, -0.05, 0]} />
+      <gridHelper args={[6, 20, "#3a3a58", "#2a2a45"]} position={[0, -0.05, 0]} />
 
       <OrbitControls
         autoRotate

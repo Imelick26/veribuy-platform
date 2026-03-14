@@ -38,7 +38,7 @@ export default function ReportDetailPage({
   if (!report || !report.inspection) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-500">Report not found</p>
+        <p className="text-text-secondary">Report not found</p>
         <Link href="/dashboard/reports">
           <Button variant="secondary" className="mt-4">
             <ArrowLeft className="h-4 w-4" /> Back to Reports
@@ -70,8 +70,8 @@ export default function ReportDetailPage({
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Inspection Report</h1>
-            <p className="text-gray-500 font-mono text-sm">{report.number}</p>
+            <h1 className="text-2xl font-bold text-text-primary">Inspection Report</h1>
+            <p className="text-text-secondary font-mono text-sm">{report.number}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -94,7 +94,7 @@ export default function ReportDetailPage({
       </div>
 
       {/* Report Content */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden print:shadow-none print:border-none">
+      <div className="bg-surface-raised rounded-xl border border-border-default shadow-sm overflow-hidden print:shadow-none print:border-none">
 
         {/* Report Header */}
         <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-8 py-6 text-white">
@@ -115,29 +115,29 @@ export default function ReportDetailPage({
         </div>
 
         {/* Executive Summary */}
-        <div className="px-8 py-6 border-b">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Executive Summary</h3>
+        <div className="px-8 py-6 border-b border-border-default">
+          <h3 className="text-lg font-bold text-text-primary mb-4">Executive Summary</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 rounded-xl bg-gray-50">
+            <div className="text-center p-4 rounded-xl bg-surface-sunken">
               <p className={`text-4xl font-bold ${
-                (inspection.overallScore || 0) >= 70 ? "text-green-600" :
-                (inspection.overallScore || 0) >= 50 ? "text-yellow-600" : "text-red-600"
+                (inspection.overallScore || 0) >= 70 ? "text-green-400" :
+                (inspection.overallScore || 0) >= 50 ? "text-text-secondary" : "text-red-400"
               }`}>
                 {inspection.overallScore ?? "—"}
               </p>
-              <p className="text-xs text-gray-500 mt-1">Overall Score</p>
+              <p className="text-xs text-text-secondary mt-1">Overall Score</p>
             </div>
-            <div className="text-center p-4 rounded-xl bg-red-50">
-              <p className="text-4xl font-bold text-red-600">{criticalCount + majorCount}</p>
-              <p className="text-xs text-gray-500 mt-1">Critical/Major</p>
+            <div className="text-center p-4 rounded-xl bg-[#2e0a0a]">
+              <p className="text-4xl font-bold text-red-400">{criticalCount + majorCount}</p>
+              <p className="text-xs text-text-secondary mt-1">Critical/Major</p>
             </div>
-            <div className="text-center p-4 rounded-xl bg-yellow-50">
-              <p className="text-4xl font-bold text-yellow-600">{moderateCount}</p>
-              <p className="text-xs text-gray-500 mt-1">Moderate</p>
+            <div className="text-center p-4 rounded-xl bg-surface-overlay">
+              <p className="text-4xl font-bold text-text-secondary">{moderateCount}</p>
+              <p className="text-xs text-text-secondary mt-1">Moderate</p>
             </div>
-            <div className="text-center p-4 rounded-xl bg-blue-50">
-              <p className="text-4xl font-bold text-blue-600">{minorCount}</p>
-              <p className="text-xs text-gray-500 mt-1">Minor/Info</p>
+            <div className="text-center p-4 rounded-xl bg-[#1a0a2e]">
+              <p className="text-4xl font-bold text-brand-300">{minorCount}</p>
+              <p className="text-xs text-text-secondary mt-1">Minor/Info</p>
             </div>
           </div>
 
@@ -151,7 +151,7 @@ export default function ReportDetailPage({
               ].map((item) => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-500">{item.label}</span>
+                    <span className="text-text-secondary">{item.label}</span>
                     <span className="font-medium">{item.score}/100</span>
                   </div>
                   <Progress value={item.score || 0} size="sm" color={
@@ -165,8 +165,8 @@ export default function ReportDetailPage({
 
           {/* Total repair estimate */}
           {totalRepairHigh > 0 && (
-            <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-              <p className="text-sm font-semibold text-amber-800">
+            <div className="mt-4 p-3 rounded-lg bg-[#2e0a0a] border border-red-900/50">
+              <p className="text-sm font-semibold text-red-400">
                 <AlertTriangle className="inline h-4 w-4 mr-1" />
                 Total Estimated Repair Cost: {formatCurrency(totalRepairLow)} – {formatCurrency(totalRepairHigh)}
               </p>
@@ -175,8 +175,8 @@ export default function ReportDetailPage({
         </div>
 
         {/* Vehicle Details */}
-        <div className="px-8 py-6 border-b">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Vehicle Information</h3>
+        <div className="px-8 py-6 border-b border-border-default">
+          <h3 className="text-lg font-bold text-text-primary mb-4">Vehicle Information</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6">
             {[
               ["VIN", vehicle.vin],
@@ -193,21 +193,21 @@ export default function ReportDetailPage({
               ["Inspection Date", formatDate(inspection.createdAt)],
             ].map(([label, value]) => (
               <div key={label as string}>
-                <p className="text-xs text-gray-500">{label}</p>
-                <p className="text-sm font-medium text-gray-900">{value}</p>
+                <p className="text-xs text-text-secondary">{label}</p>
+                <p className="text-sm font-medium text-text-primary">{value}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Findings */}
-        <div className="px-8 py-6 border-b">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">
+        <div className="px-8 py-6 border-b border-border-default">
+          <h3 className="text-lg font-bold text-text-primary mb-4">
             <Wrench className="inline h-5 w-5 mr-1" />
             Findings ({findings.length})
           </h3>
           {findings.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
+            <div className="text-center py-8 text-text-tertiary">
               <CheckCircle className="h-8 w-8 mx-auto mb-2" />
               <p className="text-sm">No issues found during inspection</p>
             </div>
@@ -219,7 +219,7 @@ export default function ReportDetailPage({
                   className={`p-4 rounded-xl border ${severityColor(f.severity)}`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-gray-900">{f.title}</h4>
+                    <h4 className="font-semibold text-text-primary">{f.title}</h4>
                     <div className="flex items-center gap-2">
                       <Badge variant={
                         f.severity === "CRITICAL" ? "danger" :
@@ -230,9 +230,9 @@ export default function ReportDetailPage({
                       <Badge>{f.category.replace(/_/g, " ")}</Badge>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600">{f.description}</p>
+                  <p className="text-sm text-text-secondary">{f.description}</p>
                   {f.evidence && (
-                    <p className="text-sm text-gray-500 mt-1 italic">Evidence: {f.evidence}</p>
+                    <p className="text-sm text-text-secondary mt-1 italic">Evidence: {f.evidence}</p>
                   )}
                   {(f.repairCostLow || f.repairCostHigh) && (
                     <p className="text-sm font-medium mt-2">
@@ -244,7 +244,7 @@ export default function ReportDetailPage({
                     <div className="flex gap-2 mt-3">
                       {f.media.map((m) => (
                         m.url && (
-                          <div key={m.id} className="h-16 w-16 rounded-lg bg-gray-100 overflow-hidden">
+                          <div key={m.id} className="h-16 w-16 rounded-lg bg-surface-sunken overflow-hidden">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={m.url} alt="Evidence" className="h-full w-full object-cover" />
                           </div>
@@ -260,18 +260,18 @@ export default function ReportDetailPage({
 
         {/* Media Gallery */}
         {media && media.length > 0 && (
-          <div className="px-8 py-6 border-b">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">
+          <div className="px-8 py-6 border-b border-border-default">
+            <h3 className="text-lg font-bold text-text-primary mb-4">
               <Camera className="inline h-5 w-5 mr-1" />
               Photo Gallery ({media.length})
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
               {media.filter((m) => m.url).map((m) => (
-                <div key={m.id} className="rounded-lg bg-gray-100 overflow-hidden aspect-square">
+                <div key={m.id} className="rounded-lg bg-surface-sunken overflow-hidden aspect-square">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={m.url!} alt={m.captureType || "Photo"} className="h-full w-full object-cover" />
                   {m.captureType && (
-                    <p className="text-[10px] text-gray-500 text-center py-1 bg-white">
+                    <p className="text-[10px] text-text-secondary text-center py-1 bg-surface-raised">
                       {m.captureType.replace(/_/g, " ")}
                     </p>
                   )}
@@ -282,11 +282,11 @@ export default function ReportDetailPage({
         )}
 
         {/* Footer */}
-        <div className="px-8 py-4 bg-gray-50 text-center">
-          <p className="text-xs text-gray-400">
+        <div className="px-8 py-4 bg-surface-sunken text-center">
+          <p className="text-xs text-text-tertiary">
             Report generated by VeriBuy on {formatDate(report.generatedAt)}
           </p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-text-tertiary mt-0.5">
             This report is provided for informational purposes. Always consult a qualified mechanic for final assessment.
           </p>
         </div>

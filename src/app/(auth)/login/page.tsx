@@ -35,8 +35,8 @@ export default function LoginPage() {
         <span className="text-xl font-bold text-brand-gradient">VeriBuy</span>
       </div>
 
-      <h2 className="text-3xl font-bold text-gray-900 mb-2 tracking-tight">Welcome back</h2>
-      <p className="text-gray-500 mb-8">Sign in to your account to continue</p>
+      <h2 className="text-3xl font-bold text-text-primary mb-2 tracking-tight">Welcome back</h2>
+      <p className="text-text-secondary mb-8">Sign in to your account to continue</p>
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Input
@@ -59,7 +59,7 @@ export default function LoginPage() {
         />
 
         {error && (
-          <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-100">
+          <div className="rounded-xl bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-500/20">
             {error}
           </div>
         )}
@@ -69,7 +69,7 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-gray-500">
+      <p className="mt-6 text-center text-sm text-text-secondary">
         Don&apos;t have an account?{" "}
         <Link href="/register" className="font-semibold text-brand-gradient hover:opacity-80 transition-opacity">
           Create one

@@ -28,9 +28,9 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-white border-r border-gray-100">
+    <aside className="flex h-screen w-64 flex-col bg-surface-raised border-r border-border-default">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-2.5 px-6 border-b border-gray-100">
+      <div className="flex h-16 items-center gap-2.5 px-6 border-b border-border-default">
         <Image src="/logo.png" alt="VeriBuy" width={36} height={36} className="h-9 w-9" />
         <span className="text-xl font-bold text-brand-gradient">VeriBuy</span>
       </div>
@@ -48,11 +48,11 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-brand-gradient-subtle text-brand-700 nav-accent-left"
-                  : "text-gray-500 hover:bg-brand-50/50 hover:text-brand-700"
+                  ? "bg-brand-gradient-subtle text-brand-300 nav-accent-left"
+                  : "text-text-secondary hover:bg-surface-hover hover:text-brand-300"
               )}
             >
-              <item.icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-brand-600")} />
+              <item.icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-brand-400")} />
               {item.name}
             </Link>
           );
@@ -60,10 +60,10 @@ export function Sidebar() {
       </nav>
 
       {/* Sign out */}
-      <div className="border-t border-gray-100 px-3 py-4">
+      <div className="border-t border-border-default px-3 py-4">
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-all duration-200 cursor-pointer"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-text-secondary hover:bg-[#2e0a0a] hover:text-red-400 transition-all duration-200 cursor-pointer"
         >
           <LogOut className="h-5 w-5" />
           Sign Out
