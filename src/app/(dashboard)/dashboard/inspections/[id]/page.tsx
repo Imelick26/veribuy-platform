@@ -179,7 +179,7 @@ export default function InspectionDetailPage({
         recordRiskCheck.mutate({
           inspectionId: id,
           riskId,
-          status: existing?.status || "NOT_CHECKED",
+          status: (existing?.status as RiskCheckStatus["status"]) || "NOT_CHECKED",
           notes: existing?.notes || undefined,
           mediaIds: newMediaIds,
         });
