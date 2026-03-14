@@ -1,20 +1,18 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
+import NextAuth from "next-auth";
+import { NextResponse } from "next/server";
+import { authConfig } from "@/lib/auth.config";
 
-export async function middleware(req: NextRequest) {
+// Create a lightweight NextAuth instance for Edge middleware — no Prisma/bcrypt
+const { auth } = NextAuth(authConfig);
+
+export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // Public routes that don't require auth
   const publicRoutes = ["/login", "/register", "/api/auth", "/api/trpc"];
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
-  // Check for JWT token — Auth.js v5 uses "authjs.session-token" cookie (not "next-auth.*")
-  const token = await getToken({
-    req,
-    secret: process.env.NEXTAUTH_SECRET,
-    salt: "authjs.session-token",
-  });
-  const isLoggedIn = !!token;
+  const isLoggedIn = !!req.auth;
 
   // Allow public routes
   if (isPublicRoute) {
@@ -33,7 +31,7 @@ export async function middleware(req: NextRequest) {
   }
 
   return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: [
