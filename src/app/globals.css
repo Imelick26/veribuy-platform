@@ -16,11 +16,11 @@
   --color-brand-900: #1a0033;
 
   /* Dark Theme Surfaces */
-  --color-surface-base: #0f0f1a;
-  --color-surface-raised: #1a1a2e;
-  --color-surface-overlay: #222240;
-  --color-surface-sunken: #12121f;
-  --color-surface-hover: #2a2a48;
+  --color-surface-base: #181828;
+  --color-surface-raised: #1e1e34;
+  --color-surface-overlay: #282848;
+  --color-surface-sunken: #141424;
+  --color-surface-hover: #30304e;
 
   /* Dark Theme Text */
   --color-text-primary: #e8e8f0;
@@ -28,8 +28,8 @@
   --color-text-tertiary: #686880;
 
   /* Dark Theme Borders */
-  --color-border-default: #2a2a45;
-  --color-border-strong: #3a3a58;
+  --color-border-default: #2e2e4a;
+  --color-border-strong: #3e3e5c;
 
   /* Severity Colors */
   --color-severity-critical: #b91c1c;
@@ -41,7 +41,7 @@
 
 /* === Body === */
 body {
-  background: #0f0f1a;
+  background: #181828;
   color: #e8e8f0;
   min-height: 100vh;
 }
@@ -52,14 +52,14 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #12121f;
+  background: #14142a;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3a3a58;
+  background: #3e3e5c;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a68;
+  background: #4e4e6c;
 }
 
 /* === Brand Gradient Utilities === */
