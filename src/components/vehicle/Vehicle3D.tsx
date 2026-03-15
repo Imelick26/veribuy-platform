@@ -37,7 +37,7 @@ function CarBody() {
       </mesh>
       <mesh position={[0, 0.35, 0]}>
         <boxGeometry args={[2.4, 0.5, 1.1]} />
-        <meshStandardMaterial color="#4a4a68" wireframe />
+        <meshStandardMaterial color="#a0a0b4" wireframe />
       </mesh>
 
       {/* Cabin */}
@@ -47,7 +47,7 @@ function CarBody() {
       </mesh>
       <mesh position={[0.1, 0.72, 0]}>
         <boxGeometry args={[1.4, 0.4, 1.0]} />
-        <meshStandardMaterial color="#4a4a68" wireframe />
+        <meshStandardMaterial color="#a0a0b4" wireframe />
       </mesh>
 
       {/* Hood */}
@@ -133,7 +133,7 @@ function HotspotMarker({
 
       {(hovered || isActive) && (
         <Html distanceFactor={4} style={{ pointerEvents: "none" }}>
-          <div className="whitespace-nowrap rounded-lg bg-gray-900/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-sm">
+          <div className="whitespace-nowrap rounded-lg bg-gray-800/90 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-sm">
             <span
               className="mr-1.5 inline-block h-2 w-2 rounded-full"
               style={{ backgroundColor: color }}
@@ -173,7 +173,7 @@ function Scene({
       ))}
 
       {/* Ground grid */}
-      <gridHelper args={[6, 20, "#3a3a58", "#2a2a45"]} position={[0, -0.05, 0]} />
+      <gridHelper args={[6, 20, "#a0a0b4", "#c0c0d0"]} position={[0, -0.05, 0]} />
 
       <OrbitControls
         autoRotate
@@ -198,7 +198,7 @@ export function Vehicle3D({
       <Suspense
         fallback={
           <div className="flex items-center justify-center h-full">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-300" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
           </div>
         }
       >

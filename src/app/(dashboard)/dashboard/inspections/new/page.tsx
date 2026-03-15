@@ -92,7 +92,7 @@ export default function NewInspectionPage() {
         </form>
 
         {decodeMutation.error && (
-          <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-900/50">
+          <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             {decodeMutation.error.message}
           </div>
@@ -100,10 +100,10 @@ export default function NewInspectionPage() {
 
         {/* Decoded vehicle info */}
         {decodedVehicle && (
-          <div className="mt-6 p-4 rounded-lg bg-[#0a2e1a] border border-green-900/50">
+          <div className="mt-6 p-4 rounded-lg bg-[#dcfce7] border border-green-300">
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-              <span className="font-semibold text-green-300">Vehicle Decoded</span>
+              <CheckCircle className="h-5 w-5 text-green-700" />
+              <span className="font-semibold text-green-700">Vehicle Decoded</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -116,8 +116,8 @@ export default function NewInspectionPage() {
                 ["Engine", decodedVehicle.engine || "\u2014"],
               ].map(([label, value]) => (
                 <div key={label as string}>
-                  <p className="text-xs text-green-400 uppercase font-medium">{label}</p>
-                  <p className="text-sm font-medium text-green-200">{value}</p>
+                  <p className="text-xs text-green-700 uppercase font-medium">{label}</p>
+                  <p className="text-sm font-medium text-green-800">{value}</p>
                 </div>
               ))}
             </div>

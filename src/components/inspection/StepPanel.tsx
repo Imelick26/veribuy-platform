@@ -120,7 +120,7 @@ export function StepPanel({
 
           {!riskProfile ? (
             <div className="text-center py-8">
-              <ShieldAlert className="h-6 w-6 mx-auto text-brand-300 mb-3" />
+              <ShieldAlert className="h-6 w-6 mx-auto text-brand-600 mb-3" />
               <h4 className="font-semibold text-text-primary mb-1">Ready to Analyze Vehicle Risks</h4>
               <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
                 We&apos;ll query NHTSA for complaints, recalls, and investigations, then merge with our curated risk database to build a complete risk profile.
@@ -145,14 +145,14 @@ export function StepPanel({
                   <p className="text-2xl font-bold text-text-primary">{riskProfile.aggregatedRisks.length}</p>
                   <p className="text-xs text-text-secondary">Total Risks</p>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-[#2e0a0a]">
-                  <p className="text-2xl font-bold text-red-400">
+                <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
+                  <p className="text-2xl font-bold text-red-700">
                     {riskProfile.aggregatedRisks.filter((r) => r.severity === "CRITICAL").length}
                   </p>
                   <p className="text-xs text-text-secondary">Critical</p>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-[#2e0a0a]">
-                  <p className="text-2xl font-bold text-red-400">
+                <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
+                  <p className="text-2xl font-bold text-red-700">
                     {riskProfile.nhtsaData.recallCount}
                   </p>
                   <p className="text-xs text-text-secondary">Recalls</p>
@@ -160,7 +160,7 @@ export function StepPanel({
               </div>
 
               {/* NHTSA data summary */}
-              <div className="p-3 rounded-lg bg-[#1a0a2e] border border-brand-800/50 text-xs text-brand-300">
+              <div className="p-3 rounded-lg bg-[#fce8f3] border border-brand-300 text-xs text-brand-700">
                 <p className="font-semibold mb-1">NHTSA Intelligence Summary</p>
                 <ul className="space-y-0.5">
                   <li>{riskProfile.nhtsaData.complaintCount} owner complaints analyzed</li>
@@ -175,12 +175,12 @@ export function StepPanel({
                 const totalLow = riskProfile.aggregatedRisks.reduce((s, r) => s + r.cost.low, 0);
                 const totalHigh = riskProfile.aggregatedRisks.reduce((s, r) => s + r.cost.high, 0);
                 return totalLow > 0 ? (
-                  <div className="p-3 rounded-lg bg-[#2e0a0a] border border-red-900/50">
-                    <p className="text-xs font-semibold text-red-400 mb-1">
+                  <div className="p-3 rounded-lg bg-[#fde8e8] border border-red-300">
+                    <p className="text-xs font-semibold text-red-700 mb-1">
                       <AlertTriangle className="inline h-3 w-3 mr-1" />
                       Total Potential Repair Exposure
                     </p>
-                    <p className="text-lg font-bold text-red-300">
+                    <p className="text-lg font-bold text-red-700">
                       {formatCurrency(totalLow)} – {formatCurrency(totalHigh)}
                     </p>
                   </div>
@@ -270,7 +270,7 @@ export function StepPanel({
           {!aiAnalysisResults || aiAnalysisResults.length === 0 ? (
             <div className="space-y-4">
               <div className="text-center py-6">
-                <Sparkles className="h-6 w-6 mx-auto text-brand-300 mb-3" />
+                <Sparkles className="h-6 w-6 mx-auto text-brand-600 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">AI-Powered Condition Analysis</h4>
                 <p className="text-sm text-text-secondary mb-1 max-w-md mx-auto">
                   Our AI will analyze your captured photos against each identified risk, looking for
@@ -287,8 +287,8 @@ export function StepPanel({
                 const isDisabled = !riskProfile || photoCount === 0;
                 return (
                   <>
-                    <div className={`p-3 rounded-lg border ${photoCount > 0 ? "bg-[#1a0a2e] border-brand-800/50" : "bg-surface-overlay border-border-strong"}`}>
-                      <p className={`text-xs font-semibold mb-1 ${photoCount > 0 ? "text-brand-300" : "text-text-secondary"}`}>
+                    <div className={`p-3 rounded-lg border ${photoCount > 0 ? "bg-[#fce8f3] border-brand-300" : "bg-surface-overlay border-border-strong"}`}>
+                      <p className={`text-xs font-semibold mb-1 ${photoCount > 0 ? "text-brand-700" : "text-text-secondary"}`}>
                         <Camera className="inline h-3 w-3 mr-1" />
                         {photoCount} photos captured
                       </p>
@@ -297,7 +297,7 @@ export function StepPanel({
                           Capture photos in the Media Capture step before running analysis.
                         </p>
                       ) : (
-                        <p className="text-xs text-brand-200">
+                        <p className="text-xs text-brand-600">
                           {riskProfile?.aggregatedRisks.length || 0} risk items will be evaluated
                         </p>
                       )}
@@ -333,14 +333,14 @@ export function StepPanel({
             <div className="space-y-3">
               {/* Results summary */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-3 rounded-lg bg-[#2e0a0a]">
-                  <p className="text-2xl font-bold text-red-400">
+                <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
+                  <p className="text-2xl font-bold text-red-700">
                     {aiAnalysisResults.filter(r => r.verdict === "CONFIRMED").length}
                   </p>
                   <p className="text-xs text-text-secondary">Confirmed</p>
                 </div>
-                <div className="text-center p-3 rounded-lg bg-[#0a2e1a]">
-                  <p className="text-2xl font-bold text-green-400">
+                <div className="text-center p-3 rounded-lg bg-[#dcfce7]">
+                  <p className="text-2xl font-bold text-green-700">
                     {aiAnalysisResults.filter(r => r.verdict === "CLEARED").length}
                   </p>
                   <p className="text-xs text-text-secondary">Cleared</p>
@@ -363,9 +363,9 @@ export function StepPanel({
                       className={cn(
                         "p-3 rounded-lg border text-sm",
                         result.verdict === "CONFIRMED"
-                          ? "border-red-900/50 bg-[#2e0a0a]"
+                          ? "border-red-300 bg-[#fde8e8]"
                           : result.verdict === "CLEARED"
-                            ? "border-green-900/50 bg-[#0a2e1a]"
+                            ? "border-green-300 bg-[#dcfce7]"
                             : "border-border-strong bg-surface-overlay"
                       )}
                     >
@@ -431,7 +431,7 @@ export function StepPanel({
           {!history ? (
             <div className="space-y-4">
               <div className="text-center py-6">
-                <Clock className="h-6 w-6 mx-auto text-brand-300 mb-3" />
+                <Clock className="h-6 w-6 mx-auto text-brand-600 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">Pull Vehicle History Report</h4>
                 <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
                   Fetch title records, accident history, ownership data, and recall status from VinAudit.
@@ -459,18 +459,18 @@ export function StepPanel({
               <div className={cn(
                 "p-3 rounded-lg border",
                 history.titleStatus === "CLEAN"
-                  ? "bg-[#0a2e1a] border-green-900/50"
-                  : "bg-[#2e0a0a] border-red-900/50"
+                  ? "bg-[#dcfce7] border-green-300"
+                  : "bg-[#fde8e8] border-red-300"
               )}>
                 <div className="flex items-center gap-2">
                   {history.titleStatus === "CLEAN" ? (
-                    <CheckCircle className="h-5 w-5 text-green-400" />
+                    <CheckCircle className="h-5 w-5 text-green-700" />
                   ) : (
-                    <AlertTriangle className="h-5 w-5 text-red-400" />
+                    <AlertTriangle className="h-5 w-5 text-red-700" />
                   )}
                   <span className={cn(
                     "font-semibold text-sm",
-                    history.titleStatus === "CLEAN" ? "text-green-300" : "text-red-300"
+                    history.titleStatus === "CLEAN" ? "text-green-700" : "text-red-700"
                   )}>
                     Title: {history.titleStatus}
                   </span>
@@ -497,12 +497,12 @@ export function StepPanel({
 
               {/* Damage flags */}
               {(history.structuralDamage || history.floodDamage) && (
-                <div className="p-3 rounded-lg bg-[#2e0a0a] border border-red-900/50">
-                  <p className="text-xs font-semibold text-red-400 mb-1">
+                <div className="p-3 rounded-lg bg-[#fde8e8] border border-red-300">
+                  <p className="text-xs font-semibold text-red-700 mb-1">
                     <AlertTriangle className="inline h-3 w-3 mr-1" /> Damage Flags
                   </p>
-                  {history.structuralDamage && <p className="text-xs text-red-300">Structural damage reported</p>}
-                  {history.floodDamage && <p className="text-xs text-red-300">Flood damage reported</p>}
+                  {history.structuralDamage && <p className="text-xs text-red-700">Structural damage reported</p>}
+                  {history.floodDamage && <p className="text-xs text-red-700">Flood damage reported</p>}
                 </div>
               )}
 
@@ -537,7 +537,7 @@ export function StepPanel({
           {!market ? (
             <div className="space-y-4">
               <div className="text-center py-6">
-                <BarChart3 className="h-6 w-6 mx-auto text-brand-300 mb-3" />
+                <BarChart3 className="h-6 w-6 mx-auto text-brand-600 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">Run Market Analysis</h4>
                 <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
                   Fetch comparable listings and estimate fair market value adjusted for vehicle condition.
@@ -564,10 +564,10 @@ export function StepPanel({
               {/* Buy recommendation */}
               <div className={cn(
                 "p-4 rounded-lg border text-center",
-                market.recommendation === "STRONG_BUY" ? "bg-[#0a2e1a] border-green-900/50" :
-                market.recommendation === "FAIR_BUY" ? "bg-[#1a0a2e] border-brand-800/50" :
-                market.recommendation === "OVERPAYING" ? "bg-[#2e0a0a] border-red-900/50" :
-                "bg-[#2e0a0a] border-red-900/50"
+                market.recommendation === "STRONG_BUY" ? "bg-[#dcfce7] border-green-300" :
+                market.recommendation === "FAIR_BUY" ? "bg-[#fce8f3] border-brand-300" :
+                market.recommendation === "OVERPAYING" ? "bg-[#fde8e8] border-red-300" :
+                "bg-[#fde8e8] border-red-300"
               )}>
                 <Badge
                   variant={
@@ -597,13 +597,13 @@ export function StepPanel({
                 {market.strongBuyMax && (
                   <div className="flex justify-between text-sm">
                     <span className="text-text-secondary">Strong Buy Max</span>
-                    <span className="font-medium text-green-400">{formatCurrency(market.strongBuyMax)}</span>
+                    <span className="font-medium text-green-700">{formatCurrency(market.strongBuyMax)}</span>
                   </div>
                 )}
                 {market.estReconCost != null && market.estReconCost > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-text-secondary">Est. Recon Cost</span>
-                    <span className="font-medium text-red-400">{formatCurrency(market.estReconCost)}</span>
+                    <span className="font-medium text-red-700">{formatCurrency(market.estReconCost)}</span>
                   </div>
                 )}
                 {market.estGrossProfit != null && (
@@ -611,7 +611,7 @@ export function StepPanel({
                     <span className="text-text-secondary font-semibold">Est. Gross Profit</span>
                     <span className={cn(
                       "font-bold",
-                      market.estGrossProfit > 0 ? "text-green-400" : "text-red-400"
+                      market.estGrossProfit > 0 ? "text-green-700" : "text-red-700"
                     )}>
                       {formatCurrency(market.estGrossProfit)}
                     </span>
@@ -643,11 +643,11 @@ export function StepPanel({
           </CardHeader>
           {inspection.report ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-[#0a2e1a] border border-green-900/50">
-                <CheckCircle className="h-6 w-6 text-green-400" />
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-[#dcfce7] border border-green-300">
+                <CheckCircle className="h-6 w-6 text-green-700" />
                 <div>
-                  <p className="font-semibold text-green-300">Report Generated</p>
-                  <p className="text-sm text-green-400">{inspection.report.number}</p>
+                  <p className="font-semibold text-green-700">Report Generated</p>
+                  <p className="text-sm text-green-700">{inspection.report.number}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -670,7 +670,7 @@ export function StepPanel({
             </div>
           ) : (
             <div className="text-center py-8">
-              <FileText className="h-6 w-6 mx-auto text-brand-300 mb-3" />
+              <FileText className="h-6 w-6 mx-auto text-brand-600 mb-3" />
               <h4 className="font-semibold text-text-primary mb-1">Ready to Generate Report</h4>
               <p className="text-sm text-text-secondary mb-4">
                 This will compile all findings, media, and risk data into a comprehensive inspection report.

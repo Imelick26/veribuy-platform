@@ -128,7 +128,7 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-500/20">
+          <div className="rounded-xl bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
             {error}
           </div>
         )}

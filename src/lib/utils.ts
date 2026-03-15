@@ -23,19 +23,19 @@ export function formatDate(date: Date | string): string {
 
 export function severityColor(severity: string): string {
   switch (severity) {
-    case "CRITICAL": return "text-red-400 bg-[#2e0a0a] border-red-900/50";
-    case "MAJOR": return "text-red-400 bg-[#2e0a0a] border-red-900/50";
+    case "CRITICAL": return "text-red-700 bg-[#fde8e8] border-red-300";
+    case "MAJOR": return "text-red-700 bg-[#fde8e8] border-red-300";
     case "MODERATE": return "text-text-secondary bg-surface-overlay border-border-strong";
-    case "MINOR": return "text-brand-300 bg-[#1a0a2e] border-brand-800/50";
+    case "MINOR": return "text-brand-700 bg-[#fce8f3] border-brand-300";
     default: return "text-text-secondary bg-surface-overlay border-border-default";
   }
 }
 
 export function statusColor(status: string): string {
   switch (status) {
-    case "COMPLETED": return "text-green-400 bg-[#0a2e1a]";
-    case "CANCELLED": return "text-red-400 bg-[#2e0a0a]";
+    case "COMPLETED": return "text-green-700 bg-[#dcfce7]";
+    case "CANCELLED": return "text-red-700 bg-[#fde8e8]";
     case "CREATED": return "text-text-secondary bg-surface-overlay";
-    default: return "text-brand-300 bg-[#1a0a2e]";
+    default: return "text-brand-700 bg-[#fce8f3]";
   }
 }

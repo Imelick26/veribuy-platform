@@ -78,12 +78,12 @@ export function FindingFromRisk({
           </div>
 
           {/* Risk context banner */}
-          <div className="mb-4 p-3 rounded-lg bg-[#1a0a2e] border border-brand-800/50">
+          <div className="mb-4 p-3 rounded-lg bg-[#fce8f3] border border-brand-300">
             <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="h-4 w-4 text-brand-400" />
-              <p className="text-xs font-bold text-brand-300">Pre-populated from risk profile</p>
+              <AlertTriangle className="h-4 w-4 text-brand-600" />
+              <p className="text-xs font-bold text-brand-700">Pre-populated from risk profile</p>
             </div>
-            <p className="text-[11px] text-brand-200">
+            <p className="text-[11px] text-brand-600">
               Review and modify the details below before submitting. Add your specific observations in the evidence notes.
             </p>
           </div>

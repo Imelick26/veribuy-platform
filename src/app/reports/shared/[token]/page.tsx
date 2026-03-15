@@ -74,30 +74,30 @@ export default function SharedReportPage({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-4 rounded-xl bg-surface-sunken">
                 <p className={`text-4xl font-bold ${
-                  (inspection.overallScore || 0) >= 70 ? "text-green-400" :
-                  (inspection.overallScore || 0) >= 50 ? "text-text-secondary" : "text-red-400"
+                  (inspection.overallScore || 0) >= 70 ? "text-green-700" :
+                  (inspection.overallScore || 0) >= 50 ? "text-text-secondary" : "text-red-700"
                 }`}>
                   {inspection.overallScore ?? "—"}
                 </p>
                 <p className="text-xs text-text-secondary mt-1">Overall Score</p>
               </div>
-              <div className="text-center p-4 rounded-xl bg-[#2e0a0a]">
-                <p className="text-4xl font-bold text-red-400">{criticalCount + majorCount}</p>
+              <div className="text-center p-4 rounded-xl bg-[#fde8e8]">
+                <p className="text-4xl font-bold text-red-700">{criticalCount + majorCount}</p>
                 <p className="text-xs text-text-secondary mt-1">Critical/Major Issues</p>
               </div>
-              <div className="text-center p-4 rounded-xl bg-[#1a0a2e]">
-                <p className="text-4xl font-bold text-brand-300">{findings.length}</p>
+              <div className="text-center p-4 rounded-xl bg-[#fce8f3]">
+                <p className="text-4xl font-bold text-brand-700">{findings.length}</p>
                 <p className="text-xs text-text-secondary mt-1">Total Findings</p>
               </div>
-              <div className="text-center p-4 rounded-xl bg-[#0a2e1a]">
-                <p className="text-4xl font-bold text-green-400">{media?.length || 0}</p>
+              <div className="text-center p-4 rounded-xl bg-[#dcfce7]">
+                <p className="text-4xl font-bold text-green-700">{media?.length || 0}</p>
                 <p className="text-xs text-text-secondary mt-1">Photos</p>
               </div>
             </div>
 
             {totalRepairHigh > 0 && (
-              <div className="mt-4 p-3 rounded-lg bg-[#2e0a0a] border border-red-900/50">
-                <p className="text-sm font-semibold text-red-400">
+              <div className="mt-4 p-3 rounded-lg bg-[#fde8e8] border border-red-300">
+                <p className="text-sm font-semibold text-red-700">
                   <AlertTriangle className="inline h-4 w-4 mr-1" />
                   Total Estimated Repair Cost: {formatCurrency(totalRepairLow)} – {formatCurrency(totalRepairHigh)}
                 </p>

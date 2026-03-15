@@ -49,11 +49,11 @@ export function VehicleDiagram({
     <div className={`relative bg-surface-raised rounded-xl border border-border-default overflow-hidden ${className}`}>
       <svg viewBox="0 0 800 340" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
         {/* Background */}
-        <rect width="800" height="340" fill="#1a1a2e" />
+        <rect width="800" height="340" fill="#e8e8ee" />
 
         {/* Ground line */}
-        <line x1="40" y1="275" x2="760" y2="275" stroke="#2a2a45" strokeWidth="1.5" />
-        <line x1="40" y1="276" x2="760" y2="276" stroke="#222240" strokeWidth="3" />
+        <line x1="40" y1="275" x2="760" y2="275" stroke="#c0c0d0" strokeWidth="1.5" />
+        <line x1="40" y1="276" x2="760" y2="276" stroke="#d0d0dc" strokeWidth="3" />
 
         {/* Vehicle Body — Side profile sedan/SUV silhouette */}
         <g transform="translate(400, 170)">
@@ -63,8 +63,8 @@ export function VehicleDiagram({
                L-80,-10 C-60,-10 -40,-45 -20,-55 L20,-60 C40,-62 80,-62 120,-60
                L160,-55 C180,-45 200,-10 220,-10 L250,-10 C270,-10 280,0 280,10
                L280,40 C280,50 275,55 270,60 Z"
-            fill="#222240"
-            stroke="#4a4a68"
+            fill="#d0d0dc"
+            stroke="#9090a4"
             strokeWidth="2"
           />
 
@@ -72,14 +72,14 @@ export function VehicleDiagram({
           <path
             d="M-40,-45 C-20,-55 20,-60 60,-62 C100,-60 140,-55 160,-45"
             fill="none"
-            stroke="#4a4a68"
+            stroke="#9090a4"
             strokeWidth="1.5"
           />
 
           {/* Windshield */}
           <path
             d="M-40,-45 L-80,-10"
-            stroke="#5c5c7a"
+            stroke="#8080a0"
             strokeWidth="2.5"
             strokeLinecap="round"
           />
@@ -87,7 +87,7 @@ export function VehicleDiagram({
           {/* Rear window */}
           <path
             d="M160,-45 L200,-10"
-            stroke="#5c5c7a"
+            stroke="#8080a0"
             strokeWidth="2.5"
             strokeLinecap="round"
           />
@@ -95,59 +95,59 @@ export function VehicleDiagram({
           {/* Side windows */}
           <path
             d="M-38,-43 C-18,-53 20,-58 60,-60 C100,-58 138,-53 158,-43 L198,-10 L-78,-10 Z"
-            fill="#2a2a48"
+            fill="#c8c8dc"
             fillOpacity="0.5"
-            stroke="#3a3a58"
+            stroke="#a0a0b4"
             strokeWidth="1"
           />
 
           {/* Window divider (B-pillar) */}
-          <line x1="60" y1="-60" x2="60" y2="-10" stroke="#4a4a68" strokeWidth="2.5" />
+          <line x1="60" y1="-60" x2="60" y2="-10" stroke="#9090a4" strokeWidth="2.5" />
 
           {/* Door line */}
-          <line x1="60" y1="-10" x2="60" y2="55" stroke="#4a4a68" strokeWidth="1" strokeDasharray="4,3" />
+          <line x1="60" y1="-10" x2="60" y2="55" stroke="#9090a4" strokeWidth="1" strokeDasharray="4,3" />
 
           {/* Hood line */}
           <path
             d="M-120,-10 L-240,0"
-            stroke="#4a4a68"
+            stroke="#9090a4"
             strokeWidth="1"
           />
 
           {/* Trunk line */}
           <path
             d="M220,-10 L260,5"
-            stroke="#4a4a68"
+            stroke="#9090a4"
             strokeWidth="1"
           />
 
           {/* Headlight */}
-          <ellipse cx="-255" cy="20" rx="12" ry="15" fill="#3a3a48" stroke="#4a4a68" strokeWidth="1.5" />
-          <ellipse cx="-255" cy="20" rx="6" ry="8" fill="#5c5c6a" />
+          <ellipse cx="-255" cy="20" rx="12" ry="15" fill="#b8b8cc" stroke="#9090a4" strokeWidth="1.5" />
+          <ellipse cx="-255" cy="20" rx="6" ry="8" fill="#a0a0b4" />
 
           {/* Taillight */}
-          <rect x="268" y="15" width="10" height="25" rx="3" fill="#4a2a2a" stroke="#4a4a68" strokeWidth="1.5" />
+          <rect x="268" y="15" width="10" height="25" rx="3" fill="#c0a0a0" stroke="#9090a4" strokeWidth="1.5" />
 
           {/* Bumpers */}
-          <path d="M-265,40 L-270,55 L-260,60" stroke="#4a4a68" strokeWidth="1.5" fill="none" />
-          <path d="M275,40 L280,55 L270,60" stroke="#4a4a68" strokeWidth="1.5" fill="none" />
+          <path d="M-265,40 L-270,55 L-260,60" stroke="#9090a4" strokeWidth="1.5" fill="none" />
+          <path d="M275,40 L280,55 L270,60" stroke="#9090a4" strokeWidth="1.5" fill="none" />
 
           {/* Side skirt detail */}
-          <line x1="-200" y1="55" x2="240" y2="55" stroke="#3a3a58" strokeWidth="0.75" />
+          <line x1="-200" y1="55" x2="240" y2="55" stroke="#a0a0b4" strokeWidth="0.75" />
 
           {/* Door handle */}
           <rect x="15" y="5" width="20" height="5" rx="2" fill="#94a3b8" />
 
           {/* Side mirror */}
-          <ellipse cx="-85" cy="-5" rx="10" ry="7" fill="#3a3a58" stroke="#4a4a68" strokeWidth="1" />
+          <ellipse cx="-85" cy="-5" rx="10" ry="7" fill="#c0c0d0" stroke="#9090a4" strokeWidth="1" />
         </g>
 
         {/* Front wheel */}
         <g transform="translate(220, 235)">
           <circle r="38" fill="#374151" stroke="#1f2937" strokeWidth="2" />
           <circle r="28" fill="#4b5563" />
-          <circle r="15" fill="#686880" />
-          <circle r="6" fill="#4a4a68" />
+          <circle r="15" fill="#9090a4" />
+          <circle r="6" fill="#a0a0b4" />
           {/* Spokes */}
           {[0, 72, 144, 216, 288].map((angle) => (
             <line
@@ -166,8 +166,8 @@ export function VehicleDiagram({
         <g transform="translate(580, 235)">
           <circle r="38" fill="#374151" stroke="#1f2937" strokeWidth="2" />
           <circle r="28" fill="#4b5563" />
-          <circle r="15" fill="#686880" />
-          <circle r="6" fill="#4a4a68" />
+          <circle r="15" fill="#9090a4" />
+          <circle r="6" fill="#a0a0b4" />
           {[0, 72, 144, 216, 288].map((angle) => (
             <line
               key={angle}
@@ -182,11 +182,11 @@ export function VehicleDiagram({
         </g>
 
         {/* Zone labels (subtle) */}
-        <text x="180" y="155" fontSize="9" fill="#4a4a68" textAnchor="middle" fontFamily="system-ui">ENGINE</text>
-        <text x="400" y="125" fontSize="9" fill="#4a4a68" textAnchor="middle" fontFamily="system-ui">CABIN</text>
-        <text x="600" y="155" fontSize="9" fill="#4a4a68" textAnchor="middle" fontFamily="system-ui">REAR</text>
-        <text x="220" y="295" fontSize="9" fill="#4a4a68" textAnchor="middle" fontFamily="system-ui">FRONT</text>
-        <text x="580" y="295" fontSize="9" fill="#4a4a68" textAnchor="middle" fontFamily="system-ui">REAR</text>
+        <text x="180" y="155" fontSize="9" fill="#a0a0b4" textAnchor="middle" fontFamily="system-ui">ENGINE</text>
+        <text x="400" y="125" fontSize="9" fill="#a0a0b4" textAnchor="middle" fontFamily="system-ui">CABIN</text>
+        <text x="600" y="155" fontSize="9" fill="#a0a0b4" textAnchor="middle" fontFamily="system-ui">REAR</text>
+        <text x="220" y="295" fontSize="9" fill="#a0a0b4" textAnchor="middle" fontFamily="system-ui">FRONT</text>
+        <text x="580" y="295" fontSize="9" fill="#a0a0b4" textAnchor="middle" fontFamily="system-ui">REAR</text>
 
         {/* Hotspots */}
         {hotspots.map((hs) => {
@@ -221,7 +221,7 @@ export function VehicleDiagram({
                 cy={cy}
                 r={r}
                 fill={color}
-                stroke="#1a1a2e"
+                stroke="#f0f0f3"
                 strokeWidth="2.5"
                 opacity={isActive || isHovered ? 1 : 0.85}
               />
@@ -279,7 +279,7 @@ export function VehicleDiagram({
             ].map((item, i) => (
               <g key={item.label} transform={`translate(0, ${i * 18})`}>
                 <circle cx="6" cy="6" r="5" fill={item.color} />
-                <text x="16" y="10" fontSize="10" fill="#686880" fontFamily="system-ui">{item.label}</text>
+                <text x="16" y="10" fontSize="10" fill="#9090a4" fontFamily="system-ui">{item.label}</text>
               </g>
             ))}
           </g>

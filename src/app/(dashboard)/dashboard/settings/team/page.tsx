@@ -121,7 +121,7 @@ export default function TeamPage() {
               </Button>
             </div>
             {inviteMutation.error && (
-              <div className="rounded-lg bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-500/20">
+              <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
                 {inviteMutation.error.message}
               </div>
             )}
@@ -192,7 +192,7 @@ export default function TeamPage() {
                           removeMutation.mutate({ userId: member.id });
                         }
                       }}
-                      className="p-1.5 rounded-md text-text-tertiary hover:text-red-400 hover:bg-[#2e0a0a] transition-colors cursor-pointer"
+                      className="p-1.5 rounded-md text-text-tertiary hover:text-red-700 hover:bg-[#fde8e8] transition-colors cursor-pointer"
                       title="Remove member"
                     >
                       <Trash2 className="h-4 w-4" />

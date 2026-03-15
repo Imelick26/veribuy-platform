@@ -74,24 +74,24 @@ function CaptureCard({
       className={cn(
         "relative rounded-lg border p-3 transition-colors",
         isCaptured
-          ? "border-green-800/50 bg-[#0a2e1a]"
+          ? "border-green-300 bg-[#dcfce7]"
           : riskSeverity === "CRITICAL"
-            ? "border-red-900/50 bg-[#2e0a0a]/30 hover:border-red-700"
+            ? "border-red-300 bg-[#fde8e8]/30 hover:border-red-700"
             : riskSeverity === "MAJOR"
-              ? "border-red-900/50 bg-[#2e0a0a]/30 hover:border-red-700"
+              ? "border-red-300 bg-[#fde8e8]/30 hover:border-red-700"
               : "border-dashed border-border-strong bg-surface-raised hover:border-brand-400 hover:bg-surface-hover"
       )}
     >
       {/* Status indicator */}
       {isCaptured && (
         <div className="absolute top-2 right-2">
-          <CheckCircle className="h-5 w-5 text-green-400" />
+          <CheckCircle className="h-5 w-5 text-green-700" />
         </div>
       )}
       {riskSeverity && !isCaptured && (
         <div className="absolute top-2 right-2">
           <AlertTriangle className={cn("h-4 w-4",
-            riskSeverity === "CRITICAL" ? "text-red-400" : "text-red-400"
+            riskSeverity === "CRITICAL" ? "text-red-700" : "text-red-700"
           )} />
         </div>
       )}
@@ -110,12 +110,12 @@ function CaptureCard({
         ) : (
           <div className={cn(
             "h-20 w-full rounded-lg flex items-center justify-center",
-            isCaptured ? "bg-[#0a2e1a]" : riskSeverity ? "bg-surface-sunken" : "bg-[#1a0a2e]"
+            isCaptured ? "bg-[#dcfce7]" : riskSeverity ? "bg-surface-sunken" : "bg-[#fce8f3]"
           )}>
             {isUploading ? (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
             ) : (
-              <Icon className={cn("h-8 w-8", isCaptured ? "text-green-500" : "text-brand-400")} />
+              <Icon className={cn("h-8 w-8", isCaptured ? "text-green-700" : "text-brand-400")} />
             )}
           </div>
         )}
@@ -131,7 +131,7 @@ function CaptureCard({
         {riskSeverity && (
           <span className={cn(
             "text-[10px] uppercase tracking-wider font-medium",
-            riskSeverity === "CRITICAL" ? "text-red-400" : "text-red-400"
+            riskSeverity === "CRITICAL" ? "text-red-700" : "text-red-700"
           )}>
             {riskSeverity} Risk Area
           </span>

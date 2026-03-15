@@ -20,7 +20,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           {
             "bg-brand-gradient text-white shadow-brand-glow hover:brightness-110 active:brightness-95 focus:ring-brand-400":
               variant === "primary",
-            "bg-surface-overlay text-text-primary border border-border-default hover:border-brand-400 hover:text-brand-300 focus:ring-brand-400":
+            "bg-surface-overlay text-text-primary border border-border-default hover:border-brand-400 hover:text-brand-600 focus:ring-brand-400":
               variant === "secondary",
             "text-text-secondary hover:bg-surface-hover hover:text-text-primary focus:ring-brand-400":
               variant === "ghost",

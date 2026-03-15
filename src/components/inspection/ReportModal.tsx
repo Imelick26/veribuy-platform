@@ -28,7 +28,7 @@ export function ReportModal({ reportId, reportNumber, pdfUrl, shareToken, onClos
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} />
 
       {/* Modal */}
       <div className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-16 bg-surface-overlay rounded-xl shadow-lg z-50 flex flex-col overflow-hidden">

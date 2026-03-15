@@ -75,8 +75,8 @@ export default function InspectionsPage() {
                   <td className="px-5 py-3 text-sm">
                     {insp.overallScore != null ? (
                       <span className={`font-semibold ${
-                        insp.overallScore >= 70 ? "text-green-400" :
-                        insp.overallScore >= 50 ? "text-text-secondary" : "text-red-400"
+                        insp.overallScore >= 70 ? "text-green-700" :
+                        insp.overallScore >= 50 ? "text-text-secondary" : "text-red-700"
                       }`}>
                         {insp.overallScore}/100
                       </span>

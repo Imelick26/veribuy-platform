@@ -95,8 +95,8 @@ export function RiskChecklist({
   const getConfidenceBadge = (rc: RiskConfidence | undefined) => {
     if (!rc || rc.tier === "UNCHECKED") return null;
     const styles = {
-      VERIFIED: "bg-[#0a2e1a] text-green-400 border-green-800/50",
-      EVIDENCED: "bg-[#1a0a2e] text-brand-300 border-brand-800/50",
+      VERIFIED: "bg-[#dcfce7] text-green-700 border-green-300",
+      EVIDENCED: "bg-[#fce8f3] text-brand-700 border-brand-300",
       MANUAL: "bg-surface-overlay text-text-secondary border-border-strong",
       UNCHECKED: "",
     };
@@ -185,8 +185,8 @@ export function RiskChecklist({
               className={cn(
                 "rounded-lg border transition-colors",
                 isActive ? "border-brand-400 ring-1 ring-brand-500/30" :
-                status === "CONFIRMED" ? "border-red-900/50 bg-[#2e0a0a]" :
-                status === "NOT_FOUND" ? "border-green-900/50 bg-[#0a2e1a]" :
+                status === "CONFIRMED" ? "border-red-300 bg-[#fde8e8]" :
+                status === "NOT_FOUND" ? "border-green-300 bg-[#dcfce7]" :
                 status === "UNABLE_TO_INSPECT" ? "border-border-strong bg-surface-overlay" :
                 "border-border-default bg-surface-raised"
               )}
@@ -205,7 +205,7 @@ export function RiskChecklist({
                     )}
                     {/* Evidence badge on collapsed header */}
                     {riskMedia.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1.5 py-0.5 rounded bg-[#1a0a2e] text-brand-300 shrink-0">
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1.5 py-0.5 rounded bg-[#fce8f3] text-brand-700 shrink-0">
                         <Camera className="h-2.5 w-2.5" /> {riskMedia.length}
                       </span>
                     )}
@@ -260,12 +260,12 @@ export function RiskChecklist({
 
                   {/* How to Inspect — step-by-step guidance */}
                   {(risk.howToInspect || risk.inspectionGuidance) && (
-                    <div className="p-2.5 rounded-lg bg-[#1a0a2e] border border-brand-800/50">
-                      <p className="text-[10px] font-bold uppercase text-brand-300 mb-1">
+                    <div className="p-2.5 rounded-lg bg-[#fce8f3] border border-brand-300">
+                      <p className="text-[10px] font-bold uppercase text-brand-700 mb-1">
                         <Eye className="inline h-3 w-3 mr-1" />
                         How to Inspect
                       </p>
-                      <p className="text-[11px] text-brand-200 leading-relaxed">
+                      <p className="text-[11px] text-brand-600 leading-relaxed">
                         {risk.howToInspect || risk.inspectionGuidance}
                       </p>
                     </div>
@@ -273,12 +273,12 @@ export function RiskChecklist({
 
                   {/* Signs of Failure */}
                   {((risk.signsOfFailure && risk.signsOfFailure.length > 0) || risk.symptoms.length > 0) && (
-                    <div className="p-2.5 rounded-lg bg-[#2e0a0a] border border-red-900/50">
-                      <p className="text-[10px] font-bold uppercase text-red-400 mb-1">
+                    <div className="p-2.5 rounded-lg bg-[#fde8e8] border border-red-300">
+                      <p className="text-[10px] font-bold uppercase text-red-700 mb-1">
                         <AlertTriangle className="inline h-3 w-3 mr-1" />
                         Signs of Failure
                       </p>
-                      <ul className="text-[11px] text-red-300 list-disc list-inside space-y-0.5">
+                      <ul className="text-[11px] text-red-700 list-disc list-inside space-y-0.5">
                         {(risk.signsOfFailure || risk.symptoms).map((s, si) => <li key={si}>{s}</li>)}
                       </ul>
                     </div>
@@ -286,8 +286,8 @@ export function RiskChecklist({
 
                   {/* Inline Evidence Capture */}
                   {risk.capturePrompts && risk.capturePrompts.length > 0 && onUploadEvidence && (
-                    <div className="p-2.5 rounded-lg bg-[#1a0a2e] border border-brand-800/50">
-                      <p className="text-[10px] font-bold uppercase text-brand-300 mb-2">
+                    <div className="p-2.5 rounded-lg bg-[#fce8f3] border border-brand-300">
+                      <p className="text-[10px] font-bold uppercase text-brand-700 mb-2">
                         <Camera className="inline h-3 w-3 mr-1" />
                         Capture Evidence
                       </p>
@@ -301,15 +301,15 @@ export function RiskChecklist({
                           return (
                             <div key={idx} className="flex items-center gap-2">
                               {captured ? (
-                                <div className="h-10 w-10 rounded border border-green-800/50 bg-[#0a2e1a] overflow-hidden shrink-0 relative">
+                                <div className="h-10 w-10 rounded border border-green-300 bg-[#dcfce7] overflow-hidden shrink-0 relative">
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img src={captured.url} alt="" className="h-full w-full object-cover" />
                                   <div className="absolute inset-0 flex items-center justify-center bg-green-500/20">
-                                    <CheckCircle className="h-4 w-4 text-green-400" />
+                                    <CheckCircle className="h-4 w-4 text-green-700" />
                                   </div>
                                 </div>
                               ) : isUploading ? (
-                                <div className="h-10 w-10 rounded border border-brand-800/50 bg-[#1a0a2e] flex items-center justify-center shrink-0">
+                                <div className="h-10 w-10 rounded border border-brand-300 bg-[#fce8f3] flex items-center justify-center shrink-0">
                                   <Loader2 className="h-4 w-4 text-brand-400 animate-spin" />
                                 </div>
                               ) : (
@@ -319,7 +319,7 @@ export function RiskChecklist({
                                     const ref = fileInputRefs.current[captureKey];
                                     ref?.click();
                                   }}
-                                  className="h-10 w-10 rounded border-2 border-dashed border-brand-600/50 bg-surface-sunken flex items-center justify-center shrink-0 hover:bg-[#1a0a2e] hover:border-brand-400 transition-colors"
+                                  className="h-10 w-10 rounded border-2 border-dashed border-brand-600/50 bg-surface-sunken flex items-center justify-center shrink-0 hover:bg-[#fce8f3] hover:border-brand-400 transition-colors"
                                 >
                                   <Camera className="h-4 w-4 text-brand-400" />
                                 </button>
@@ -332,7 +332,7 @@ export function RiskChecklist({
                                 ref={(el) => { fileInputRefs.current[captureKey] = el; }}
                                 onChange={(e) => handleFileSelect(risk.id, idx, e)}
                               />
-                              <p className="text-[11px] text-brand-200 leading-tight flex-1">{prompt}</p>
+                              <p className="text-[11px] text-brand-600 leading-tight flex-1">{prompt}</p>
                             </div>
                           );
                         })}
@@ -344,7 +344,7 @@ export function RiskChecklist({
                   {riskMedia.length > 0 && !onUploadEvidence && (
                     <div className="flex items-center gap-2">
                       <ImageIcon className="h-3.5 w-3.5 text-brand-400 shrink-0" />
-                      <span className="text-[11px] text-brand-300 font-medium">{riskMedia.length} photo(s) captured</span>
+                      <span className="text-[11px] text-brand-700 font-medium">{riskMedia.length} photo(s) captured</span>
                       <div className="flex gap-1">
                         {riskMedia.slice(0, 4).map((m) => (
                           <div key={m.mediaId} className="h-8 w-8 rounded border border-border-default overflow-hidden">
@@ -353,7 +353,7 @@ export function RiskChecklist({
                           </div>
                         ))}
                         {riskMedia.length > 4 && (
-                          <div className="h-8 w-8 rounded border border-border-default flex items-center justify-center bg-surface-overlay text-[10px] font-bold text-brand-300">
+                          <div className="h-8 w-8 rounded border border-border-default flex items-center justify-center bg-surface-overlay text-[10px] font-bold text-brand-700">
                             +{riskMedia.length - 4}
                           </div>
                         )}
@@ -363,18 +363,18 @@ export function RiskChecklist({
 
                   {/* Why It Matters + Cost */}
                   {(risk.whyItMatters || risk.description) && (
-                    <div className="p-2.5 rounded-lg bg-[#1a0a2e] border border-brand-800/50">
+                    <div className="p-2.5 rounded-lg bg-[#fce8f3] border border-brand-300">
                       <div className="flex items-start gap-2">
                         <Info className="h-3.5 w-3.5 text-brand-400 mt-0.5 shrink-0" />
                         <div>
-                          <p className="text-[10px] font-bold uppercase text-brand-300 mb-0.5">Why It Matters</p>
-                          <p className="text-[11px] text-brand-200 leading-relaxed">
+                          <p className="text-[10px] font-bold uppercase text-brand-700 mb-0.5">Why It Matters</p>
+                          <p className="text-[11px] text-brand-600 leading-relaxed">
                             {risk.whyItMatters || risk.description}
                           </p>
                         </div>
                       </div>
                       {risk.cost.low > 0 && (
-                        <p className="text-[11px] font-semibold text-brand-300 mt-1.5 ml-5">
+                        <p className="text-[11px] font-semibold text-brand-700 mt-1.5 ml-5">
                           Est. repair: {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
                         </p>
                       )}
@@ -386,8 +386,8 @@ export function RiskChecklist({
                     <div className="flex items-center gap-2">
                       <span className={cn(
                         "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full",
-                        risk.likelihood === "VERY_COMMON" ? "bg-[#2e0a0a] text-red-400" :
-                        risk.likelihood === "COMMON" ? "bg-[#2e0a0a] text-red-400" :
+                        risk.likelihood === "VERY_COMMON" ? "bg-[#fde8e8] text-red-700" :
+                        risk.likelihood === "COMMON" ? "bg-[#fde8e8] text-red-700" :
                         risk.likelihood === "OCCASIONAL" ? "bg-surface-overlay text-text-secondary" :
                         "bg-surface-overlay text-text-tertiary"
                       )}>
@@ -399,9 +399,9 @@ export function RiskChecklist({
 
                   {/* Active recall info */}
                   {risk.hasActiveRecall && risk.relatedRecalls && risk.relatedRecalls.length > 0 && (
-                    <div className="p-2.5 rounded-lg bg-[#2e0a0a] border border-red-900/50">
-                      <p className="text-[10px] font-bold uppercase text-red-400 mb-1">Active Recall</p>
-                      <p className="text-[11px] text-red-300">{risk.relatedRecalls[0].remedy}</p>
+                    <div className="p-2.5 rounded-lg bg-[#fde8e8] border border-red-300">
+                      <p className="text-[10px] font-bold uppercase text-red-700 mb-1">Active Recall</p>
+                      <p className="text-[11px] text-red-700">{risk.relatedRecalls[0].remedy}</p>
                     </div>
                   )}
 
@@ -423,7 +423,7 @@ export function RiskChecklist({
                           size="sm"
                           variant="secondary"
                           onClick={() => onCheckRisk(risk.id, "CONFIRMED")}
-                          className="text-xs bg-[#2e0a0a] text-red-400 border-red-900/50 hover:bg-[#3e0a0a]"
+                          className="text-xs bg-[#fde8e8] text-red-700 border-red-300 hover:bg-red-200"
                         >
                           <XCircle className="h-3.5 w-3.5" /> Issue Found
                         </Button>
@@ -431,7 +431,7 @@ export function RiskChecklist({
                           size="sm"
                           variant="secondary"
                           onClick={() => onCheckRisk(risk.id, "NOT_FOUND")}
-                          className="text-xs bg-[#0a2e1a] text-green-400 border-green-900/50 hover:bg-[#0a3e1a]"
+                          className="text-xs bg-[#dcfce7] text-green-700 border-green-300 hover:bg-green-200"
                         >
                           <CheckCircle className="h-3.5 w-3.5" /> Clear
                         </Button>

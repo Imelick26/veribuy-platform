@@ -15,21 +15,21 @@
   --color-brand-800: #320050;
   --color-brand-900: #1a0033;
 
-  /* Dark Theme Surfaces */
-  --color-surface-base: #181828;
-  --color-surface-raised: #1e1e34;
-  --color-surface-overlay: #282848;
-  --color-surface-sunken: #141424;
-  --color-surface-hover: #30304e;
+  /* Light Graphite Surfaces */
+  --color-surface-base: #f0f0f3;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #e8e8ee;
+  --color-surface-sunken: #e4e4ea;
+  --color-surface-hover: #ececf1;
 
-  /* Dark Theme Text */
-  --color-text-primary: #e8e8f0;
-  --color-text-secondary: #9898b0;
-  --color-text-tertiary: #686880;
+  /* Light Graphite Text */
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #5c5c72;
+  --color-text-tertiary: #8c8ca0;
 
-  /* Dark Theme Borders */
-  --color-border-default: #2e2e4a;
-  --color-border-strong: #3e3e5c;
+  /* Light Graphite Borders */
+  --color-border-default: #d8d8e2;
+  --color-border-strong: #c0c0d0;
 
   /* Severity Colors */
   --color-severity-critical: #b91c1c;
@@ -41,25 +41,25 @@
 
 /* === Body === */
 body {
-  background: #181828;
-  color: #e8e8f0;
+  background: #f0f0f3;
+  color: #1a1a2e;
   min-height: 100vh;
 }
 
-/* Dark scrollbar */
+/* Light scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #14142a;
+  background: #e4e4ea;
 }
 ::-webkit-scrollbar-thumb {
-  background: #3e3e5c;
+  background: #c0c0d0;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4e4e6c;
+  background: #a0a0b4;
 }
 
 /* === Brand Gradient Utilities === */
@@ -68,7 +68,7 @@ body {
 }
 
 .bg-brand-gradient-subtle {
-  background: linear-gradient(135deg, rgba(255,66,137,0.12) 0%, rgba(190,0,164,0.10) 50%, rgba(92,0,153,0.14) 100%);
+  background: linear-gradient(135deg, rgba(255,66,137,0.08) 0%, rgba(190,0,164,0.06) 50%, rgba(92,0,153,0.08) 100%);
 }
 
 .text-brand-gradient {

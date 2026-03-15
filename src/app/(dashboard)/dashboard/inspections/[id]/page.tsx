@@ -364,9 +364,9 @@ export default function InspectionDetailPage({
                 <div
                   className={`mx-auto h-8 w-8 rounded-full flex items-center justify-center mb-1 transition-colors ${
                     isStepCompleted
-                      ? "bg-[#0a2e1a] text-green-400"
+                      ? "bg-[#dcfce7] text-green-700"
                       : isActive
-                      ? "bg-[#1a0a2e] text-brand-400 ring-2 ring-brand-500/40"
+                      ? "bg-[#fce8f3] text-brand-600 ring-2 ring-brand-400/40"
                       : "bg-surface-overlay text-text-tertiary"
                   }`}
                 >
@@ -379,8 +379,8 @@ export default function InspectionDetailPage({
                   )}
                 </div>
                 <p className={`text-xs ${
-                  isStepCompleted ? "text-green-400 font-medium" :
-                  isActive ? "text-brand-300 font-medium" : "text-text-tertiary"
+                  isStepCompleted ? "text-green-700 font-medium" :
+                  isActive ? "text-brand-700 font-medium" : "text-text-tertiary"
                 }`}>
                   {meta.label}
                 </p>
@@ -503,8 +503,8 @@ export default function InspectionDetailPage({
             <div className="space-y-4">
               <div className="text-center">
                 <p className={`text-5xl font-bold ${
-                  inspection.overallScore >= 70 ? "text-green-400" :
-                  inspection.overallScore >= 50 ? "text-text-secondary" : "text-red-400"
+                  inspection.overallScore >= 70 ? "text-green-700" :
+                  inspection.overallScore >= 50 ? "text-text-secondary" : "text-red-700"
                 }`}>
                   {inspection.overallScore}
                 </p>
