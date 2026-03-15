@@ -33,9 +33,7 @@ export default function InspectionsPage() {
           </div>
         ) : inspections.length === 0 ? (
           <div className="text-center py-20">
-            <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-[#1a0a2e] flex items-center justify-center">
-              <ClipboardCheck className="h-7 w-7 text-brand-400" />
-            </div>
+            <ClipboardCheck className="h-5 w-5 text-text-tertiary mx-auto mb-2" />
             <h3 className="text-lg font-semibold text-text-primary mb-1">No inspections yet</h3>
             <p className="text-text-secondary mb-6">Start your first vehicle inspection</p>
             <Link href="/dashboard/inspections/new">
@@ -48,18 +46,18 @@ export default function InspectionsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border-default">
-                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-6 py-3">Vehicle</th>
-                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-6 py-3">Number</th>
-                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-6 py-3">Inspector</th>
-                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-6 py-3">Status</th>
-                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-6 py-3">Score</th>
-                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-6 py-3">Date</th>
+                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Vehicle</th>
+                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Number</th>
+                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Inspector</th>
+                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Status</th>
+                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Score</th>
+                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-default">
               {inspections.map((insp) => (
-                <tr key={insp.id} className="hover:bg-brand-gradient-subtle transition-all duration-200">
-                  <td className="px-6 py-4">
+                <tr key={insp.id} className="hover:bg-surface-hover transition-colors">
+                  <td className="px-5 py-3">
                     <Link href={`/dashboard/inspections/${insp.id}`} className="block">
                       <p className="font-medium text-text-primary">
                         {insp.vehicle.year} {insp.vehicle.make} {insp.vehicle.model}
@@ -67,14 +65,14 @@ export default function InspectionsPage() {
                       <p className="text-xs text-text-secondary font-mono">{insp.vehicle.vin}</p>
                     </Link>
                   </td>
-                  <td className="px-6 py-4 text-sm text-text-secondary font-mono">{insp.number}</td>
-                  <td className="px-6 py-4 text-sm text-text-secondary">{insp.inspector.name}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-3 text-sm text-text-secondary font-mono">{insp.number}</td>
+                  <td className="px-5 py-3 text-sm text-text-secondary">{insp.inspector.name}</td>
+                  <td className="px-5 py-3">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor(insp.status)}`}>
                       {insp.status.replace(/_/g, " ")}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-5 py-3 text-sm">
                     {insp.overallScore != null ? (
                       <span className={`font-semibold ${
                         insp.overallScore >= 70 ? "text-green-400" :
@@ -86,7 +84,7 @@ export default function InspectionsPage() {
                       <span className="text-text-tertiary">&mdash;</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-text-secondary">{formatDate(insp.createdAt)}</td>
+                  <td className="px-5 py-3 text-sm text-text-secondary">{formatDate(insp.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

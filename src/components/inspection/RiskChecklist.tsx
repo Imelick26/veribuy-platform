@@ -183,7 +183,7 @@ export function RiskChecklist({
             <div
               key={risk.id}
               className={cn(
-                "rounded-xl border transition-all",
+                "rounded-lg border transition-colors",
                 isActive ? "border-brand-400 ring-1 ring-brand-500/30" :
                 status === "CONFIRMED" ? "border-red-900/50 bg-[#2e0a0a]" :
                 status === "NOT_FOUND" ? "border-green-900/50 bg-[#0a2e1a]" :
@@ -227,9 +227,9 @@ export function RiskChecklist({
                   {risk.severity}
                 </Badge>
                 {isExpanded ? (
-                  <ChevronUp className="h-4 w-4 text-gray-400 shrink-0" />
+                  <ChevronUp className="h-4 w-4 text-text-tertiary shrink-0" />
                 ) : (
-                  <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" />
+                  <ChevronDown className="h-4 w-4 text-text-tertiary shrink-0" />
                 )}
               </button>
 

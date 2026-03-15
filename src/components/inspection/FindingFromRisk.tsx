@@ -114,7 +114,7 @@ export function FindingFromRisk({
                 <select
                   value={form.severity}
                   onChange={(e) => setForm((p) => ({ ...p, severity: e.target.value as never }))}
-                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                  className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                 >
                   {SEVERITY_OPTIONS.map((s) => (
                     <option key={s} value={s}>{s}</option>
@@ -126,7 +126,7 @@ export function FindingFromRisk({
                 <select
                   value={form.category}
                   onChange={(e) => setForm((p) => ({ ...p, category: e.target.value as never }))}
-                  className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                  className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                 >
                   {CATEGORY_OPTIONS.map((c) => (
                     <option key={c} value={c}>{c.replace(/_/g, " ")}</option>

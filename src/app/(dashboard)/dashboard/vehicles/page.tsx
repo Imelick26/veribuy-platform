@@ -24,9 +24,7 @@ export default function VehiclesPage() {
           </div>
         ) : vehicles.length === 0 ? (
           <div className="text-center py-20">
-            <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-[#1a0a2e] flex items-center justify-center">
-              <Car className="h-7 w-7 text-brand-400" />
-            </div>
+            <Car className="h-5 w-5 text-text-tertiary mx-auto mb-2" />
             <h3 className="text-lg font-semibold text-text-primary mb-1">No vehicles yet</h3>
             <p className="text-text-secondary">Vehicles are added when you start an inspection</p>
           </div>
@@ -34,28 +32,28 @@ export default function VehiclesPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border-default">
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-6 py-3">Vehicle</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-6 py-3">VIN</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-6 py-3">Drivetrain</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-6 py-3">Inspections</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-6 py-3">Added</th>
+                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Vehicle</th>
+                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">VIN</th>
+                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Drivetrain</th>
+                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Inspections</th>
+                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Added</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border-default">
               {vehicles.map((v) => (
-                <tr key={v.id} className="hover:bg-brand-gradient-subtle transition-all duration-200">
-                  <td className="px-6 py-4">
+                <tr key={v.id} className="hover:bg-surface-hover transition-colors">
+                  <td className="px-5 py-3">
                     <p className="font-medium text-text-primary">
                       {v.year} {v.make} {v.model} {v.trim || ""}
                     </p>
                     <p className="text-xs text-text-secondary">{v.bodyStyle}</p>
                   </td>
-                  <td className="px-6 py-4 font-mono text-sm text-text-secondary">{v.vin}</td>
-                  <td className="px-6 py-4 text-sm text-text-secondary">{v.drivetrain || "&mdash;"}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-3 font-mono text-sm text-text-secondary">{v.vin}</td>
+                  <td className="px-5 py-3 text-sm text-text-secondary">{v.drivetrain || "\u2014"}</td>
+                  <td className="px-5 py-3">
                     <Badge variant="info">{v._count.inspections}</Badge>
                   </td>
-                  <td className="px-6 py-4 text-sm text-text-tertiary">{formatDate(v.createdAt)}</td>
+                  <td className="px-5 py-3 text-sm text-text-tertiary">{formatDate(v.createdAt)}</td>
                 </tr>
               ))}
             </tbody>

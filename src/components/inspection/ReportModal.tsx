@@ -31,7 +31,7 @@ export function ReportModal({ reportId, reportNumber, pdfUrl, shareToken, onClos
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
 
       {/* Modal */}
-      <div className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-16 bg-surface-overlay rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden">
+      <div className="fixed inset-4 sm:inset-8 md:inset-12 lg:inset-16 bg-surface-overlay rounded-xl shadow-lg z-50 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-default bg-surface-raised">
           <div className="flex items-center gap-3">

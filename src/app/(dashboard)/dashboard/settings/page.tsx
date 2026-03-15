@@ -17,17 +17,13 @@ export default function SettingsPage() {
       </div>
 
       {/* Organization */}
-      <Card accent>
+      <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-brand-gradient p-2 shadow-brand-glow">
-              <Building2 className="h-4 w-4 text-white" />
-            </div>
-            <div>
-              <CardTitle>Organization</CardTitle>
-              <CardDescription>Your organization details</CardDescription>
-            </div>
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-text-tertiary" />
+            <CardTitle>Organization</CardTitle>
           </div>
+          <CardDescription>Your organization details</CardDescription>
         </CardHeader>
         {user && (
           <div className="space-y-3">
@@ -54,15 +50,11 @@ export default function SettingsPage() {
       {/* Profile */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-[#1a0a2e] p-2">
-              <Users className="h-4 w-4 text-brand-400" />
-            </div>
-            <div>
-              <CardTitle>Profile</CardTitle>
-              <CardDescription>Your personal information</CardDescription>
-            </div>
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-text-tertiary" />
+            <CardTitle>Profile</CardTitle>
           </div>
+          <CardDescription>Your personal information</CardDescription>
         </CardHeader>
         {user && (
           <div className="space-y-3">
@@ -85,15 +77,11 @@ export default function SettingsPage() {
       {/* Subscription */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-[#1a0a2e] p-2">
-              <CreditCard className="h-4 w-4 text-brand-400" />
-            </div>
-            <div>
-              <CardTitle>Subscription</CardTitle>
-              <CardDescription>Manage your plan and billing</CardDescription>
-            </div>
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-text-tertiary" />
+            <CardTitle>Subscription</CardTitle>
           </div>
+          <CardDescription>Manage your plan and billing</CardDescription>
         </CardHeader>
         <div className="text-center py-6">
           <p className="text-sm text-text-secondary mb-4">

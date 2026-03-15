@@ -16,21 +16,21 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer",
+          "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer",
           {
-            "bg-brand-gradient text-white shadow-brand-glow hover:shadow-brand-glow-lg hover:brightness-110 active:brightness-95 focus:ring-brand-400":
+            "bg-brand-gradient text-white shadow-brand-glow hover:brightness-110 active:brightness-95 focus:ring-brand-400":
               variant === "primary",
-            "bg-surface-overlay text-text-primary border border-border-default hover:border-brand-400 hover:text-brand-300 hover:shadow-sm focus:ring-brand-400":
+            "bg-surface-overlay text-text-primary border border-border-default hover:border-brand-400 hover:text-brand-300 focus:ring-brand-400":
               variant === "secondary",
-            "text-text-secondary hover:bg-surface-hover hover:text-brand-300 focus:ring-brand-400":
+            "text-text-secondary hover:bg-surface-hover hover:text-text-primary focus:ring-brand-400":
               variant === "ghost",
-            "bg-red-600 text-white hover:bg-red-700 shadow-sm hover:shadow-md focus:ring-red-500":
+            "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500":
               variant === "danger",
           },
           {
-            "text-sm px-3.5 py-1.5": size === "sm",
-            "text-sm px-5 py-2.5": size === "md",
-            "text-base px-7 py-3": size === "lg",
+            "text-sm px-3 py-1.5": size === "sm",
+            "text-sm px-4 py-2": size === "md",
+            "text-sm px-5 py-2.5": size === "lg",
           },
           className
         )}

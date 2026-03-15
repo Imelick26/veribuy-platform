@@ -23,75 +23,67 @@ export default function DashboardPage() {
   const recentReports = reports?.reports || [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Dashboard</h1>
-          <p className="text-text-secondary mt-1">Overview of your inspection activity</p>
-        </div>
-        <Link href="/dashboard/inspections/new">
-          <Button size="lg">
-            <Plus className="h-4 w-4" />
-            New Inspection
-          </Button>
-        </Link>
+      <div>
+        <h1 className="text-2xl font-bold text-text-primary tracking-tight">Dashboard</h1>
+        <p className="text-text-secondary mt-1">Overview of your inspection activity</p>
       </div>
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card accent>
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-brand-gradient p-3 shadow-brand-glow">
-              <ClipboardCheck className="h-6 w-6 text-white" />
-            </div>
+        <Card>
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-text-secondary">Active Inspections</p>
-              <p className="text-3xl font-bold text-text-primary">
+              <div className="flex items-center gap-1.5 mb-1">
+                <ClipboardCheck className="h-3.5 w-3.5 text-text-tertiary" />
+                <p className="text-sm text-text-secondary">Active Inspections</p>
+              </div>
+              <p className="text-2xl font-bold text-text-primary">
                 {recentInspections.filter((i) => i.status !== "COMPLETED" && i.status !== "CANCELLED").length}
               </p>
             </div>
           </div>
         </Card>
         <Card>
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-green-500 p-3 shadow-sm">
-              <CheckCircle className="h-6 w-6 text-white" />
-            </div>
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-text-secondary">Completed</p>
-              <p className="text-3xl font-bold text-text-primary">
+              <div className="flex items-center gap-1.5 mb-1">
+                <CheckCircle className="h-3.5 w-3.5 text-text-tertiary" />
+                <p className="text-sm text-text-secondary">Completed</p>
+              </div>
+              <p className="text-2xl font-bold text-text-primary">
                 {recentInspections.filter((i) => i.status === "COMPLETED").length}
               </p>
             </div>
           </div>
         </Card>
         <Card>
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-brand-500 p-3 shadow-sm">
-              <Car className="h-6 w-6 text-white" />
-            </div>
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-text-secondary">Vehicles</p>
-              <p className="text-3xl font-bold text-text-primary">&mdash;</p>
+              <div className="flex items-center gap-1.5 mb-1">
+                <Car className="h-3.5 w-3.5 text-text-tertiary" />
+                <p className="text-sm text-text-secondary">Vehicles</p>
+              </div>
+              <p className="text-2xl font-bold text-text-primary">&mdash;</p>
             </div>
           </div>
         </Card>
         <Card>
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-brand-500 p-3 shadow-sm">
-              <FileText className="h-6 w-6 text-white" />
-            </div>
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-text-secondary">Reports</p>
-              <p className="text-3xl font-bold text-text-primary">{recentReports.length}</p>
+              <div className="flex items-center gap-1.5 mb-1">
+                <FileText className="h-3.5 w-3.5 text-text-tertiary" />
+                <p className="text-sm text-text-secondary">Reports</p>
+              </div>
+              <p className="text-2xl font-bold text-text-primary">{recentReports.length}</p>
             </div>
           </div>
         </Card>
       </div>
 
       {/* Recent activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Recent Inspections */}
         <Card>
           <CardHeader>
@@ -106,9 +98,7 @@ export default function DashboardPage() {
           </CardHeader>
           {recentInspections.length === 0 ? (
             <div className="text-center py-8">
-              <div className="mx-auto mb-4 h-12 w-12 rounded-2xl bg-[#1a0a2e] flex items-center justify-center">
-                <ClipboardCheck className="h-6 w-6 text-brand-400" />
-              </div>
+              <ClipboardCheck className="h-5 w-5 text-text-tertiary mx-auto mb-2" />
               <p className="text-sm text-text-secondary mb-3">No inspections yet</p>
               <Link href="/dashboard/inspections/new">
                 <Button size="sm">
@@ -117,12 +107,12 @@ export default function DashboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {recentInspections.map((insp) => (
                 <Link
                   key={insp.id}
                   href={`/dashboard/inspections/${insp.id}`}
-                  className="flex items-center justify-between p-3 rounded-xl border border-border-default hover:bg-brand-gradient-subtle hover:border-brand-500/30 transition-all duration-200"
+                  className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-surface-hover transition-colors"
                 >
                   <div>
                     <p className="font-medium text-text-primary text-sm">
@@ -150,42 +140,39 @@ export default function DashboardPage() {
             <CardTitle>Quick Actions</CardTitle>
             <CardDescription>Common tasks to get you started</CardDescription>
           </CardHeader>
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Link
               href="/dashboard/inspections/new"
-              className="flex items-center gap-4 p-4 rounded-xl border border-border-default hover:bg-brand-gradient-subtle hover:border-brand-500/30 transition-all duration-200 group"
+              className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-hover transition-colors"
             >
-              <div className="rounded-xl bg-brand-gradient p-2.5 shadow-brand-glow group-hover:shadow-brand-glow-lg transition-shadow">
-                <Plus className="h-5 w-5 text-white" />
+              <Plus className="h-4 w-4 text-text-tertiary flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-text-primary text-sm">New Inspection</p>
+                <p className="text-xs text-text-secondary">Start a vehicle inspection by entering a VIN</p>
               </div>
-              <div>
-                <p className="font-medium text-text-primary">New Inspection</p>
-                <p className="text-sm text-text-secondary">Start a vehicle inspection by entering a VIN</p>
-              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-text-tertiary flex-shrink-0" />
             </Link>
             <Link
               href="/dashboard/reports"
-              className="flex items-center gap-4 p-4 rounded-xl border border-border-default hover:bg-brand-gradient-subtle hover:border-brand-500/30 transition-all duration-200"
+              className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-hover transition-colors"
             >
-              <div className="rounded-xl bg-green-500 p-2.5 shadow-sm">
-                <FileText className="h-5 w-5 text-white" />
+              <FileText className="h-4 w-4 text-text-tertiary flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-text-primary text-sm">View Reports</p>
+                <p className="text-xs text-text-secondary">Access generated inspection reports</p>
               </div>
-              <div>
-                <p className="font-medium text-text-primary">View Reports</p>
-                <p className="text-sm text-text-secondary">Access generated inspection reports</p>
-              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-text-tertiary flex-shrink-0" />
             </Link>
             <Link
               href="/dashboard/vehicles"
-              className="flex items-center gap-4 p-4 rounded-xl border border-border-default hover:bg-brand-gradient-subtle hover:border-brand-500/30 transition-all duration-200"
+              className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-hover transition-colors"
             >
-              <div className="rounded-xl bg-brand-500 p-2.5 shadow-sm">
-                <TrendingUp className="h-5 w-5 text-white" />
+              <TrendingUp className="h-4 w-4 text-text-tertiary flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-text-primary text-sm">Vehicle Database</p>
+                <p className="text-xs text-text-secondary">Browse all inspected vehicles</p>
               </div>
-              <div>
-                <p className="font-medium text-text-primary">Vehicle Database</p>
-                <p className="text-sm text-text-secondary">Browse all inspected vehicles</p>
-              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-text-tertiary flex-shrink-0" />
             </Link>
           </div>
         </Card>

@@ -65,7 +65,7 @@ export default function NewInspectionPage() {
       </div>
 
       {/* Step 1: VIN Decode */}
-      <Card accent>
+      <Card>
         <CardHeader>
           <CardTitle>Step 1: Vehicle Identification</CardTitle>
           <CardDescription>Enter the 17-character VIN to decode vehicle details</CardDescription>
@@ -92,7 +92,7 @@ export default function NewInspectionPage() {
         </form>
 
         {decodeMutation.error && (
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-900/50">
+          <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#2e0a0a] px-4 py-3 text-sm text-red-400 ring-1 ring-red-900/50">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             {decodeMutation.error.message}
           </div>
@@ -100,7 +100,7 @@ export default function NewInspectionPage() {
 
         {/* Decoded vehicle info */}
         {decodedVehicle && (
-          <div className="mt-6 p-4 rounded-xl bg-[#0a2e1a] border border-green-900/50">
+          <div className="mt-6 p-4 rounded-lg bg-[#0a2e1a] border border-green-900/50">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle className="h-5 w-5 text-green-400" />
               <span className="font-semibold text-green-300">Vehicle Decoded</span>

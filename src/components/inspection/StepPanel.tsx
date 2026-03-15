@@ -120,7 +120,7 @@ export function StepPanel({
 
           {!riskProfile ? (
             <div className="text-center py-8">
-              <ShieldAlert className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+              <ShieldAlert className="h-6 w-6 mx-auto text-brand-300 mb-3" />
               <h4 className="font-semibold text-text-primary mb-1">Ready to Analyze Vehicle Risks</h4>
               <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
                 We&apos;ll query NHTSA for complaints, recalls, and investigations, then merge with our curated risk database to build a complete risk profile.
@@ -270,7 +270,7 @@ export function StepPanel({
           {!aiAnalysisResults || aiAnalysisResults.length === 0 ? (
             <div className="space-y-4">
               <div className="text-center py-6">
-                <Sparkles className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+                <Sparkles className="h-6 w-6 mx-auto text-brand-300 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">AI-Powered Condition Analysis</h4>
                 <p className="text-sm text-text-secondary mb-1 max-w-md mx-auto">
                   Our AI will analyze your captured photos against each identified risk, looking for
@@ -431,7 +431,7 @@ export function StepPanel({
           {!history ? (
             <div className="space-y-4">
               <div className="text-center py-6">
-                <Clock className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+                <Clock className="h-6 w-6 mx-auto text-brand-300 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">Pull Vehicle History Report</h4>
                 <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
                   Fetch title records, accident history, ownership data, and recall status from VinAudit.
@@ -537,7 +537,7 @@ export function StepPanel({
           {!market ? (
             <div className="space-y-4">
               <div className="text-center py-6">
-                <BarChart3 className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+                <BarChart3 className="h-6 w-6 mx-auto text-brand-300 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">Run Market Analysis</h4>
                 <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
                   Fetch comparable listings and estimate fair market value adjusted for vehicle condition.
@@ -670,7 +670,7 @@ export function StepPanel({
             </div>
           ) : (
             <div className="text-center py-8">
-              <FileText className="h-12 w-12 mx-auto text-brand-300 mb-3" />
+              <FileText className="h-6 w-6 mx-auto text-brand-300 mb-3" />
               <h4 className="font-semibold text-text-primary mb-1">Ready to Generate Report</h4>
               <p className="text-sm text-text-secondary mb-4">
                 This will compile all findings, media, and risk data into a comprehensive inspection report.

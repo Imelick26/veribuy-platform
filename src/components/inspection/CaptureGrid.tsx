@@ -72,7 +72,7 @@ function CaptureCard({
   return (
     <div
       className={cn(
-        "relative rounded-xl border-2 p-4 transition-all",
+        "relative rounded-lg border p-3 transition-colors",
         isCaptured
           ? "border-green-800/50 bg-[#0a2e1a]"
           : riskSeverity === "CRITICAL"

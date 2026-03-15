@@ -362,7 +362,7 @@ export default function InspectionDetailPage({
             return (
               <div key={stepKey} className="text-center">
                 <div
-                  className={`mx-auto h-10 w-10 rounded-full flex items-center justify-center mb-1 transition-all ${
+                  className={`mx-auto h-8 w-8 rounded-full flex items-center justify-center mb-1 transition-colors ${
                     isStepCompleted
                       ? "bg-[#0a2e1a] text-green-400"
                       : isActive
@@ -371,11 +371,11 @@ export default function InspectionDetailPage({
                   }`}
                 >
                   {isStepCompleted ? (
-                    <CheckCircle className="h-5 w-5" />
+                    <CheckCircle className="h-4 w-4" />
                   ) : isActive ? (
-                    <ChevronRight className="h-5 w-5" />
+                    <ChevronRight className="h-4 w-4" />
                   ) : (
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-3.5 w-3.5" />
                   )}
                 </div>
                 <p className={`text-xs ${
@@ -547,9 +547,9 @@ export default function InspectionDetailPage({
                 {!isCompleted && !isCancelled && (
                   <button
                     onClick={() => setShowFindingForm(true)}
-                    className="rounded-full h-6 w-6 flex items-center justify-center bg-[#1a0a2e] text-brand-400 hover:bg-brand-800 transition-colors"
+                    className="rounded-md h-6 w-6 flex items-center justify-center bg-surface-overlay text-text-secondary hover:bg-surface-hover transition-colors"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-3 w-3" />
                   </button>
                 )}
               </div>
@@ -651,7 +651,7 @@ export default function InspectionDetailPage({
                     <select
                       value={findingForm.severity}
                       onChange={(e) => setFindingForm((p) => ({ ...p, severity: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                      className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                     >
                       {SEVERITY_OPTIONS.map((s) => (
                         <option key={s} value={s}>{s}</option>
@@ -663,7 +663,7 @@ export default function InspectionDetailPage({
                     <select
                       value={findingForm.category}
                       onChange={(e) => setFindingForm((p) => ({ ...p, category: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+                      className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
                     >
                       {CATEGORY_OPTIONS.map((c) => (
                         <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
