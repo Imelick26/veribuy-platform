@@ -27,7 +27,15 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-// Dynamic import to avoid SSR issues with Three.js
+// Dynamic imports to avoid SSR issues with Three.js
+const VehicleViewer = dynamic(() => import("@/components/vehicle/VehicleViewer").then(m => ({ default: m.VehicleViewer })), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[400px] bg-[#1a1f2e] rounded-xl">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+    </div>
+  ),
+});
 const Vehicle3D = dynamic(() => import("@/components/vehicle/Vehicle3D").then(m => ({ default: m.Vehicle3D })), {
   ssr: false,
   loading: () => (
@@ -80,6 +88,7 @@ export default function InspectionDetailPage({
   );
 
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
+  const [viewerTab, setViewerTab] = useState<"3d" | "legacy">("3d");
   const [showFindingForm, setShowFindingForm] = useState(false);
   const [findingForm, setFindingForm] = useState({
     title: "",
@@ -271,17 +280,54 @@ export default function InspectionDetailPage({
       {riskProfile && riskProfile.risks.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-0 overflow-hidden">
-            <Vehicle3D
-              hotspots={riskProfile.risks.map((r, i) => ({
-                id: `risk-${i}`,
-                position: [r.position.x, r.position.y, r.position.z] as [number, number, number],
-                severity: r.severity as "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO",
-                label: r.title,
-              }))}
-              onHotspotClick={(hotspotId) => setActiveHotspot(hotspotId === activeHotspot ? null : hotspotId)}
-              activeHotspot={activeHotspot}
-              className="h-[350px]"
-            />
+            {/* View toggle tabs */}
+            <div className="flex border-b border-gray-200 bg-gray-50/50">
+              <button
+                onClick={() => setViewerTab("3d")}
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  viewerTab === "3d"
+                    ? "text-blue-600 border-b-2 border-blue-600 bg-white"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                3D Model
+              </button>
+              <button
+                onClick={() => setViewerTab("legacy")}
+                className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                  viewerTab === "legacy"
+                    ? "text-blue-600 border-b-2 border-blue-600 bg-white"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Classic View
+              </button>
+            </div>
+
+            {viewerTab === "3d" ? (
+              <VehicleViewer
+                vehicle={{
+                  bodyStyle: inspection.vehicle.bodyStyle,
+                  nhtsaData: inspection.vehicle.nhtsaData as Record<string, unknown> | null,
+                }}
+                risks={riskProfile.risks}
+                activeRiskId={activeHotspot}
+                onRiskClick={(riskId) => setActiveHotspot(riskId === activeHotspot ? null : riskId)}
+                className="h-[400px]"
+              />
+            ) : (
+              <Vehicle3D
+                hotspots={riskProfile.risks.map((r, i) => ({
+                  id: `risk-${i}`,
+                  position: [r.position.x, r.position.y, r.position.z] as [number, number, number],
+                  severity: r.severity as "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO",
+                  label: r.title,
+                }))}
+                onHotspotClick={(hotspotId) => setActiveHotspot(hotspotId === activeHotspot ? null : hotspotId)}
+                activeHotspot={activeHotspot}
+                className="h-[350px]"
+              />
+            )}
           </Card>
           <Card>
             <CardHeader>
