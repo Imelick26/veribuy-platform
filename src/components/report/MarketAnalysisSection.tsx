@@ -8,7 +8,7 @@ import { formatCurrency, cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 
 export interface MarketAnalysisData {
-  baselinePrice: number;          // cents — VinAudit market baseline
+  baselinePrice: number;          // cents — MarketCheck market baseline
   adjustedPrice: number;          // cents — final fair value for THIS car
   recommendation: string;
   strongBuyMax: number;
@@ -175,7 +175,7 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
           </h4>
           <div className="space-y-1.5">
             {/* Market Baseline */}
-            <WaterfallRow label="Market Baseline (VinAudit)" value={data.baselinePrice} />
+            <WaterfallRow label="Market Baseline (MarketCheck)" value={data.baselinePrice} />
 
             {/* Condition Adjustment */}
             {data.conditionMultiplier != null && data.adjustedValueBeforeRecon != null && (

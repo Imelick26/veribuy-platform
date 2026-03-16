@@ -548,7 +548,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
               </Text>
 
               <View style={styles.marketRow}>
-                <Text style={styles.marketLabel}>Market Baseline (VinAudit)</Text>
+                <Text style={styles.marketLabel}>Market Baseline (MarketCheck)</Text>
                 <Text style={styles.marketValue}>{fmtCurrency(data.marketAnalysis.baselinePrice)}</Text>
               </View>
 

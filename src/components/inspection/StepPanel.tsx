@@ -521,7 +521,7 @@ export function StepPanel({
                 <Clock className="h-6 w-6 mx-auto text-brand-600 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">Pull Vehicle History Report</h4>
                 <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
-                  Fetch title records, accident history, ownership data, and recall status from VinAudit.
+                  Fetch recall status from NHTSA and initialize vehicle history for this inspection.
                 </p>
               </div>
               <Button

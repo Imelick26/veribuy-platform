@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
 import { analyzeRiskMedia, analyzeOverallCondition } from "@/lib/ai/media-analyzer";
-import { fetchVehicleHistory } from "@/lib/vinaudit";
-import { fetchMarketValue } from "@/lib/vinaudit";
+import { fetchMarketValue } from "@/lib/marketcheck";
+import { fetchRecalls } from "@/lib/nhtsa";
 import { calculateFairPrice, calculateDealEconomics, type HistoryData } from "@/lib/market-valuation";
 import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult } from "@/types/risk";
 
@@ -393,7 +393,9 @@ export const inspectionRouter = router({
       };
     }),
 
-  // Fetch vehicle history from VinAudit API
+  // Fetch vehicle history using NHTSA (free) for recalls
+  // Title status, accidents, owners are entered by the inspector or
+  // can be upgraded to a paid provider (VinAudit/Carfax) later.
   fetchHistory: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -403,36 +405,47 @@ export const inspectionRouter = router({
       });
       if (!inspection) throw new Error("Inspection not found");
 
-      const historyData = await fetchVehicleHistory(inspection.vehicle.vin);
+      const vehicle = inspection.vehicle;
+
+      // Fetch recalls from NHTSA (free, no API key needed)
+      const nhtsaRecalls = await fetchRecalls(
+        vehicle.make,
+        vehicle.model,
+        vehicle.year,
+      );
+
+      // Count open recalls (all NHTSA recalls are considered open unless completed)
+      const openRecallCount = nhtsaRecalls.length;
+
+      const historyRecord = {
+        provider: "NHTSA",
+        titleStatus: "CLEAN",        // Default — inspector can override
+        accidentCount: 0,            // Default — inspector can override
+        ownerCount: 1,               // Default — inspector can override
+        serviceRecords: 0,
+        structuralDamage: false,     // Default — inspector can override
+        floodDamage: false,          // Default — inspector can override
+        openRecallCount,
+        recalls: JSON.parse(JSON.stringify(
+          nhtsaRecalls.map((r) => ({
+            campaignNumber: r.campaignNumber,
+            component: r.component,
+            summary: r.summary,
+            consequence: r.consequence,
+            remedy: r.remedy,
+          }))
+        )),
+        rawData: JSON.parse(JSON.stringify({ nhtsaRecalls })),
+      };
 
       // Create or update VehicleHistory record
       const vehicleHistory = await ctx.db.vehicleHistory.upsert({
         where: { inspectionId: input.inspectionId },
         create: {
           inspectionId: input.inspectionId,
-          provider: historyData.provider,
-          titleStatus: historyData.titleStatus,
-          accidentCount: historyData.accidentCount,
-          ownerCount: historyData.ownerCount,
-          serviceRecords: historyData.serviceRecords,
-          structuralDamage: historyData.structuralDamage,
-          floodDamage: historyData.floodDamage,
-          openRecallCount: historyData.openRecallCount,
-          recalls: JSON.parse(JSON.stringify(historyData.recalls)),
-          rawData: JSON.parse(JSON.stringify(historyData.rawData)),
+          ...historyRecord,
         },
-        update: {
-          provider: historyData.provider,
-          titleStatus: historyData.titleStatus,
-          accidentCount: historyData.accidentCount,
-          ownerCount: historyData.ownerCount,
-          serviceRecords: historyData.serviceRecords,
-          structuralDamage: historyData.structuralDamage,
-          floodDamage: historyData.floodDamage,
-          openRecallCount: historyData.openRecallCount,
-          recalls: JSON.parse(JSON.stringify(historyData.recalls)),
-          rawData: JSON.parse(JSON.stringify(historyData.rawData)),
-        },
+        update: historyRecord,
       });
 
       // Mark step as completed
@@ -453,7 +466,7 @@ export const inspectionRouter = router({
       return vehicleHistory;
     }),
 
-  // Fetch market analysis using VinAudit + AI valuation
+  // Fetch market analysis using MarketCheck + valuation engine
   fetchMarket: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -463,9 +476,18 @@ export const inspectionRouter = router({
       });
       if (!inspection) throw new Error("Inspection not found");
 
-      // Fetch market value from VinAudit
+      const vehicle = inspection.vehicle;
+
+      // Extract ZIP code from location string, or default
+      const zipMatch = (inspection.location || "").match(/\b(\d{5})\b/);
+      const zip = zipMatch ? zipMatch[1] : "97201"; // default Portland, OR
+
+      // Fetch market value + comps from MarketCheck
       const marketData = await fetchMarketValue(
-        inspection.vehicle.vin,
+        vehicle.year,
+        vehicle.make,
+        vehicle.model,
+        zip,
         inspection.odometer || undefined
       );
 
@@ -479,7 +501,7 @@ export const inspectionRouter = router({
         url: l.url,
       }));
 
-      // Convert VinAudit dollar values → cents (DB stores cents)
+      // Convert MarketCheck dollar values → cents (DB stores cents)
       const basePriceCents = Math.round(marketData.estimatedValue * 100);
       const retailPriceCents = Math.round(
         (marketData.valueHigh || marketData.estimatedValue * 1.1) * 100
