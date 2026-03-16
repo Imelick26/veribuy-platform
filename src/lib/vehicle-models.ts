@@ -44,25 +44,26 @@ const TALL_CAMERA_PRESETS: CameraPreset[] = DEFAULT_CAMERA_PRESETS.map((p) => ({
 // Multiple archetypes can share the same model file.
 // ---------------------------------------------------------------------------
 
+// All GLB models from Kenney Car Kit (CC0 public domain, ~170KB each)
 const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
-  // Sedans → sedan.glb or luxury-sedan GLTF
-  "sedan-compact":     `${MODEL_CDN}/sedan.glb`,
-  "sedan-midsize":     `${MODEL_CDN}/sedan.glb`,
-  "sedan-fullsize":    `${MODEL_CDN}/luxury-sedan/scene.gltf`,
-  // SUVs → suv.glb
-  "suv-compact":       `${MODEL_CDN}/suv.glb`,
-  "suv-midsize":       `${MODEL_CDN}/suv.glb`,
-  "suv-fullsize":      `${MODEL_CDN}/suv.glb`,
-  // Trucks → box-truck GLTF (closest available)
-  "truck-crew-short":  `${MODEL_CDN}/box-truck/scene.gltf`,
-  "truck-crew-standard": `${MODEL_CDN}/box-truck/scene.gltf`,
-  "truck-regular-long": `${MODEL_CDN}/box-truck/scene.gltf`,
+  // Sedans
+  "sedan-compact":       `${MODEL_CDN}/kenney/sedan-sports.glb`,
+  "sedan-midsize":       `${MODEL_CDN}/kenney/sedan.glb`,
+  "sedan-fullsize":      `${MODEL_CDN}/kenney/sedan.glb`,
+  // SUVs
+  "suv-compact":         `${MODEL_CDN}/kenney/suv.glb`,
+  "suv-midsize":         `${MODEL_CDN}/kenney/suv.glb`,
+  "suv-fullsize":        `${MODEL_CDN}/kenney/suv-luxury.glb`,
+  // Pickup trucks
+  "truck-crew-short":    `${MODEL_CDN}/kenney/truck.glb`,
+  "truck-crew-standard": `${MODEL_CDN}/kenney/truck.glb`,
+  "truck-regular-long":  `${MODEL_CDN}/kenney/truck-flat.glb`,
   // Others
-  "hatchback":         `${MODEL_CDN}/sedan.glb`,
-  "coupe":             `${MODEL_CDN}/coupe/scene.gltf`,
-  "wagon":             `${MODEL_CDN}/sedan.glb`,
-  "minivan":           `${MODEL_CDN}/cargo-van/scene.gltf`,
-  "cargo-van":         `${MODEL_CDN}/cargo-van/scene.gltf`,
+  "hatchback":           `${MODEL_CDN}/kenney/hatchback.glb`,
+  "coupe":               `${MODEL_CDN}/kenney/coupe.glb`,
+  "wagon":               `${MODEL_CDN}/kenney/wagon.glb`,
+  "minivan":             `${MODEL_CDN}/kenney/minivan.glb`,
+  "cargo-van":           `${MODEL_CDN}/kenney/cargo-van.glb`,
 };
 
 // ---------------------------------------------------------------------------

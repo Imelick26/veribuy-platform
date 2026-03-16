@@ -18,12 +18,17 @@ import { ProceduralFallback } from "./ProceduralFallback";
 import type { VehicleModelConfig } from "@/types/vehicle";
 import { useVehicleViewerStore } from "@/stores/vehicle-viewer-store";
 
-// Uniform material for diagnostic look
-const VEHICLE_MATERIAL = new THREE.MeshStandardMaterial({
-  color: "#c8c8d4",
-  roughness: 0.85,
-  metalness: 0.1,
-  flatShading: false,
+// Uniform semi-transparent material — lets damage hotspots show through
+const VEHICLE_MATERIAL = new THREE.MeshPhysicalMaterial({
+  color: "#b8c0d0",
+  roughness: 0.4,
+  metalness: 0.2,
+  transparent: true,
+  opacity: 0.35,
+  depthWrite: false,          // prevents z-fighting with interior markers
+  side: THREE.DoubleSide,     // visible from inside too
+  transmission: 0.1,          // slight glass-like effect
+  clearcoat: 0.3,
 });
 
 interface VehicleModelProps {
