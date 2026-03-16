@@ -85,7 +85,7 @@ function Marker({
 
   return (
     <group position={position}>
-      {/* Main sphere */}
+      {/* Main sphere — large enough to see through transparent body */}
       <mesh
         ref={meshRef}
         onClick={(e) => {
@@ -94,25 +94,29 @@ function Marker({
         }}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
+        renderOrder={10}
       >
-        <sphereGeometry args={[0.05, 16, 16]} />
+        <sphereGeometry args={[0.12, 16, 16]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={isActive || hovered ? 0.9 : 0.5}
+          emissiveIntensity={isActive || hovered ? 1.2 : 0.8}
           transparent
           opacity={0.95}
+          depthTest={false}
         />
       </mesh>
 
       {/* Outer pulse ring */}
-      <mesh>
-        <sphereGeometry args={[0.08, 16, 16]} />
+      <mesh renderOrder={9}>
+        <sphereGeometry args={[0.2, 16, 16]} />
         <meshStandardMaterial
           color={color}
+          emissive={color}
+          emissiveIntensity={0.3}
           transparent
-          opacity={0.15}
-          wireframe
+          opacity={0.25}
+          depthTest={false}
         />
       </mesh>
 
