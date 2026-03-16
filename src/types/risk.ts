@@ -89,6 +89,30 @@ export interface AIAnalysisResult {
   confidence: number;
   explanation: string;
   evidenceMediaIds: string[];
+  /** Observed condition level of the component */
+  observedCondition?: "GOOD" | "FAIR" | "WORN" | "DAMAGED" | "FAILED";
+  /** Specific visual observations the AI identified */
+  visualObservations?: string[];
+  /** Recommended next action if CONFIRMED or INCONCLUSIVE */
+  suggestedAction?: string;
+}
+
+export interface UnexpectedFinding {
+  title: string;
+  description: string;
+  severity: "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR";
+  category: string;
+  photoIndex: number;
+  confidence: number;
+}
+
+export interface OverallConditionResult {
+  overallGrade: "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
+  exteriorCondition: "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
+  interiorVisible: boolean;
+  engineBayCondition?: "CLEAN" | "NORMAL" | "DIRTY" | "CONCERNING";
+  unexpectedFindings: UnexpectedFinding[];
+  summary: string;
 }
 
 export interface AggregatedRiskProfile {

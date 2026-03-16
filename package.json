@@ -52,6 +52,7 @@
     "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "exceljs": "^4.4.0",
     "prisma": "^7.4.2",
     "tailwindcss": "^4",
     "typescript": "^5"

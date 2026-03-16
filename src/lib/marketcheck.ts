@@ -75,7 +75,7 @@ async function searchActiveListings(
   make: string,
   model: string,
   zip: string,
-  radius: number = 150,
+  radius: number = 100,
   rows: number = 10,
 ): Promise<MarketCheckSearchResponse> {
   const apiKey = getApiKey();
@@ -165,7 +165,7 @@ export async function fetchMarketValue(
 ): Promise<MarketValueResult> {
   // Fire both requests in parallel
   const [searchResult, stats] = await Promise.all([
-    searchActiveListings(year, make, model, zip, 150, 10),
+    searchActiveListings(year, make, model, zip, 100, 10),
     getMarketStats(year, make, model).catch(() => null), // stats endpoint may fail on rare vehicles
   ]);
 
