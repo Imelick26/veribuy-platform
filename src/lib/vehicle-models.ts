@@ -71,16 +71,21 @@ const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
 // Model manifest
 // ---------------------------------------------------------------------------
 
+// Comrade1280 models are in centimeters with Y-forward (car pointing up).
+// Scale 0.06 → ~3m car length; rotate -90° X to lay flat (Y-up → Z-forward).
+const MODEL_SCALE: [number, number, number] = [0.06, 0.06, 0.06];
+const MODEL_ROTATION: [number, number, number] = [-Math.PI / 2, 0, 0];
+
 function createConfig(
   archetypeId: VehicleArchetypeId,
   overrides?: Partial<Omit<VehicleModelConfig, "archetypeId" | "inspectionZones">>
 ): VehicleModelConfig {
   return {
     archetypeId,
-    modelPath: ARCHETYPE_MODEL_MAP[archetypeId] || `${MODEL_CDN}/sedan.glb`,
-    scale: [1, 1, 1],
+    modelPath: ARCHETYPE_MODEL_MAP[archetypeId] || `${MODEL_CDN}/comrade1280/sedan.glb`,
+    scale: MODEL_SCALE,
     position: [0, 0, 0],
-    rotation: [0, 0, 0],
+    rotation: MODEL_ROTATION,
     cameraPresets: DEFAULT_CAMERA_PRESETS,
     inspectionZones: getInspectionZones(archetypeId),
     ...overrides,
