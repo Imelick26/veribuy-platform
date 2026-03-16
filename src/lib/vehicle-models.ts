@@ -47,7 +47,7 @@ const TALL_CAMERA_PRESETS: CameraPreset[] = DEFAULT_CAMERA_PRESETS.map((p) => ({
 // Generic Passenger Car Pack by Comrade1280 (CC-BY, ~250-320KB each)
 // 10 unbranded modern vehicles covering all 14 archetypes
 // Cache-bust version param — increment when re-uploading models
-const MODEL_V = "v3";
+const MODEL_V = "v4";
 
 const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
   // Sedans
@@ -74,10 +74,11 @@ const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
 // Model manifest
 // ---------------------------------------------------------------------------
 
-// Comrade1280 models are in centimeters with Y-forward (car pointing up).
-// Scale 0.06 → ~3m car length; rotate -90° X to lay flat (Y-up → Z-forward).
-const MODEL_SCALE: [number, number, number] = [0.06, 0.06, 0.06];
-const MODEL_ROTATION: [number, number, number] = [-Math.PI / 2, 0, 0];
+// Comrade1280 models have baked transforms (identity nodes, Y-up, Z-forward).
+// Scale 0.55 maps world-space meters to the inspection-zone coordinate space.
+// No rotation needed — models are already in standard glTF Y-up convention.
+const MODEL_SCALE: [number, number, number] = [0.55, 0.55, 0.55];
+const MODEL_ROTATION: [number, number, number] = [0, 0, 0];
 
 function createConfig(
   archetypeId: VehicleArchetypeId,
