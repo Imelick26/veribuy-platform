@@ -46,25 +46,28 @@ const TALL_CAMERA_PRESETS: CameraPreset[] = DEFAULT_CAMERA_PRESETS.map((p) => ({
 
 // Generic Passenger Car Pack by Comrade1280 (CC-BY, ~250-320KB each)
 // 10 unbranded modern vehicles covering all 14 archetypes
+// Cache-bust version param — increment when re-uploading models
+const MODEL_V = "v2";
+
 const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
   // Sedans
-  "sedan-compact":       `${MODEL_CDN}/comrade1280/compact.glb`,
-  "sedan-midsize":       `${MODEL_CDN}/comrade1280/sedan.glb`,
-  "sedan-fullsize":      `${MODEL_CDN}/comrade1280/sedan.glb`,
+  "sedan-compact":       `${MODEL_CDN}/comrade1280/compact.glb?${MODEL_V}`,
+  "sedan-midsize":       `${MODEL_CDN}/comrade1280/sedan.glb?${MODEL_V}`,
+  "sedan-fullsize":      `${MODEL_CDN}/comrade1280/sedan.glb?${MODEL_V}`,
   // SUVs — offroad = Jeep-style (compact), suv = larger crossover (mid/full)
-  "suv-compact":         `${MODEL_CDN}/comrade1280/offroad.glb`,
-  "suv-midsize":         `${MODEL_CDN}/comrade1280/suv.glb`,
-  "suv-fullsize":        `${MODEL_CDN}/comrade1280/suv.glb`,
+  "suv-compact":         `${MODEL_CDN}/comrade1280/offroad.glb?${MODEL_V}`,
+  "suv-midsize":         `${MODEL_CDN}/comrade1280/suv.glb?${MODEL_V}`,
+  "suv-fullsize":        `${MODEL_CDN}/comrade1280/suv.glb?${MODEL_V}`,
   // Pickup trucks
-  "truck-crew-short":    `${MODEL_CDN}/comrade1280/pickup.glb`,
-  "truck-crew-standard": `${MODEL_CDN}/comrade1280/pickup.glb`,
-  "truck-regular-long":  `${MODEL_CDN}/comrade1280/pickup.glb`,
+  "truck-crew-short":    `${MODEL_CDN}/comrade1280/pickup.glb?${MODEL_V}`,
+  "truck-crew-standard": `${MODEL_CDN}/comrade1280/pickup.glb?${MODEL_V}`,
+  "truck-regular-long":  `${MODEL_CDN}/comrade1280/pickup.glb?${MODEL_V}`,
   // Others
-  "hatchback":           `${MODEL_CDN}/comrade1280/hatchback.glb`,
-  "coupe":               `${MODEL_CDN}/comrade1280/coupe.glb`,
-  "wagon":               `${MODEL_CDN}/comrade1280/wagon.glb`,
-  "minivan":             `${MODEL_CDN}/comrade1280/minivan.glb`,
-  "cargo-van":           `${MODEL_CDN}/comrade1280/minivan.glb`,
+  "hatchback":           `${MODEL_CDN}/comrade1280/hatchback.glb?${MODEL_V}`,
+  "coupe":               `${MODEL_CDN}/comrade1280/coupe.glb?${MODEL_V}`,
+  "wagon":               `${MODEL_CDN}/comrade1280/wagon.glb?${MODEL_V}`,
+  "minivan":             `${MODEL_CDN}/comrade1280/minivan.glb?${MODEL_V}`,
+  "cargo-van":           `${MODEL_CDN}/comrade1280/minivan.glb?${MODEL_V}`,
 };
 
 // ---------------------------------------------------------------------------
