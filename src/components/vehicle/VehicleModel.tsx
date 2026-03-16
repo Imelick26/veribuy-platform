@@ -10,13 +10,14 @@
  * Falls back to ProceduralFallback when the .glb file is not available.
  */
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, Suspense } from "react";
 import { useLoader } from "@react-three/fiber";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
 import { ProceduralFallback } from "./ProceduralFallback";
 import type { VehicleModelConfig } from "@/types/vehicle";
 import { useVehicleViewerStore } from "@/stores/vehicle-viewer-store";
+import { ErrorBoundary } from "react-error-boundary";
 
 // Uniform semi-transparent material — lets damage hotspots show through
 const VEHICLE_MATERIAL = new THREE.MeshPhysicalMaterial({
@@ -35,17 +36,15 @@ interface VehicleModelProps {
   config: VehicleModelConfig;
 }
 
-function LoadedModel({ config }: VehicleModelProps) {
+/**
+ * Inner component that actually loads the GLB via useLoader (Suspense-based).
+ * Must be wrapped in <Suspense> and <ErrorBoundary>.
+ */
+function GltfModel({ config }: VehicleModelProps) {
   const setModelLoaded = useVehicleViewerStore((s) => s.setModelLoaded);
-  const [loadError, setLoadError] = useState(false);
 
-  let gltf: { scene: THREE.Group } | null = null;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    gltf = useLoader(GLTFLoader, config.modelPath);
-  } catch {
-    // useLoader throws a promise during loading (Suspense) and an error on failure
-  }
+  // useLoader suspends until loaded — don't wrap in try/catch
+  const gltf = useLoader(GLTFLoader, config.modelPath);
 
   // Clone scene and override materials
   const scene = useMemo(() => {
@@ -68,16 +67,7 @@ function LoadedModel({ config }: VehicleModelProps) {
     return () => setModelLoaded(false);
   }, [scene, setModelLoaded]);
 
-  // Check if model file actually exists (handle 404)
-  useEffect(() => {
-    fetch(config.modelPath, { method: "HEAD" })
-      .then((res) => {
-        if (!res.ok) setLoadError(true);
-      })
-      .catch(() => setLoadError(true));
-  }, [config.modelPath]);
-
-  if (loadError || !scene) {
+  if (!scene) {
     return <ProceduralFallback archetypeId={config.archetypeId} />;
   }
 
@@ -91,21 +81,23 @@ function LoadedModel({ config }: VehicleModelProps) {
   );
 }
 
+/**
+ * Fallback wrapper that shows ProceduralFallback on load error.
+ */
+function ErrorFallback({ config }: VehicleModelProps) {
+  return <ProceduralFallback archetypeId={config.archetypeId} />;
+}
+
 export function VehicleModel({ config }: VehicleModelProps) {
-  const [useGltf, setUseGltf] = useState(true);
-
-  // Pre-check if model file exists before attempting to load
-  useEffect(() => {
-    fetch(config.modelPath, { method: "HEAD" })
-      .then((res) => {
-        if (!res.ok) setUseGltf(false);
-      })
-      .catch(() => setUseGltf(false));
-  }, [config.modelPath]);
-
-  if (!useGltf) {
-    return <ProceduralFallback archetypeId={config.archetypeId} />;
-  }
-
-  return <LoadedModel config={config} />;
+  return (
+    <ErrorBoundary
+      fallback={<ProceduralFallback archetypeId={config.archetypeId} />}
+    >
+      <Suspense
+        fallback={<ProceduralFallback archetypeId={config.archetypeId} />}
+      >
+        <GltfModel config={config} />
+      </Suspense>
+    </ErrorBoundary>
+  );
 }
