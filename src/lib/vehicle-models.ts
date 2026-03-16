@@ -44,26 +44,27 @@ const TALL_CAMERA_PRESETS: CameraPreset[] = DEFAULT_CAMERA_PRESETS.map((p) => ({
 // Multiple archetypes can share the same model file.
 // ---------------------------------------------------------------------------
 
-// All GLB models from Kenney Car Kit (CC0 public domain, ~170KB each)
+// Generic Passenger Car Pack by Comrade1280 (CC-BY, ~250-320KB each)
+// 10 unbranded modern vehicles covering all 14 archetypes
 const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
   // Sedans
-  "sedan-compact":       `${MODEL_CDN}/kenney/sedan-sports.glb`,
-  "sedan-midsize":       `${MODEL_CDN}/kenney/sedan.glb`,
-  "sedan-fullsize":      `${MODEL_CDN}/kenney/sedan.glb`,
-  // SUVs
-  "suv-compact":         `${MODEL_CDN}/kenney/suv.glb`,
-  "suv-midsize":         `${MODEL_CDN}/kenney/suv.glb`,
-  "suv-fullsize":        `${MODEL_CDN}/kenney/suv-luxury.glb`,
+  "sedan-compact":       `${MODEL_CDN}/comrade1280/compact.glb`,
+  "sedan-midsize":       `${MODEL_CDN}/comrade1280/sedan.glb`,
+  "sedan-fullsize":      `${MODEL_CDN}/comrade1280/sedan.glb`,
+  // SUVs — offroad = Jeep-style (compact), suv = larger crossover (mid/full)
+  "suv-compact":         `${MODEL_CDN}/comrade1280/offroad.glb`,
+  "suv-midsize":         `${MODEL_CDN}/comrade1280/suv.glb`,
+  "suv-fullsize":        `${MODEL_CDN}/comrade1280/suv.glb`,
   // Pickup trucks
-  "truck-crew-short":    `${MODEL_CDN}/kenney/truck.glb`,
-  "truck-crew-standard": `${MODEL_CDN}/kenney/truck.glb`,
-  "truck-regular-long":  `${MODEL_CDN}/kenney/truck-flat.glb`,
+  "truck-crew-short":    `${MODEL_CDN}/comrade1280/pickup.glb`,
+  "truck-crew-standard": `${MODEL_CDN}/comrade1280/pickup.glb`,
+  "truck-regular-long":  `${MODEL_CDN}/comrade1280/pickup.glb`,
   // Others
-  "hatchback":           `${MODEL_CDN}/kenney/hatchback.glb`,
-  "coupe":               `${MODEL_CDN}/kenney/coupe.glb`,
-  "wagon":               `${MODEL_CDN}/kenney/wagon.glb`,
-  "minivan":             `${MODEL_CDN}/kenney/minivan.glb`,
-  "cargo-van":           `${MODEL_CDN}/kenney/cargo-van.glb`,
+  "hatchback":           `${MODEL_CDN}/comrade1280/hatchback.glb`,
+  "coupe":               `${MODEL_CDN}/comrade1280/coupe.glb`,
+  "wagon":               `${MODEL_CDN}/comrade1280/wagon.glb`,
+  "minivan":             `${MODEL_CDN}/comrade1280/minivan.glb`,
+  "cargo-van":           `${MODEL_CDN}/comrade1280/minivan.glb`,
 };
 
 // ---------------------------------------------------------------------------
