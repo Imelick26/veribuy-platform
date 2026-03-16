@@ -47,7 +47,7 @@ const TALL_CAMERA_PRESETS: CameraPreset[] = DEFAULT_CAMERA_PRESETS.map((p) => ({
 // Generic Passenger Car Pack by Comrade1280 (CC-BY, ~250-320KB each)
 // 10 unbranded modern vehicles covering all 14 archetypes
 // Cache-bust version param — increment when re-uploading models
-const MODEL_V = "v2";
+const MODEL_V = "v3";
 
 const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
   // Sedans
