@@ -1,0 +1,8 @@
+Model Information:
+* title:	Generic Car
+* source:	https://sketchfab.com/3d-models/generic-car-7e477194e48343b7b7aa0179b1e23387
+* author:	assetfactory (https://sketchfab.com/assetfactory)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works

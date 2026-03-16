@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VeriBuy 3D Vehicle Viewer — Dev Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f1219; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+    #canvas-container { width: 100vw; height: 100vh; position: relative; }
+    #controls { position: absolute; top: 16px; left: 16px; z-index: 10; display: flex; flex-direction: column; gap: 8px; }
+    #archetype-bar { position: absolute; top: 16px; right: 16px; z-index: 10; display: flex; flex-wrap: wrap; gap: 4px; max-width: 400px; justify-content: flex-end; }
+    .btn { background: rgba(30,41,59,0.8); border: 1px solid rgba(71,85,105,0.5); color: #94a3b8; padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; backdrop-filter: blur(8px); transition: all 0.2s; font-family: inherit; }
+    .btn:hover { background: rgba(51,65,85,0.8); color: #e2e8f0; }
+    .btn.active { background: rgba(37,99,235,0.7); color: #fff; border-color: rgba(59,130,246,0.5); }
+    .btn.model-toggle { background: rgba(22,163,74,0.7); border-color: rgba(34,197,94,0.5); color: #fff; }
+    .btn.model-toggle:hover { background: rgba(22,163,74,0.9); }
+    .badge { background: rgba(30,41,59,0.8); border: 1px solid rgba(71,85,105,0.3); color: #94a3b8; padding: 4px 10px; border-radius: 6px; font-size: 11px; backdrop-filter: blur(8px); }
+    .risk-list { position: absolute; bottom: 16px; right: 16px; z-index: 10; display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+    .risk-item { background: rgba(30,41,59,0.8); border: 1px solid rgba(71,85,105,0.3); padding: 8px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; backdrop-filter: blur(8px); transition: all 0.2s; min-width: 200px; }
+    .risk-item:hover { border-color: rgba(59,130,246,0.5); }
+    .risk-item.active { border-color: #3b82f6; background: rgba(37,99,235,0.2); }
+    .risk-title { font-weight: 600; color: #e2e8f0; }
+    .risk-meta { color: #64748b; margin-top: 2px; }
+    .sev-CRITICAL { border-left: 3px solid #ef4444; }
+    .sev-MAJOR { border-left: 3px solid #f97316; }
+    .sev-MODERATE { border-left: 3px solid #eab308; }
+    .sev-MINOR { border-left: 3px solid #22c55e; }
+    #stats { position: absolute; bottom: 16px; left: 16px; z-index: 10; }
+    #stats .badge { display: block; margin-top: 4px; }
+    #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 20; display: none; }
+    #loading .spinner { width: 40px; height: 40px; border: 3px solid rgba(59,130,246,0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="controls">
+    <span class="badge" id="archetype-label">Midsize Sedan</span>
+    <button class="btn model-toggle" id="model-toggle">Load GLB Model</button>
+    <button class="btn" id="mat-toggle" style="background:rgba(139,92,246,0.7);border-color:rgba(167,139,250,0.5);color:#fff;">Toggle Materials</button>
+  </div>
+
+  <div id="archetype-bar"></div>
+
+  <div class="risk-list" id="risk-list"></div>
+
+  <div id="stats">
+    <span class="badge" id="stat-triangles">Triangles: —</span>
+    <span class="badge" id="stat-fps">FPS: —</span>
+    <span class="badge" id="stat-size">File: —</span>
+  </div>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <span class="badge">Loading model...</span>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.183.2/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+    // -----------------------------------------------------------------------
+    // Archetype dimensions (for procedural fallback)
+    // -----------------------------------------------------------------------
+    const DIMS = {
+      sedan: { bL:2.6,bW:1.0,bH:0.45, cL:1.4,cH:0.38,cZ:0.05, gc:0.08, wr:0.2, wh:0.85, bed:false,bedL:0 },
+      suv:   { bL:2.7,bW:1.1,bH:0.55, cL:1.7,cH:0.48,cZ:-0.1, gc:0.15, wr:0.24, wh:0.9, bed:false,bedL:0 },
+      truck: { bL:3.2,bW:1.1,bH:0.55, cL:1.3,cH:0.5,cZ:0.5, gc:0.18, wr:0.26, wh:1.1, bed:true,bedL:1.2 },
+      hatch: { bL:2.3,bW:0.95,bH:0.45, cL:1.5,cH:0.4,cZ:-0.05, gc:0.08, wr:0.19, wh:0.78, bed:false,bedL:0 },
+      coupe: { bL:2.4,bW:1.0,bH:0.4, cL:1.2,cH:0.35,cZ:0.1, gc:0.06, wr:0.2, wh:0.82, bed:false,bedL:0 },
+      mini:  { bL:2.8,bW:1.1,bH:0.55, cL:2.0,cH:0.55,cZ:-0.1, gc:0.1, wr:0.22, wh:0.95, bed:false,bedL:0 },
+      van:   { bL:3.0,bW:1.1,bH:0.7, cL:2.2,cH:0.65,cZ:-0.15, gc:0.12, wr:0.24, wh:1.0, bed:false,bedL:0 },
+    };
+
+    const ARCHETYPES = [
+      { id:'sedan-compact', label:'Compact Sedan', dim:'sedan' },
+      { id:'sedan-midsize', label:'Midsize Sedan', dim:'sedan' },
+      { id:'sedan-fullsize', label:'Full-Size Sedan', dim:'sedan' },
+      { id:'suv-compact', label:'Compact SUV', dim:'suv' },
+      { id:'suv-midsize', label:'Midsize SUV', dim:'suv' },
+      { id:'suv-fullsize', label:'Full-Size SUV', dim:'suv' },
+      { id:'truck-crew-short', label:'Crew Cab Short', dim:'truck' },
+      { id:'truck-crew-standard', label:'Crew Cab Std', dim:'truck' },
+      { id:'truck-regular-long', label:'Regular Cab Long', dim:'truck' },
+      { id:'hatchback', label:'Hatchback', dim:'hatch' },
+      { id:'coupe', label:'Coupe', dim:'coupe' },
+      { id:'minivan', label:'Minivan', dim:'mini' },
+      { id:'cargo-van', label:'Cargo Van', dim:'van' },
+    ];
+
+    // Available GLB/GLTF models — mapped by body type
+    // For car-pack models, 'filterNode' isolates a single vehicle from the multi-vehicle scene
+    const GLB_MODELS = {
+      'sedan':        { path: '/public/models/vehicles/sedan.glb', label: 'Generic Sedan (37MB)' },
+      'suv':          { path: '/public/models/vehicles/suv.glb', label: 'Generic SUV (48MB)' },
+      'coupe':        { path: '/public/models/vehicles/coupe/scene.gltf', label: 'Generic Coupe (14MB)' },
+      'sports-car':   { path: '/public/models/vehicles/sports-car/scene.gltf', label: 'Sport Coupé (38MB)' },
+      'cargo-van':    { path: '/public/models/vehicles/cargo-van/scene.gltf', label: 'Cargo Van (10MB)' },
+      'box-truck':    { path: '/public/models/vehicles/box-truck/scene.gltf', label: 'Delivery Truck (880KB)' },
+      'luxury-sedan': { path: '/public/models/vehicles/luxury-sedan/scene.gltf', label: 'Luxury Sedan (7MB)' },
+      'pickup':       { path: '/public/models/vehicles/car-pack/scene.gltf', label: 'Pickup Truck', filterNode: 'Pickup_Body' },
+      'hatchback':    { path: '/public/models/vehicles/car-pack/scene.gltf', label: 'Hatchback', filterNode: 'Hatchback_Body' },
+      'minivan':      { path: '/public/models/vehicles/car-pack/scene.gltf', label: 'Minivan', filterNode: 'minivan_body' },
+      'wagon':        { path: '/public/models/vehicles/car-pack/scene.gltf', label: 'Wagon', filterNode: 'Wagon_Body' },
+      'offroad':      { path: '/public/models/vehicles/car-pack/scene.gltf', label: 'Off-Road', filterNode: 'Offroad_Body' },
+      'compact':      { path: '/public/models/vehicles/car-pack/scene.gltf', label: 'Compact', filterNode: 'Compact_Body' },
+    };
+
+    // Map archetype dim keys to their GLB model
+    const DIM_TO_MODEL = {
+      'sedan': 'sedan',
+      'suv':   'suv',
+      'truck': 'pickup',
+      'hatch': 'hatchback',
+      'coupe': 'coupe',
+      'mini':  'minivan',
+      'van':   'cargo-van',
+    };
+
+    // -----------------------------------------------------------------------
+    // Mock risks — positions are relative to a ~2.5m long vehicle centered at origin
+    // -----------------------------------------------------------------------
+    const RISKS = [
+      { id:'r0', sev:'CRITICAL', title:'Radiator Leak', cat:'ENGINE', hint:'radiator',
+        basePos:[0, 0.6, 1.15] },
+      { id:'r1', sev:'MAJOR', title:'Worn Brake Pads', cat:'BRAKES', hint:'front-left',
+        basePos:[0.55, 0.15, 0.75] },
+      { id:'r2', sev:'MODERATE', title:'Suspension Noise', cat:'SUSPENSION', hint:'front-right',
+        basePos:[-0.55, 0.2, 0.75] },
+      { id:'r3', sev:'MINOR', title:'Rear Bumper Scuff', cat:'COSMETIC', hint:'rear-bumper',
+        basePos:[0.3, 0.25, -1.3] },
+      { id:'r4', sev:'MODERATE', title:'Oil Seepage', cat:'ENGINE', hint:'oil-pan',
+        basePos:[0, 0.15, 0.6] },
+      { id:'r5', sev:'MINOR', title:'Headlight Condensation', cat:'ELECTRICAL', hint:'headlight-right',
+        basePos:[0.45, 0.4, 1.25] },
+      { id:'r6', sev:'MAJOR', title:'Transmission Shudder', cat:'DRIVETRAIN', hint:'transmission',
+        basePos:[0, 0.1, 0.0] },
+    ];
+
+    const SEV_COLORS = { CRITICAL:'#ef4444', MAJOR:'#f97316', MODERATE:'#eab308', MINOR:'#22c55e' };
+
+    // -----------------------------------------------------------------------
+    // Scene setup
+    // -----------------------------------------------------------------------
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#1a1f2e');
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(3, 2, 3);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enablePan = false;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.5;
+    controls.minDistance = 2;
+    controls.maxDistance = 10;
+    controls.maxPolarAngle = Math.PI / 2.1;
+
+    let lastInteraction = 0;
+    controls.addEventListener('start', () => { lastInteraction = Date.now(); controls.autoRotate = false; });
+
+    // Lights — improved for realistic model rendering
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const key = new THREE.DirectionalLight(0xffffff, 1.0);
+    key.position.set(5, 8, 5);
+    key.castShadow = false;
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.4);
+    fill.position.set(-3, 4, -3);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.3);
+    rim.position.set(0, 2, -5);
+    scene.add(rim);
+
+    // Ground grid
+    const grid = new THREE.GridHelper(8, 24, 0x3a3f52, 0x2a2f42);
+    grid.position.y = -0.01;
+    scene.add(grid);
+
+    // GLTFLoader setup
+    const gltfLoader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/libs/draco/');
+    gltfLoader.setDRACOLoader(dracoLoader);
+
+    // Diagnostic material (uniform gray)
+    const diagMat = new THREE.MeshStandardMaterial({ color:'#c8c8d4', roughness:0.85, metalness:0.1 });
+    const glassDiagMat = new THREE.MeshStandardMaterial({ color:'#a8c0d8', transparent:true, opacity:0.35, roughness:0.1, metalness:0.3, side:THREE.DoubleSide });
+
+    // -----------------------------------------------------------------------
+    // Groups
+    // -----------------------------------------------------------------------
+    let vehicleGroup = new THREE.Group();
+    scene.add(vehicleGroup);
+    let markerGroup = new THREE.Group();
+    vehicleGroup.add(markerGroup); // markers are children of vehicle so they rotate together
+
+    let currentMode = 'procedural'; // 'procedural' or 'glb'
+    let currentGlbKey = 'test-toycar';
+    let triangleCount = 0;
+
+    // -----------------------------------------------------------------------
+    // Procedural vehicle builder
+    // -----------------------------------------------------------------------
+    const bodyMat = new THREE.MeshStandardMaterial({ color:'#c8c8d4', roughness:0.85, metalness:0.1 });
+    const wireMat = new THREE.MeshStandardMaterial({ color:'#8890a0', wireframe:true, transparent:true, opacity:0.3 });
+    const glassMat = new THREE.MeshStandardMaterial({ color:'#a8c0d8', transparent:true, opacity:0.35, roughness:0.1, metalness:0.3, side:THREE.DoubleSide });
+    const wheelMat = new THREE.MeshStandardMaterial({ color:'#2a2a2a', roughness:0.95 });
+    const rimMat2 = new THREE.MeshStandardMaterial({ color:'#444', roughness:0.7, metalness:0.3 });
+
+    function clearVehicle() {
+      while(vehicleGroup.children.length) {
+        const child = vehicleGroup.children[0];
+        vehicleGroup.remove(child);
+        if (child.geometry) child.geometry.dispose();
+      }
+      markerGroup = new THREE.Group();
+      vehicleGroup.add(markerGroup);
+      triangleCount = 0;
+    }
+
+    function addMarkers() {
+      RISKS.forEach(r => {
+        const color = new THREE.Color(SEV_COLORS[r.sev] || '#666');
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.06, 16, 16),
+          new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:0.6, transparent:true, opacity:0.95 })
+        );
+        sphere.position.set(...r.basePos);
+        sphere.userData = { riskId: r.id };
+        markerGroup.add(sphere);
+
+        const ring = new THREE.Mesh(
+          new THREE.SphereGeometry(0.1, 16, 16),
+          new THREE.MeshStandardMaterial({ color, transparent:true, opacity:0.15, wireframe:true })
+        );
+        ring.position.set(...r.basePos);
+        markerGroup.add(ring);
+      });
+    }
+
+    function buildProcedural(dimKey) {
+      clearVehicle();
+      const d = {...DIMS[dimKey]};
+      const baseY = d.gc + d.bH/2;
+      const cabY = d.gc + d.bH + d.cH/2;
+      const tw = d.bW/2 + 0.15;
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(d.bW, d.bH, d.bL), bodyMat);
+      body.position.y = baseY;
+      vehicleGroup.add(body);
+      const bodyW = new THREE.Mesh(new THREE.BoxGeometry(d.bW, d.bH, d.bL), wireMat);
+      bodyW.position.y = baseY;
+      vehicleGroup.add(bodyW);
+
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(d.bW*0.92, d.cH, d.cL), bodyMat);
+      cab.position.set(0, cabY, d.cZ);
+      vehicleGroup.add(cab);
+
+      const ws = new THREE.Mesh(new THREE.PlaneGeometry(d.bW*0.85, d.cH*0.75), glassMat);
+      ws.position.set(0, cabY+d.cH*0.1, d.cZ+d.cL/2+0.01);
+      ws.rotation.x = -0.15;
+      vehicleGroup.add(ws);
+
+      const rw = new THREE.Mesh(new THREE.PlaneGeometry(d.bW*0.85, d.cH*0.65), glassMat);
+      rw.position.set(0, cabY+d.cH*0.1, d.cZ-d.cL/2-0.01);
+      rw.rotation.set(0.15, Math.PI, 0);
+      vehicleGroup.add(rw);
+
+      if (d.bed) {
+        const bedFloor = new THREE.Mesh(new THREE.BoxGeometry(d.bW*0.95, 0.05, d.bedL), bodyMat);
+        bedFloor.position.set(0, baseY-d.bH*0.1, -(d.bL/2-d.bedL/2));
+        vehicleGroup.add(bedFloor);
+        [-1,1].forEach(s => {
+          const wall = new THREE.Mesh(new THREE.BoxGeometry(0.04, d.bH*0.5, d.bedL), bodyMat);
+          wall.position.set(s*d.bW*0.47, baseY+d.bH*0.15, -(d.bL/2-d.bedL/2));
+          vehicleGroup.add(wall);
+        });
+      }
+
+      [[tw,d.wr+d.gc,d.wh],[-tw,d.wr+d.gc,d.wh],[tw,d.wr+d.gc,-d.wh],[-tw,d.wr+d.gc,-d.wh]].forEach(p => {
+        const tire = new THREE.Mesh(new THREE.CylinderGeometry(d.wr,d.wr,0.12,20), wheelMat);
+        tire.rotation.z = Math.PI/2;
+        tire.position.set(...p);
+        vehicleGroup.add(tire);
+      });
+
+      // Count triangles
+      vehicleGroup.traverse(c => { if (c.isMesh && c.geometry) triangleCount += c.geometry.index ? c.geometry.index.count/3 : c.geometry.attributes.position.count/3; });
+
+      addMarkers();
+      updateStats(null);
+    }
+
+    // -----------------------------------------------------------------------
+    // GLB model loader
+    // -----------------------------------------------------------------------
+    async function loadGlbModel(modelKey) {
+      const model = GLB_MODELS[modelKey];
+      if (!model) return;
+
+      clearVehicle();
+      document.getElementById('loading').style.display = 'block';
+
+      const startTime = performance.now();
+
+      try {
+        const gltf = await new Promise((resolve, reject) => {
+          gltfLoader.load(model.path, resolve, undefined, reject);
+        });
+
+        const loadTime = ((performance.now() - startTime) / 1000).toFixed(1);
+
+        let modelScene = gltf.scene;
+
+        // If filterNode is set, extract just that vehicle from a multi-vehicle pack
+        if (model.filterNode) {
+          let targetNode = null;
+          modelScene.traverse(child => {
+            if (child.name === model.filterNode) targetNode = child;
+          });
+          if (targetNode) {
+            const isolated = new THREE.Group();
+            isolated.add(targetNode.clone());
+            modelScene = isolated;
+          }
+        }
+
+        // Compute bounding box to normalize scale and position
+        const box = new THREE.Box3().setFromObject(modelScene);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+
+        // Scale model to fit ~2.5m length (our standard vehicle size)
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const targetSize = 2.8;
+        const scale = targetSize / maxDim;
+        modelScene.scale.setScalar(scale);
+
+        // Recompute after scale
+        box.setFromObject(modelScene);
+        box.getCenter(center);
+        const minY = box.min.y;
+
+        // Center horizontally and sit on ground plane
+        modelScene.position.x = -center.x;
+        modelScene.position.z = -center.z;
+        modelScene.position.y = -minY;
+
+        // Override materials to diagnostic gray (toggle option)
+        let overrideMaterials = window.__useDiagMaterials !== false;
+        modelScene.traverse(child => {
+          if (child.isMesh) {
+            triangleCount += child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3;
+            if (overrideMaterials) {
+              const origMat = child.material;
+              const isGlass = origMat && (origMat.transparent || origMat.opacity < 0.9 ||
+                (origMat.name && /glass|window|windshield/i.test(origMat.name)));
+              child.material = isGlass ? glassDiagMat : diagMat;
+            }
+          }
+        });
+
+        vehicleGroup.add(modelScene);
+        addMarkers();
+
+        // Fetch file size
+        try {
+          const resp = await fetch(model.path, { method: 'HEAD' });
+          const bytes = parseInt(resp.headers.get('content-length') || '0');
+          const mb = (bytes / 1024 / 1024).toFixed(1);
+          document.getElementById('stat-size').textContent = `File: ${mb}MB | Load: ${loadTime}s`;
+        } catch {
+          document.getElementById('stat-size').textContent = `Load: ${loadTime}s`;
+        }
+
+        updateStats(null);
+      } catch (err) {
+        console.error('Failed to load GLB:', err);
+        document.getElementById('stat-size').textContent = `Error: ${err.message}`;
+        // Fall back to procedural
+        buildProcedural('sedan');
+      } finally {
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+
+    function updateStats(fps) {
+      document.getElementById('stat-triangles').textContent = `Triangles: ${Math.round(triangleCount).toLocaleString()}`;
+      if (fps !== null) document.getElementById('stat-fps').textContent = `FPS: ${fps}`;
+    }
+
+    // -----------------------------------------------------------------------
+    // UI
+    // -----------------------------------------------------------------------
+    let currentArchIdx = 1;
+
+    const bar = document.getElementById('archetype-bar');
+    ARCHETYPES.forEach((a, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'btn' + (i===currentArchIdx?' active':'');
+      btn.textContent = a.label;
+      btn.onclick = () => {
+        currentArchIdx = i;
+        bar.querySelectorAll('.btn').forEach((b,j) => b.className = 'btn'+(j===i?' active':''));
+        document.getElementById('archetype-label').textContent = a.label;
+        // Auto-load the matching GLB model
+        const modelKey = DIM_TO_MODEL[a.dim];
+        if (modelKey && GLB_MODELS[modelKey]) {
+          currentMode = 'glb';
+          currentGlbKey = modelKey;
+          loadGlbModel(modelKey);
+        } else {
+          currentMode = 'procedural';
+          document.getElementById('stat-size').textContent = 'File: procedural';
+          buildProcedural(a.dim);
+        }
+        updateModelToggle();
+      };
+      bar.appendChild(btn);
+    });
+
+    // Model toggle button — cycles through all GLB models
+    const modelToggle = document.getElementById('model-toggle');
+    const glbKeys = Object.keys(GLB_MODELS);
+    let glbIdx = 0;
+    currentGlbKey = glbKeys[0];
+
+    function updateModelToggle() {
+      if (currentMode === 'procedural') {
+        modelToggle.textContent = `Load: ${GLB_MODELS[glbKeys[glbIdx]].label}`;
+      } else {
+        modelToggle.textContent = 'Back to Procedural';
+      }
+    }
+
+    modelToggle.onclick = () => {
+      if (currentMode === 'glb') {
+        // Switch back to procedural
+        currentMode = 'procedural';
+        document.getElementById('stat-size').textContent = 'File: procedural';
+        buildProcedural(ARCHETYPES[currentArchIdx].dim);
+      } else {
+        // Load GLB
+        currentMode = 'glb';
+        currentGlbKey = glbKeys[glbIdx];
+        glbIdx = (glbIdx + 1) % glbKeys.length;
+        loadGlbModel(currentGlbKey);
+      }
+      updateModelToggle();
+    };
+
+    // Material toggle
+    const matToggle = document.getElementById('mat-toggle');
+    window.__useDiagMaterials = true;
+    matToggle.onclick = () => {
+      window.__useDiagMaterials = !window.__useDiagMaterials;
+      matToggle.textContent = window.__useDiagMaterials ? 'Show Original Materials' : 'Show Diagnostic Gray';
+      if (currentMode === 'glb') {
+        loadGlbModel(currentGlbKey);
+      }
+    };
+
+    // Risk list
+    const riskList = document.getElementById('risk-list');
+    RISKS.forEach(r => {
+      const el = document.createElement('div');
+      el.className = `risk-item sev-${r.sev}`;
+      el.innerHTML = `<div class="risk-title">${r.title}</div><div class="risk-meta">${r.sev} · ${r.cat}</div>`;
+      el.onclick = () => {
+        riskList.querySelectorAll('.risk-item').forEach(e => e.classList.remove('active'));
+        el.classList.toggle('active');
+      };
+      riskList.appendChild(el);
+    });
+
+    // Build initial — load sedan GLB by default
+    currentMode = 'glb';
+    currentGlbKey = 'sedan';
+    loadGlbModel('sedan');
+    updateModelToggle();
+
+    // -----------------------------------------------------------------------
+    // Animation loop with FPS counter
+    // -----------------------------------------------------------------------
+    const clock = new THREE.Clock();
+    let frameCount = 0;
+    let fpsTime = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+      const dt = clock.getDelta();
+
+      // FPS
+      frameCount++;
+      fpsTime += dt;
+      if (fpsTime >= 1.0) {
+        updateStats(Math.round(frameCount / fpsTime));
+        frameCount = 0;
+        fpsTime = 0;
+      }
+
+      // Resume auto-rotate after 3s
+      if (!controls.autoRotate && Date.now() - lastInteraction > 3000) {
+        controls.autoRotate = true;
+      }
+
+      // Pulse markers
+      markerGroup.children.forEach((child, i) => {
+        if (i % 2 === 0) {
+          const s = 1 + Math.sin(t * 2 + i) * 0.15;
+          child.scale.setScalar(s);
+        }
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

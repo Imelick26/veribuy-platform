@@ -1,0 +1,4 @@
+*.glb filter=lfs diff=lfs merge=lfs -text
+public/models/vehicles/**/*.bin filter=lfs diff=lfs merge=lfs -text
+public/models/vehicles/**/*.png filter=lfs diff=lfs merge=lfs -text
+public/models/vehicles/**/*.jpeg filter=lfs diff=lfs merge=lfs -text

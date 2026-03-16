@@ -1,0 +1,11 @@
+Model Information:
+* title:	Generic Sport Coupé Car
+* source:	https://sketchfab.com/3d-models/generic-sport-coupe-car-820a13c4831c41959ce75e6c2014e882
+* author:	Márcio Meireles (https://sketchfab.com/marciomeireles)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Generic Sport Coupé Car" (https://sketchfab.com/3d-models/generic-sport-coupe-car-820a13c4831c41959ce75e6c2014e882) by Márcio Meireles (https://sketchfab.com/marciomeireles) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
