@@ -260,7 +260,29 @@ export default function InspectionDetailPage({
   }
 
   function handleCreateFindingFromRisk(risk: AggregatedRisk) {
-    setFindingFromRisk(risk);
+    // Auto-create finding directly from risk data — no form needed
+    const validCategories = new Set(CATEGORY_OPTIONS);
+    const category = validCategories.has(risk.category as typeof CATEGORY_OPTIONS[number])
+      ? (risk.category as typeof CATEGORY_OPTIONS[number])
+      : "OTHER" as typeof CATEGORY_OPTIONS[number];
+
+    const validSeverities = new Set(SEVERITY_OPTIONS);
+    const severity = validSeverities.has(risk.severity as typeof SEVERITY_OPTIONS[number])
+      ? (risk.severity as typeof SEVERITY_OPTIONS[number])
+      : "MODERATE" as typeof SEVERITY_OPTIONS[number];
+
+    addFinding.mutate({
+      inspectionId: id,
+      title: risk.title,
+      description: risk.aiSummary || risk.description,
+      severity,
+      category,
+      repairCostLow: risk.cost.low > 0 ? risk.cost.low : undefined,
+      repairCostHigh: risk.cost.high > 0 ? risk.cost.high : undefined,
+      positionX: risk.position?.x || undefined,
+      positionY: risk.position?.y || undefined,
+      positionZ: risk.position?.z || undefined,
+    });
   }
 
   function handleSubmitFindingFromRisk(finding: {

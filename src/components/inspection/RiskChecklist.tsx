@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { CheckCircle, XCircle, HelpCircle, Camera, ChevronDown, ChevronUp, AlertTriangle, MapPin, Wrench, Eye, Info, ImageIcon, Loader2, ShieldCheck, ShieldAlert } from "lucide-react";
+import { CheckCircle, XCircle, HelpCircle, Camera, ChevronDown, AlertTriangle, Loader2, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import type { AggregatedRisk, RiskCheckStatus, AIAnalysisResult } from "@/types/risk";
-import { computeRiskConfidence, computeInspectionConfidence, type InspectionConfidence, type RiskConfidence } from "@/lib/confidence";
 
 interface RiskChecklistProps {
   risks: AggregatedRisk[];
@@ -17,9 +15,8 @@ interface RiskChecklistProps {
   onCaptureEvidence: (risk: AggregatedRisk) => void;
   onHighlightRisk: (riskId: string | null) => void;
   activeRiskId: string | null;
-  // Inline capture props
   onUploadEvidence?: (riskId: string, captureIndex: number, file: File) => Promise<string | null>;
-  uploadingRiskCapture?: string | null; // "riskId:captureIndex" while uploading
+  uploadingRiskCapture?: string | null;
   riskMediaMap?: Record<string, Array<{ mediaId: string; url: string; captureType: string }>>;
   aiResults?: AIAnalysisResult[];
 }
@@ -29,452 +26,303 @@ export function RiskChecklist({
   checkStatuses,
   onCheckRisk,
   onCreateFinding,
-  onCaptureEvidence,
   onHighlightRisk,
   activeRiskId,
   onUploadEvidence,
   uploadingRiskCapture,
   riskMediaMap = {},
-  aiResults = [],
 }: RiskChecklistProps) {
-  const [expandedRisks, setExpandedRisks] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const checkedCount = Object.values(checkStatuses).filter(
     (s) => s.status !== "NOT_CHECKED"
   ).length;
-  const confirmedCount = Object.values(checkStatuses).filter(
+  const failedCount = Object.values(checkStatuses).filter(
     (s) => s.status === "CONFIRMED"
+  ).length;
+  const passedCount = Object.values(checkStatuses).filter(
+    (s) => s.status === "NOT_FOUND"
   ).length;
   const progressPct = risks.length > 0 ? (checkedCount / risks.length) * 100 : 0;
 
-  // Compute confidence
-  const inspectionConfidence = computeInspectionConfidence(risks, checkStatuses, aiResults);
-  const confidenceByRisk = new Map(inspectionConfidence.perRisk.map((r) => [r.riskId, r]));
+  function handleFail(risk: AggregatedRisk) {
+    // Mark as confirmed
+    onCheckRisk(risk.id, "CONFIRMED");
+    // Auto-create finding from the risk data — no form needed
+    onCreateFinding(risk);
+  }
 
-  const toggleExpanded = (riskId: string) => {
-    setExpandedRisks((prev) => {
-      const next = new Set(prev);
-      if (next.has(riskId)) next.delete(riskId);
-      else next.add(riskId);
-      return next;
-    });
+  function handlePass(riskId: string) {
+    onCheckRisk(riskId, "NOT_FOUND");
+  }
+
+  function handleSkip(riskId: string) {
+    onCheckRisk(riskId, "UNABLE_TO_INSPECT");
+  }
+
+  function handleReset(riskId: string) {
+    onCheckRisk(riskId, "NOT_CHECKED");
+  }
+
+  function toggleDetails(riskId: string) {
+    setExpandedId(expandedId === riskId ? null : riskId);
     onHighlightRisk(riskId === activeRiskId ? null : riskId);
-  };
-
-  const getStatusIcon = (status: RiskCheckStatus["status"]) => {
-    switch (status) {
-      case "CONFIRMED":
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case "NOT_FOUND":
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case "UNABLE_TO_INSPECT":
-        return <HelpCircle className="h-4 w-4 text-text-tertiary" />;
-      default:
-        return <div className="h-4 w-4 rounded-full border-2 border-border-strong" />;
-    }
-  };
-
-  const getStatusLabel = (status: RiskCheckStatus["status"]) => {
-    switch (status) {
-      case "CONFIRMED": return "Issue Found";
-      case "NOT_FOUND": return "Clear";
-      case "UNABLE_TO_INSPECT": return "Unable to Inspect";
-      default: return "Not Checked";
-    }
-  };
+  }
 
   const handleFileSelect = async (riskId: string, captureIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onUploadEvidence) return;
     await onUploadEvidence(riskId, captureIndex, file);
-    // Reset input so same file can be re-selected
     e.target.value = "";
   };
 
-  const getConfidenceBadge = (rc: RiskConfidence | undefined) => {
-    if (!rc || rc.tier === "UNCHECKED") return null;
-    const styles = {
-      VERIFIED: "bg-[#dcfce7] text-green-700 border-green-300",
-      EVIDENCED: "bg-[#fce8f3] text-brand-700 border-brand-300",
-      MANUAL: "bg-surface-overlay text-text-secondary border-border-strong",
-      UNCHECKED: "",
-    };
-    const icons = {
-      VERIFIED: <ShieldCheck className="h-3 w-3" />,
-      EVIDENCED: <Camera className="h-3 w-3" />,
-      MANUAL: <ShieldAlert className="h-3 w-3" />,
-      UNCHECKED: null,
-    };
-    return (
-      <span className={cn("inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border", styles[rc.tier])}>
-        {icons[rc.tier]} {rc.label}
-      </span>
-    );
-  };
-
-  const confidenceColor = inspectionConfidence.overall >= 0.7 ? "bg-green-500" :
-    inspectionConfidence.overall >= 0.45 ? "bg-brand-400" : "bg-gray-500";
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Progress Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-text-primary">Known Issues Checklist</h3>
-          <p className="text-sm text-text-secondary">
-            {checkedCount} of {risks.length} items inspected
-            {confirmedCount > 0 && (
-              <span className="text-red-600 font-medium"> · {confirmedCount} issues found</span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-2 w-32 rounded-full bg-surface-sunken overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${progressPct}%`,
-                background: confirmedCount > 0
-                  ? "linear-gradient(to right, #ef4444, #dc2626)"
-                  : "linear-gradient(to right, #22c55e, #16a34a)",
-              }}
-            />
-          </div>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold text-text-primary">Inspection Checklist</h3>
           <span className="text-sm font-medium text-text-secondary">
-            {Math.round(progressPct)}%
+            {checkedCount}/{risks.length}
           </span>
         </div>
+
+        {/* Progress bar */}
+        <div className="h-2 w-full rounded-full bg-surface-sunken overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${progressPct}%`,
+              background: failedCount > 0
+                ? "linear-gradient(to right, #ef4444, #dc2626)"
+                : "linear-gradient(to right, #22c55e, #16a34a)",
+            }}
+          />
+        </div>
+
+        {/* Summary chips */}
+        {checkedCount > 0 && (
+          <div className="flex gap-3 mt-2">
+            {passedCount > 0 && (
+              <span className="text-xs font-medium text-green-700">
+                {passedCount} passed
+              </span>
+            )}
+            {failedCount > 0 && (
+              <span className="text-xs font-medium text-red-700">
+                {failedCount} failed
+              </span>
+            )}
+            <span className="text-xs text-text-tertiary">
+              {risks.length - checkedCount} remaining
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Confidence Meter */}
-      {checkedCount > 0 && (
-        <div className="p-3 rounded-lg bg-surface-sunken border border-border-default">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-semibold text-text-secondary">Assessment Confidence</span>
-            <span className="text-xs font-bold text-text-primary">{Math.round(inspectionConfidence.overall * 100)}%</span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-surface-overlay overflow-hidden">
-            <div
-              className={cn("h-full rounded-full transition-all duration-500", confidenceColor)}
-              style={{ width: `${inspectionConfidence.overall * 100}%` }}
-            />
-          </div>
-          <p className="text-[11px] text-text-tertiary mt-1.5">{inspectionConfidence.summary}</p>
-          {inspectionConfidence.evidenceCoverage < 1 && checkedCount > 0 && (
-            <p className="text-[11px] text-text-tertiary mt-0.5">
-              {Math.round(inspectionConfidence.evidenceCoverage * 100)}% of checked items have photo evidence
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Risk Items */}
-      <div className="space-y-2">
+      {/* Checklist items */}
+      <div className="space-y-1">
         {risks.map((risk) => {
           const status = checkStatuses[risk.id]?.status || "NOT_CHECKED";
-          const isExpanded = expandedRisks.has(risk.id);
+          const isExpanded = expandedId === risk.id;
           const isActive = activeRiskId === risk.id;
           const riskMedia = riskMediaMap[risk.id] || [];
-          const riskConfidence = confidenceByRisk.get(risk.id);
-          const isCheckedWithoutPhotos = status !== "NOT_CHECKED" && riskMedia.length === 0;
 
           return (
             <div
               key={risk.id}
               className={cn(
-                "rounded-lg border transition-colors",
-                isActive ? "border-brand-400 ring-1 ring-brand-500/30" :
-                status === "CONFIRMED" ? "border-red-300 bg-[#fde8e8]" :
-                status === "NOT_FOUND" ? "border-green-300 bg-[#dcfce7]" :
+                "rounded-lg border transition-all",
+                status === "CONFIRMED" ? "border-red-300 bg-red-50" :
+                status === "NOT_FOUND" ? "border-green-200 bg-green-50/50" :
                 status === "UNABLE_TO_INSPECT" ? "border-border-strong bg-surface-overlay" :
+                isActive ? "border-brand-400 ring-1 ring-brand-500/30" :
                 "border-border-default bg-surface-raised"
               )}
             >
-              {/* Header row */}
-              <button
-                onClick={() => toggleExpanded(risk.id)}
-                className="w-full flex items-center gap-3 p-3 text-left"
-              >
-                {getStatusIcon(status)}
+              {/* Main row — always visible */}
+              <div className="flex items-center gap-2 p-2.5">
+                {/* Status indicator */}
+                <div className="shrink-0">
+                  {status === "CONFIRMED" && <XCircle className="h-5 w-5 text-red-500" />}
+                  {status === "NOT_FOUND" && <CheckCircle className="h-5 w-5 text-green-500" />}
+                  {status === "UNABLE_TO_INSPECT" && <HelpCircle className="h-5 w-5 text-text-tertiary" />}
+                  {status === "NOT_CHECKED" && <div className="h-5 w-5 rounded-full border-2 border-border-strong" />}
+                </div>
+
+                {/* Title + meta */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-text-primary truncate">{risk.title}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn(
+                      "text-sm font-medium truncate",
+                      status === "NOT_FOUND" ? "text-text-tertiary line-through" : "text-text-primary"
+                    )}>
+                      {risk.title}
+                    </span>
                     {risk.hasActiveRecall && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white shrink-0">RECALL</span>
                     )}
-                    {/* Evidence badge on collapsed header */}
-                    {riskMedia.length > 0 && (
-                      <span className="inline-flex items-center gap-0.5 text-[9px] font-medium px-1.5 py-0.5 rounded bg-[#fce8f3] text-brand-700 shrink-0">
-                        <Camera className="h-2.5 w-2.5" /> {riskMedia.length}
-                      </span>
-                    )}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-text-tertiary">{risk.category.replace(/_/g, " ")}</span>
-                    <span className="text-xs text-text-tertiary">·</span>
-                    <span className="text-xs text-text-tertiary">{getStatusLabel(status)}</span>
-                    {/* Per-risk confidence badge */}
-                    {riskConfidence && riskConfidence.tier !== "UNCHECKED" && getConfidenceBadge(riskConfidence)}
-                  </div>
+                  {/* Repair cost shown inline when present */}
+                  {risk.cost.low > 0 && status === "NOT_CHECKED" && (
+                    <span className="text-[11px] text-text-tertiary">
+                      Est. {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
+                    </span>
+                  )}
                 </div>
+
+                {/* Severity badge */}
                 <Badge
                   variant={
                     risk.severity === "CRITICAL" ? "danger" :
                     risk.severity === "MAJOR" ? "warning" : "default"
                   }
+                  className="shrink-0 text-[10px]"
                 >
                   {risk.severity}
                 </Badge>
-                {isExpanded ? (
-                  <ChevronUp className="h-4 w-4 text-text-tertiary shrink-0" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-text-tertiary shrink-0" />
-                )}
-              </button>
 
-              {/* Expanded content */}
-              {isExpanded && (
-                <div className="px-3 pb-3 space-y-3 border-t border-border-default pt-3">
-                  {/* What + Where — combined header for AI-generated items */}
-                  {risk.whatToCheck && (
-                    <div className="p-2.5 rounded-lg bg-surface-sunken border border-border-default">
-                      <div className="flex items-start gap-2 mb-1.5">
-                        <Wrench className="h-3.5 w-3.5 text-text-tertiary mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-text-tertiary mb-0.5">What to Check</p>
-                          <p className="text-xs text-text-primary font-medium">{risk.whatToCheck}</p>
-                        </div>
-                      </div>
-                      {risk.whereToLook && (
-                        <div className="flex items-start gap-2 mt-2">
-                          <MapPin className="h-3.5 w-3.5 text-text-tertiary mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-[10px] font-bold uppercase text-text-tertiary mb-0.5">Where to Look</p>
-                            <p className="text-xs text-text-primary">{risk.whereToLook}</p>
-                          </div>
-                        </div>
+                {/* Action buttons — Pass / Fail */}
+                {status === "NOT_CHECKED" ? (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePass(risk.id); }}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-700 transition-colors"
+                      title="Pass"
+                    >
+                      <CheckCircle className="h-4.5 w-4.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleFail(risk); }}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
+                      title="Fail"
+                    >
+                      <XCircle className="h-4.5 w-4.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleDetails(risk.id); }}
+                      className={cn(
+                        "h-8 w-8 rounded-lg flex items-center justify-center transition-colors",
+                        isExpanded ? "bg-brand-100 text-brand-700" : "bg-surface-overlay hover:bg-surface-sunken text-text-tertiary"
                       )}
+                      title="Details"
+                    >
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Photo button (optional) */}
+                    {onUploadEvidence && status === "CONFIRMED" && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const key = `${risk.id}:0`;
+                            fileInputRefs.current[key]?.click();
+                          }}
+                          className={cn(
+                            "h-8 w-8 rounded-lg flex items-center justify-center transition-colors",
+                            riskMedia.length > 0
+                              ? "bg-brand-100 text-brand-700"
+                              : "bg-surface-overlay hover:bg-surface-sunken text-text-tertiary"
+                          )}
+                          title="Add photo"
+                        >
+                          {uploadingRiskCapture?.startsWith(risk.id) ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Camera className="h-4 w-4" />
+                              {riskMedia.length > 0 && (
+                                <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-brand-600 text-white rounded-full h-3.5 w-3.5 flex items-center justify-center">
+                                  {riskMedia.length}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </button>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          ref={(el) => { fileInputRefs.current[`${risk.id}:0`] = el; }}
+                          onChange={(e) => handleFileSelect(risk.id, 0, e)}
+                        />
+                      </>
+                    )}
+                    {/* Reset / undo */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleReset(risk.id); }}
+                      className="h-8 px-2 rounded-lg flex items-center justify-center bg-surface-overlay hover:bg-surface-sunken text-text-tertiary text-[11px] font-medium transition-colors"
+                      title="Undo"
+                    >
+                      Undo
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Expandable details — only shows when user wants guidance */}
+              {isExpanded && (
+                <div className="px-3 pb-3 space-y-2 border-t border-border-default pt-2">
+                  {/* What to check */}
+                  {risk.whatToCheck && (
+                    <div className="text-xs text-text-secondary">
+                      <span className="font-semibold text-text-primary">Check: </span>
+                      {risk.whatToCheck}
                     </div>
                   )}
 
-                  {/* How to Inspect — step-by-step guidance */}
-                  {(risk.howToInspect || risk.inspectionGuidance) && (
-                    <div className="p-2.5 rounded-lg bg-[#fce8f3] border border-brand-300">
-                      <p className="text-[10px] font-bold uppercase text-brand-700 mb-1">
-                        <Eye className="inline h-3 w-3 mr-1" />
-                        How to Inspect
-                      </p>
-                      <p className="text-[11px] text-brand-600 leading-relaxed">
-                        {risk.howToInspect || risk.inspectionGuidance}
-                      </p>
+                  {/* Where to look */}
+                  {risk.whereToLook && (
+                    <div className="text-xs text-text-secondary">
+                      <span className="font-semibold text-text-primary">Where: </span>
+                      {risk.whereToLook}
                     </div>
                   )}
 
-                  {/* Signs of Failure */}
+                  {/* Signs of failure */}
                   {((risk.signsOfFailure && risk.signsOfFailure.length > 0) || risk.symptoms.length > 0) && (
-                    <div className="p-2.5 rounded-lg bg-[#fde8e8] border border-red-300">
-                      <p className="text-[10px] font-bold uppercase text-red-700 mb-1">
-                        <AlertTriangle className="inline h-3 w-3 mr-1" />
-                        Signs of Failure
-                      </p>
-                      <ul className="text-[11px] text-red-700 list-disc list-inside space-y-0.5">
-                        {(risk.signsOfFailure || risk.symptoms).map((s, si) => <li key={si}>{s}</li>)}
+                    <div>
+                      <span className="text-xs font-semibold text-red-700">Signs of failure:</span>
+                      <ul className="text-xs text-red-600 list-disc list-inside mt-0.5">
+                        {(risk.signsOfFailure || risk.symptoms).slice(0, 3).map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
                       </ul>
                     </div>
                   )}
 
-                  {/* Inline Evidence Capture */}
-                  {risk.capturePrompts && risk.capturePrompts.length > 0 && onUploadEvidence && (
-                    <div className="p-2.5 rounded-lg bg-[#fce8f3] border border-brand-300">
-                      <p className="text-[10px] font-bold uppercase text-brand-700 mb-2">
-                        <Camera className="inline h-3 w-3 mr-1" />
-                        Capture Evidence
-                      </p>
-                      <div className="space-y-2">
-                        {risk.capturePrompts.map((prompt, idx) => {
-                          const captureKey = `${risk.id}:${idx}`;
-                          const isUploading = uploadingRiskCapture === captureKey;
-                          const captureType = `FINDING_EVIDENCE_${risk.id}_${idx}`;
-                          const captured = riskMedia.find((m) => m.captureType === captureType);
-
-                          return (
-                            <div key={idx} className="flex items-center gap-2">
-                              {captured ? (
-                                <div className="h-10 w-10 rounded border border-green-300 bg-[#dcfce7] overflow-hidden shrink-0 relative">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={captured.url} alt="" className="h-full w-full object-cover" />
-                                  <div className="absolute inset-0 flex items-center justify-center bg-green-500/20">
-                                    <CheckCircle className="h-4 w-4 text-green-700" />
-                                  </div>
-                                </div>
-                              ) : isUploading ? (
-                                <div className="h-10 w-10 rounded border border-brand-300 bg-[#fce8f3] flex items-center justify-center shrink-0">
-                                  <Loader2 className="h-4 w-4 text-brand-400 animate-spin" />
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const ref = fileInputRefs.current[captureKey];
-                                    ref?.click();
-                                  }}
-                                  className="h-10 w-10 rounded border-2 border-dashed border-brand-600/50 bg-surface-sunken flex items-center justify-center shrink-0 hover:bg-[#fce8f3] hover:border-brand-400 transition-colors"
-                                >
-                                  <Camera className="h-4 w-4 text-brand-400" />
-                                </button>
-                              )}
-                              <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                className="hidden"
-                                ref={(el) => { fileInputRefs.current[captureKey] = el; }}
-                                onChange={(e) => handleFileSelect(risk.id, idx, e)}
-                              />
-                              <p className="text-[11px] text-brand-600 leading-tight flex-1">{prompt}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Already-captured evidence thumbnails (from CaptureGrid or previous sessions) */}
-                  {riskMedia.length > 0 && !onUploadEvidence && (
-                    <div className="flex items-center gap-2">
-                      <ImageIcon className="h-3.5 w-3.5 text-brand-400 shrink-0" />
-                      <span className="text-[11px] text-brand-700 font-medium">{riskMedia.length} photo(s) captured</span>
-                      <div className="flex gap-1">
-                        {riskMedia.slice(0, 4).map((m) => (
-                          <div key={m.mediaId} className="h-8 w-8 rounded border border-border-default overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={m.url} alt="" className="h-full w-full object-cover" />
-                          </div>
-                        ))}
-                        {riskMedia.length > 4 && (
-                          <div className="h-8 w-8 rounded border border-border-default flex items-center justify-center bg-surface-overlay text-[10px] font-bold text-brand-700">
-                            +{riskMedia.length - 4}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Why It Matters + Cost */}
-                  {(risk.whyItMatters || risk.description) && (
-                    <div className="p-2.5 rounded-lg bg-[#fce8f3] border border-brand-300">
-                      <div className="flex items-start gap-2">
-                        <Info className="h-3.5 w-3.5 text-brand-400 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-[10px] font-bold uppercase text-brand-700 mb-0.5">Why It Matters</p>
-                          <p className="text-[11px] text-brand-600 leading-relaxed">
-                            {risk.whyItMatters || risk.description}
-                          </p>
-                        </div>
-                      </div>
-                      {risk.cost.low > 0 && (
-                        <p className="text-[11px] font-semibold text-brand-700 mt-1.5 ml-5">
-                          Est. repair: {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Likelihood badge */}
-                  {risk.likelihood && (
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full",
-                        risk.likelihood === "VERY_COMMON" ? "bg-[#fde8e8] text-red-700" :
-                        risk.likelihood === "COMMON" ? "bg-[#fde8e8] text-red-700" :
-                        risk.likelihood === "OCCASIONAL" ? "bg-surface-overlay text-text-secondary" :
-                        "bg-surface-overlay text-text-tertiary"
-                      )}>
-                        {risk.likelihood.replace(/_/g, " ")}
+                  {/* Repair cost */}
+                  {risk.cost.low > 0 && (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <DollarSign className="h-3 w-3 text-text-tertiary" />
+                      <span className="text-text-secondary">
+                        Est. repair: <span className="font-medium text-text-primary">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
                       </span>
-                      <span className="text-[10px] text-text-tertiary">likelihood on this vehicle</span>
                     </div>
                   )}
 
-                  {/* Active recall info */}
+                  {/* Recall info */}
                   {risk.hasActiveRecall && risk.relatedRecalls && risk.relatedRecalls.length > 0 && (
-                    <div className="p-2.5 rounded-lg bg-[#fde8e8] border border-red-300">
-                      <p className="text-[10px] font-bold uppercase text-red-700 mb-1">Active Recall</p>
-                      <p className="text-[11px] text-red-700">{risk.relatedRecalls[0].remedy}</p>
+                    <div className="p-2 rounded bg-red-50 border border-red-200 text-xs text-red-700">
+                      <span className="font-bold">Recall: </span>
+                      {risk.relatedRecalls[0].remedy}
                     </div>
                   )}
 
-                  {/* No evidence warning */}
-                  {isCheckedWithoutPhotos && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-surface-overlay border border-border-strong">
-                      <ShieldAlert className="h-3.5 w-3.5 text-text-tertiary shrink-0" />
-                      <p className="text-[11px] text-text-secondary">
-                        No photo evidence — assessment confidence will be lower
-                      </p>
-                    </div>
+                  {/* Skip button in details */}
+                  {status === "NOT_CHECKED" && (
+                    <button
+                      onClick={() => handleSkip(risk.id)}
+                      className="text-[11px] text-text-tertiary hover:text-text-secondary underline"
+                    >
+                      Unable to inspect
+                    </button>
                   )}
-
-                  {/* Action buttons */}
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {status === "NOT_CHECKED" && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => onCheckRisk(risk.id, "CONFIRMED")}
-                          className="text-xs bg-[#fde8e8] text-red-700 border-red-300 hover:bg-red-200"
-                        >
-                          <XCircle className="h-3.5 w-3.5" /> Issue Found
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => onCheckRisk(risk.id, "NOT_FOUND")}
-                          className="text-xs bg-[#dcfce7] text-green-700 border-green-300 hover:bg-green-200"
-                        >
-                          <CheckCircle className="h-3.5 w-3.5" /> Clear
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => onCheckRisk(risk.id, "UNABLE_TO_INSPECT")}
-                          className="text-xs"
-                        >
-                          <HelpCircle className="h-3.5 w-3.5" /> Unable to Inspect
-                        </Button>
-                      </>
-                    )}
-                    {status === "CONFIRMED" && (
-                      <Button
-                        size="sm"
-                        onClick={() => onCreateFinding(risk)}
-                        className="text-xs bg-brand-gradient text-white"
-                      >
-                        Create Finding
-                      </Button>
-                    )}
-                    {!onUploadEvidence && (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => onCaptureEvidence(risk)}
-                        className="text-xs"
-                      >
-                        <Camera className="h-3.5 w-3.5" /> Capture Evidence
-                      </Button>
-                    )}
-                    {status !== "NOT_CHECKED" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onCheckRisk(risk.id, "NOT_CHECKED")}
-                        className="text-xs text-text-tertiary"
-                      >
-                        Reset
-                      </Button>
-                    )}
-                  </div>
                 </div>
               )}
             </div>
