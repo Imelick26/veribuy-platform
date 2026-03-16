@@ -74,11 +74,11 @@ const ARCHETYPE_MODEL_MAP: Record<VehicleArchetypeId, string> = {
 // Model manifest
 // ---------------------------------------------------------------------------
 
-// Comrade1280 models have baked transforms (identity nodes, Y-up, Z-forward).
+// Comrade1280 models have baked transforms (identity nodes, Y-up).
 // Scale 0.55 maps world-space meters to the inspection-zone coordinate space.
-// No rotation needed — models are already in standard glTF Y-up convention.
+// 180° Y rotation aligns car front with Z+ (inspection-zones convention).
 const MODEL_SCALE: [number, number, number] = [0.55, 0.55, 0.55];
-const MODEL_ROTATION: [number, number, number] = [0, 0, 0];
+const MODEL_ROTATION: [number, number, number] = [0, Math.PI, 0];
 
 function createConfig(
   archetypeId: VehicleArchetypeId,

@@ -72,12 +72,13 @@ function GltfModel({ config }: VehicleModelProps) {
   }
 
   return (
-    <primitive
-      object={scene}
-      scale={config.scale}
-      position={config.position}
-      rotation={config.rotation}
-    />
+    <group rotation={config.rotation}>
+      <primitive
+        object={scene}
+        scale={config.scale}
+        position={config.position}
+      />
+    </group>
   );
 }
 
