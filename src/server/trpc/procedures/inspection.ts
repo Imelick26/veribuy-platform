@@ -1,9 +1,10 @@
 import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
-import { analyzeRiskMedia } from "@/lib/ai/media-analyzer";
+import { analyzeRiskMedia, analyzeOverallCondition } from "@/lib/ai/media-analyzer";
 import { fetchVehicleHistory } from "@/lib/vinaudit";
 import { fetchMarketValue } from "@/lib/vinaudit";
-import type { AggregatedRiskProfile, AIAnalysisResult } from "@/types/risk";
+import { calculateFairPrice, calculateDealEconomics, type HistoryData } from "@/lib/market-valuation";
+import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult } from "@/types/risk";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -237,7 +238,7 @@ export const inspectionRouter = router({
       return recalculateScore(ctx.db, input.inspectionId);
     }),
 
-  // Run AI analysis on captured photos against risk items
+  // Run AI analysis on captured photos against risk items + overall condition scan
   runAIAnalysis: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -273,19 +274,24 @@ export const inspectionRouter = router({
         throw new Error("No photos captured yet — capture photos before running AI analysis");
       }
 
-      // Run AI analysis
-      const results = await analyzeRiskMedia(
-        { year: inspection.vehicle.year, make: inspection.vehicle.make, model: inspection.vehicle.model },
-        riskProfile.aggregatedRisks,
-        mediaForAnalysis
-      );
+      const vehicleInfo = {
+        year: inspection.vehicle.year,
+        make: inspection.vehicle.make,
+        model: inspection.vehicle.model,
+      };
 
-      // Auto-create findings for CONFIRMED risks
-      for (const result of results) {
+      // Run risk-specific + overall condition analysis in parallel
+      const [riskResults, overallCondition] = await Promise.all([
+        analyzeRiskMedia(vehicleInfo, riskProfile.aggregatedRisks, mediaForAnalysis),
+        analyzeOverallCondition(vehicleInfo, mediaForAnalysis),
+      ]);
+
+      // Auto-create findings for CONFIRMED risks with evidence linking
+      for (const result of riskResults) {
         if (result.verdict === "CONFIRMED") {
           const risk = riskProfile.aggregatedRisks.find((r) => r.id === result.riskId);
           if (risk) {
-            await ctx.db.finding.create({
+            const finding = await ctx.db.finding.create({
               data: {
                 inspectionId: input.inspectionId,
                 title: risk.title,
@@ -300,14 +306,49 @@ export const inspectionRouter = router({
                 positionZ: risk.position.z,
               },
             });
+
+            // Link evidence photos to the finding
+            if (result.evidenceMediaIds.length > 0) {
+              await ctx.db.mediaItem.updateMany({
+                where: {
+                  id: { in: result.evidenceMediaIds },
+                  inspectionId: input.inspectionId,
+                },
+                data: { findingId: finding.id },
+              });
+            }
           }
         }
       }
 
-      // Recalculate scores after auto-creating findings
+      // Auto-create findings from unexpected issues found in overall condition scan
+      for (const uf of overallCondition.unexpectedFindings) {
+        if (uf.confidence < 0.6) continue;
+
+        const finding = await ctx.db.finding.create({
+          data: {
+            inspectionId: input.inspectionId,
+            title: uf.title,
+            description: uf.description,
+            severity: uf.severity as never,
+            category: (uf.category || "OTHER") as never,
+            evidence: `AI Condition Scan (${Math.round(uf.confidence * 100)}% confidence): ${uf.description}`,
+          },
+        });
+
+        // Link the specific photo if identifiable
+        if (uf.photoIndex >= 0 && uf.photoIndex < mediaForAnalysis.length) {
+          await ctx.db.mediaItem.update({
+            where: { id: mediaForAnalysis[uf.photoIndex].id },
+            data: { findingId: finding.id },
+          });
+        }
+      }
+
+      // Recalculate scores after auto-creating all findings
       await recalculateScore(ctx.db, input.inspectionId);
 
-      // Store AI results in the AI_ANALYSIS step data
+      // Store both result sets in the AI_ANALYSIS step data
       await ctx.db.inspectionStep.update({
         where: {
           inspectionId_step: {
@@ -318,11 +359,17 @@ export const inspectionRouter = router({
         data: {
           status: "IN_PROGRESS",
           enteredAt: new Date(),
-          data: JSON.parse(JSON.stringify({ aiResults: results })),
+          data: JSON.parse(JSON.stringify({
+            aiResults: riskResults,
+            overallCondition,
+          })),
         },
       });
 
-      return results as AIAnalysisResult[];
+      return {
+        riskResults: riskResults as AIAnalysisResult[],
+        overallCondition,
+      };
     }),
 
   // Get AI analysis results for an inspection
@@ -338,9 +385,12 @@ export const inspectionRouter = router({
         },
       });
 
-      if (!step?.data) return [];
+      if (!step?.data) return { aiResults: [] as AIAnalysisResult[], overallCondition: null as OverallConditionResult | null };
       const data = step.data as Record<string, unknown>;
-      return (data.aiResults || []) as AIAnalysisResult[];
+      return {
+        aiResults: (data.aiResults || []) as AIAnalysisResult[],
+        overallCondition: (data.overallCondition || null) as OverallConditionResult | null,
+      };
     }),
 
   // Fetch vehicle history from VinAudit API
@@ -409,7 +459,7 @@ export const inspectionRouter = router({
     .mutation(async ({ ctx, input }) => {
       const inspection = await ctx.db.inspection.findUnique({
         where: { id: input.inspectionId, orgId: ctx.orgId },
-        include: { vehicle: true, findings: true },
+        include: { vehicle: true, findings: true, vehicleHistory: true },
       });
       if (!inspection) throw new Error("Inspection not found");
 
@@ -429,62 +479,109 @@ export const inspectionRouter = router({
         url: l.url,
       }));
 
-      // Simple condition-based adjustment
-      const basePrice = marketData.estimatedValue;
-      const conditionScore = inspection.overallScore || 70;
-      const conditionMultiplier = conditionScore >= 80 ? 1.0 : conditionScore >= 60 ? 0.92 : conditionScore >= 40 ? 0.82 : 0.70;
-      const adjustedPrice = Math.round(basePrice * conditionMultiplier);
+      // Convert VinAudit dollar values → cents (DB stores cents)
+      const basePriceCents = Math.round(marketData.estimatedValue * 100);
+      const retailPriceCents = Math.round(
+        (marketData.valueHigh || marketData.estimatedValue * 1.1) * 100
+      );
 
-      // Determine recommendation
+      // Build history data from vehicleHistory (safe defaults if skipped)
+      const historyData: HistoryData = inspection.vehicleHistory
+        ? {
+            titleStatus: inspection.vehicleHistory.titleStatus,
+            accidentCount: inspection.vehicleHistory.accidentCount,
+            ownerCount: inspection.vehicleHistory.ownerCount ?? 1,
+            structuralDamage: inspection.vehicleHistory.structuralDamage,
+            floodDamage: inspection.vehicleHistory.floodDamage,
+            openRecallCount: inspection.vehicleHistory.openRecallCount,
+          }
+        : {
+            titleStatus: "CLEAN",
+            accidentCount: 0,
+            ownerCount: 1,
+            structuralDamage: false,
+            floodDamage: false,
+            openRecallCount: 0,
+          };
+
+      // Recon cost from findings (already in cents in DB)
+      const totalRepairLow = inspection.findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
+      const totalRepairHigh = inspection.findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
+      const reconCostCents = Math.round((totalRepairLow + totalRepairHigh) / 2);
+
+      const conditionScore = inspection.overallScore || 70;
+
+      // Fair value at baseline (score 85 = good condition, no recon) — the reference point
+      const baselineResult = calculateFairPrice(basePriceCents, 85, historyData, 0);
+
+      // Actual fair value for THIS specific car
+      const fairResult = calculateFairPrice(basePriceCents, conditionScore, historyData, reconCostCents);
+
+      // Price bands around the fair value
+      const dealEcon = calculateDealEconomics(
+        fairResult.fairPurchasePrice,
+        retailPriceCents,
+        conditionScore,
+        historyData,
+      );
+
+      // Derive recommendation: compare fair value against bands
+      const bands = dealEcon.priceBands;
       let recommendation: string;
-      if (conditionScore >= 75 && adjustedPrice <= basePrice * 0.95) {
+      const hasDealBreaker =
+        conditionScore < 40 ||
+        historyData.floodDamage ||
+        historyData.titleStatus.toUpperCase().includes("SALVAGE");
+
+      if (hasDealBreaker) {
+        recommendation = "PASS";
+      } else if (fairResult.fairPurchasePrice <= bands[0].maxPriceCents) {
         recommendation = "STRONG_BUY";
-      } else if (conditionScore >= 60) {
+      } else if (fairResult.fairPurchasePrice <= bands[1].maxPriceCents) {
         recommendation = "FAIR_BUY";
-      } else if (conditionScore >= 40) {
+      } else if (fairResult.fairPurchasePrice <= bands[2].maxPriceCents) {
         recommendation = "OVERPAYING";
       } else {
         recommendation = "PASS";
       }
 
-      // Repair cost exposure
-      const totalRepairLow = inspection.findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
-      const totalRepairHigh = inspection.findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
+      const estGrossProfit = retailPriceCents - fairResult.fairPurchasePrice - reconCostCents;
+
+      // Shared data object for create/update
+      const marketAnalysisData = {
+        comparables: JSON.parse(JSON.stringify(comparables)),
+        baselinePrice: basePriceCents,
+        adjustments: JSON.parse(JSON.stringify({
+          mileage: Math.round(marketData.mileageAdjustment * 100),
+          conditionDelta: fairResult.adjustedValueBeforeRecon - basePriceCents,
+          historyDelta: Math.round(basePriceCents * fairResult.conditionMultiplier * (fairResult.historyMultiplier - 1)),
+        })),
+        adjustedPrice: fairResult.fairPurchasePrice,
+        recommendation: recommendation as never,
+        strongBuyMax: bands[0].maxPriceCents,
+        fairBuyMax: bands[1].maxPriceCents,
+        overpayingMax: bands[2].maxPriceCents,
+        estRetailPrice: retailPriceCents,
+        estReconCost: reconCostCents,
+        estGrossProfit,
+        conditionScore,
+        conditionMultiplier: fairResult.conditionMultiplier,
+        conditionGrade: fairResult.conditionGrade,
+        historyMultiplier: fairResult.historyMultiplier,
+        historyBreakdown: JSON.parse(JSON.stringify(fairResult.historyBreakdown)),
+        fairValueAtBaseline: baselineResult.fairPurchasePrice,
+        adjustedValueBeforeRecon: fairResult.adjustedValueBeforeRecon,
+        priceBands: JSON.parse(JSON.stringify(bands)),
+      };
 
       // Create or update MarketAnalysis record
       const marketAnalysis = await ctx.db.marketAnalysis.upsert({
         where: { inspectionId: input.inspectionId },
         create: {
           inspectionId: input.inspectionId,
-          comparables: JSON.parse(JSON.stringify(comparables)),
-          baselinePrice: basePrice,
-          adjustments: JSON.parse(JSON.stringify({
-            mileage: marketData.mileageAdjustment,
-            condition: Math.round(basePrice * (conditionMultiplier - 1)),
-          })),
-          adjustedPrice,
-          recommendation: recommendation as never,
-          strongBuyMax: Math.round(adjustedPrice * 0.90),
-          fairBuyMax: adjustedPrice,
-          estRetailPrice: marketData.valueHigh || Math.round(basePrice * 1.1),
-          estReconCost: Math.round((totalRepairLow + totalRepairHigh) / 2),
-          estGrossProfit: Math.round((marketData.valueHigh || basePrice * 1.1) - adjustedPrice - (totalRepairLow + totalRepairHigh) / 2),
+          ...marketAnalysisData,
         },
-        update: {
-          comparables: JSON.parse(JSON.stringify(comparables)),
-          baselinePrice: basePrice,
-          adjustments: JSON.parse(JSON.stringify({
-            mileage: marketData.mileageAdjustment,
-            condition: Math.round(basePrice * (conditionMultiplier - 1)),
-          })),
-          adjustedPrice,
-          recommendation: recommendation as never,
-          strongBuyMax: Math.round(adjustedPrice * 0.90),
-          fairBuyMax: adjustedPrice,
-          estRetailPrice: marketData.valueHigh || Math.round(basePrice * 1.1),
-          estReconCost: Math.round((totalRepairLow + totalRepairHigh) / 2),
-          estGrossProfit: Math.round((marketData.valueHigh || basePrice * 1.1) - adjustedPrice - (totalRepairLow + totalRepairHigh) / 2),
-        },
+        update: marketAnalysisData,
       });
 
       // Mark step as completed

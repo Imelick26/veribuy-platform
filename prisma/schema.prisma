@@ -367,9 +367,9 @@ model MarketAnalysis {
   id String @id @default(cuid())
 
   comparables   Json
-  baselinePrice Int
+  baselinePrice Int      // VinAudit estimated value (cents)
   adjustments   Json
-  adjustedPrice Int
+  adjustedPrice Int      // Final fair market value for THIS car (cents)
 
   recommendation BuyRecommendation
   strongBuyMax   Int
@@ -378,6 +378,17 @@ model MarketAnalysis {
   estRetailPrice Int?
   estReconCost   Int?
   estGrossProfit Int?
+
+  // Valuation breakdown (from market-valuation.ts engine)
+  conditionScore           Int?
+  conditionMultiplier      Float?
+  conditionGrade           String?   // "EXCELLENT" | "VERY_GOOD" | "GOOD" | "FAIR" | "POOR" | "SALVAGE"
+  historyMultiplier        Float?
+  historyBreakdown         Json?     // { titleFactor, accidentFactor, ownerFactor, structuralDamageFactor, floodDamageFactor, recallFactor }
+  fairValueAtBaseline      Int?      // Fair value at score=85 (good condition reference) in cents
+  adjustedValueBeforeRecon Int?      // After condition+history, before recon subtracted (cents)
+  overpayingMax            Int?      // PASS threshold price (cents)
+  priceBands               Json?     // [{ label, maxPriceCents, marginPercent }]
 
   inspectionId String     @unique
   inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)

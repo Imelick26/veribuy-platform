@@ -17,7 +17,8 @@ import {
   Download,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { AggregatedRiskProfile, AggregatedRisk, RiskCheckStatus, AIAnalysisResult } from "@/types/risk";
+import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
+import type { AggregatedRiskProfile, AggregatedRisk, RiskCheckStatus, AIAnalysisResult, OverallConditionResult } from "@/types/risk";
 import type { InspectionConfidence } from "@/lib/confidence";
 
 interface StepPanelProps {
@@ -67,6 +68,7 @@ interface StepPanelProps {
   onRunAIAnalysis?: () => void;
   isRunningAIAnalysis?: boolean;
   aiAnalysisResults?: AIAnalysisResult[];
+  overallConditionResult?: OverallConditionResult;
   // Vehicle History
   onFetchHistory?: () => void;
   isFetchingHistory?: boolean;
@@ -100,6 +102,7 @@ export function StepPanel({
   onRunAIAnalysis,
   isRunningAIAnalysis,
   aiAnalysisResults,
+  overallConditionResult,
   onFetchHistory,
   isFetchingHistory,
   onFetchMarket,
@@ -273,8 +276,8 @@ export function StepPanel({
                 <Sparkles className="h-6 w-6 mx-auto text-brand-600 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">AI-Powered Condition Analysis</h4>
                 <p className="text-sm text-text-secondary mb-1 max-w-md mx-auto">
-                  Our AI will analyze your captured photos against each identified risk, looking for
-                  signs of damage, wear, or confirmed issues.
+                  Our AI will analyze your captured photos against each identified risk and perform a
+                  general vehicle condition scan.
                 </p>
                 <p className="text-xs text-text-tertiary max-w-sm mx-auto">
                   Photos are sent to GPT-4o Vision for expert-level analysis.
@@ -284,6 +287,7 @@ export function StepPanel({
               {/* Show captured media count */}
               {(() => {
                 const photoCount = (inspection.media || []).filter(m => m.url).length;
+                const riskCount = riskProfile?.aggregatedRisks.length || 0;
                 const isDisabled = !riskProfile || photoCount === 0;
                 return (
                   <>
@@ -298,7 +302,7 @@ export function StepPanel({
                         </p>
                       ) : (
                         <p className="text-xs text-brand-600">
-                          {riskProfile?.aggregatedRisks.length || 0} risk items will be evaluated
+                          {riskCount} risk items + general condition scan
                         </p>
                       )}
                     </div>
@@ -322,7 +326,7 @@ export function StepPanel({
 
                     {isRunningAIAnalysis && (
                       <p className="text-xs text-center text-text-tertiary">
-                        This may take 30-60 seconds depending on photo count...
+                        Analyzing photos against {riskCount} risk items + general condition scan...
                       </p>
                     )}
                   </>
@@ -331,6 +335,57 @@ export function StepPanel({
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Overall Condition Assessment */}
+              {overallConditionResult && (
+                <div className="p-4 rounded-lg border border-brand-300 bg-[#fce8f3]">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase text-brand-700">Overall Condition</span>
+                    <Badge variant={
+                      overallConditionResult.overallGrade === "EXCELLENT" || overallConditionResult.overallGrade === "GOOD"
+                        ? "success"
+                        : overallConditionResult.overallGrade === "FAIR"
+                          ? "warning"
+                          : "danger"
+                    }>
+                      {overallConditionResult.overallGrade}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-brand-600 mb-2">{overallConditionResult.summary}</p>
+
+                  {/* Sub-grades */}
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div className="text-center p-2 rounded bg-surface-overlay">
+                      <p className="text-xs font-semibold text-text-primary">{overallConditionResult.exteriorCondition}</p>
+                      <p className="text-[10px] text-text-tertiary">Exterior</p>
+                    </div>
+                    {overallConditionResult.engineBayCondition && (
+                      <div className="text-center p-2 rounded bg-surface-overlay">
+                        <p className="text-xs font-semibold text-text-primary">{overallConditionResult.engineBayCondition}</p>
+                        <p className="text-[10px] text-text-tertiary">Engine Bay</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Unexpected findings */}
+                  {overallConditionResult.unexpectedFindings.length > 0 && (
+                    <div className="space-y-1 mt-2">
+                      <p className="text-[10px] font-bold uppercase text-red-700">
+                        Unexpected Issues ({overallConditionResult.unexpectedFindings.length})
+                      </p>
+                      {overallConditionResult.unexpectedFindings.map((uf, i) => (
+                        <div key={i} className="p-2 rounded bg-[#fde8e8] border border-red-200 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-red-700">{uf.title}</span>
+                            <Badge variant="danger">{uf.severity}</Badge>
+                          </div>
+                          <p className="text-red-600 mt-0.5">{uf.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Results summary */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
@@ -383,6 +438,20 @@ export function StepPanel({
                         </Badge>
                       </div>
                       <p className="text-xs text-text-secondary">{result.explanation}</p>
+
+                      {/* Visual Observations */}
+                      {result.visualObservations && result.visualObservations.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-[10px] font-bold uppercase text-text-tertiary">Observations</p>
+                          <ul className="text-xs text-text-secondary list-disc list-inside space-y-0.5">
+                            {result.visualObservations.map((obs, i) => (
+                              <li key={i}>{obs}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Observed Condition + Suggested Action */}
                       <div className="flex items-center gap-2 mt-1.5">
                         <div className="h-1.5 flex-1 rounded-full bg-surface-sunken overflow-hidden">
                           <div
@@ -395,9 +464,27 @@ export function StepPanel({
                           />
                         </div>
                         <span className="text-[10px] text-text-tertiary">
-                          {Math.round(result.confidence * 100)}% confidence
+                          {Math.round(result.confidence * 100)}%
                         </span>
+                        {result.observedCondition && (
+                          <span className={cn(
+                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                            result.observedCondition === "GOOD" ? "bg-[#dcfce7] text-green-700" :
+                            result.observedCondition === "FAIR" ? "bg-surface-overlay text-text-secondary" :
+                            result.observedCondition === "WORN" ? "bg-[#fce8f3] text-brand-700" :
+                            "bg-[#fde8e8] text-red-700"
+                          )}>
+                            {result.observedCondition}
+                          </span>
+                        )}
                       </div>
+
+                      {/* Suggested Action */}
+                      {result.suggestedAction && (
+                        <p className="text-[10px] text-text-tertiary mt-1 italic">
+                          {result.suggestedAction}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
@@ -561,63 +648,10 @@ export function StepPanel({
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Buy recommendation */}
-              <div className={cn(
-                "p-4 rounded-lg border text-center",
-                market.recommendation === "STRONG_BUY" ? "bg-[#dcfce7] border-green-300" :
-                market.recommendation === "FAIR_BUY" ? "bg-[#fce8f3] border-brand-300" :
-                market.recommendation === "OVERPAYING" ? "bg-[#fde8e8] border-red-300" :
-                "bg-[#fde8e8] border-red-300"
-              )}>
-                <Badge
-                  variant={
-                    market.recommendation === "STRONG_BUY" ? "success" :
-                    market.recommendation === "FAIR_BUY" ? "info" :
-                    market.recommendation === "OVERPAYING" ? "warning" : "danger"
-                  }
-                >
-                  {market.recommendation.replace(/_/g, " ")}
-                </Badge>
-                <p className="text-2xl font-bold text-text-primary mt-2">
-                  {formatCurrency(market.adjustedPrice)}
-                </p>
-                <p className="text-xs text-text-secondary">Condition-Adjusted Value</p>
-              </div>
-
-              {/* Price breakdown */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Market Baseline</span>
-                  <span className="font-medium">{formatCurrency(market.baselinePrice)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-text-secondary">Condition Adjusted</span>
-                  <span className="font-medium">{formatCurrency(market.adjustedPrice)}</span>
-                </div>
-                {market.strongBuyMax && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-secondary">Strong Buy Max</span>
-                    <span className="font-medium text-green-700">{formatCurrency(market.strongBuyMax)}</span>
-                  </div>
-                )}
-                {market.estReconCost != null && market.estReconCost > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-text-secondary">Est. Recon Cost</span>
-                    <span className="font-medium text-red-700">{formatCurrency(market.estReconCost)}</span>
-                  </div>
-                )}
-                {market.estGrossProfit != null && (
-                  <div className="flex justify-between text-sm border-t border-border-default pt-2">
-                    <span className="text-text-secondary font-semibold">Est. Gross Profit</span>
-                    <span className={cn(
-                      "font-bold",
-                      market.estGrossProfit > 0 ? "text-green-700" : "text-red-700"
-                    )}>
-                      {formatCurrency(market.estGrossProfit)}
-                    </span>
-                  </div>
-                )}
-              </div>
+              <MarketAnalysisSection
+                data={market as unknown as MarketAnalysisData}
+                compact
+              />
 
               <Button
                 onClick={() => onAdvanceStep("MARKET_ANALYSIS")}

@@ -21,6 +21,46 @@ interface ReportFinding {
   repairCostHigh: number | null;
 }
 
+interface ReportMarketComparable {
+  title: string;
+  price: number;
+  mileage: number;
+  location: string;
+  source: string;
+}
+
+interface ReportMarketAnalysis {
+  baselinePrice: number;          // cents
+  adjustedPrice: number;          // cents — final fair value
+  recommendation: string;
+  strongBuyMax: number;
+  fairBuyMax: number;
+  overpayingMax?: number | null;
+  estRetailPrice?: number | null;
+  estReconCost?: number | null;
+  estGrossProfit?: number | null;
+  conditionScore?: number | null;
+  conditionMultiplier?: number | null;
+  conditionGrade?: string | null;
+  historyMultiplier?: number | null;
+  historyBreakdown?: {
+    titleFactor: number;
+    accidentFactor: number;
+    ownerFactor: number;
+    structuralDamageFactor: number;
+    floodDamageFactor: number;
+    recallFactor: number;
+  } | null;
+  fairValueAtBaseline?: number | null;
+  adjustedValueBeforeRecon?: number | null;
+  priceBands?: Array<{
+    label: string;
+    maxPriceCents: number;
+    marginPercent: number;
+  }> | null;
+  comparables?: ReportMarketComparable[] | null;
+}
+
 export interface ReportData {
   number: string;
   generatedAt: Date | string;
@@ -48,6 +88,7 @@ export interface ReportData {
     unableToInspect: number;
   };
   mediaCount: number;
+  marketAnalysis?: ReportMarketAnalysis | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -203,6 +244,58 @@ const styles = StyleSheet.create({
   },
   checklistValue: { fontSize: 18, fontFamily: "Helvetica-Bold" },
   checklistLabel: { fontSize: 7, color: "#6b7280", marginTop: 2, textAlign: "center" },
+
+  /* ---- Market Analysis ---- */
+  marketBanner: {
+    padding: 12,
+    borderRadius: 6,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  marketBannerLabel: { fontSize: 8, color: "#ffffff", marginBottom: 2 },
+  marketBannerValue: { fontSize: 22, fontFamily: "Helvetica-Bold", color: "#ffffff" },
+  marketBannerRec: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#ffffff", marginTop: 4 },
+  marketRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 3,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#f3f4f6",
+  },
+  marketLabel: { fontSize: 9, color: "#6b7280" },
+  marketValue: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1f2937" },
+  marketDeltaPos: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#16a34a" },
+  marketDeltaNeg: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#dc2626" },
+  bandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    marginBottom: 3,
+  },
+  bandDot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  bandLabel: { fontSize: 8, fontFamily: "Helvetica-Bold", flex: 1 },
+  bandPrice: { fontSize: 9, fontFamily: "Helvetica-Bold" },
+  compTable: { marginTop: 4 },
+  compHeaderRow: {
+    flexDirection: "row",
+    backgroundColor: "#f3f4f6",
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 3,
+    marginBottom: 2,
+  },
+  compRow: {
+    flexDirection: "row",
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#f3f4f6",
+  },
+  compCell: { fontSize: 8, color: "#4b5563" },
+  compCellBold: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#1f2937" },
+  compHeader: { fontSize: 7, fontFamily: "Helvetica-Bold", color: "#6b7280" },
 
   /* ---- Footer ---- */
   footer: {
@@ -392,6 +485,197 @@ export function ReportDocument({ data }: { data: ReportData }) {
                 </View>
               );
             })}
+          </View>
+
+          <Text style={styles.footer}>
+            Report #{data.number} — {data.vehicle.year} {data.vehicle.make} {data.vehicle.model} — VeriBuy
+          </Text>
+        </Page>
+      )}
+      {/* ---- Page 3: Market Analysis ---- */}
+      {data.marketAnalysis && (
+        <Page size="LETTER" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Market Analysis</Text>
+
+            {/* Recommendation banner */}
+            <View style={[styles.marketBanner, {
+              backgroundColor:
+                data.marketAnalysis.recommendation === "STRONG_BUY" ? "#16a34a" :
+                data.marketAnalysis.recommendation === "FAIR_BUY" ? "#2563eb" :
+                data.marketAnalysis.recommendation === "OVERPAYING" ? "#d97706" : "#dc2626",
+            }]}>
+              <Text style={styles.marketBannerLabel}>Fair Market Value (This Vehicle)</Text>
+              <Text style={styles.marketBannerValue}>{fmtCurrency(data.marketAnalysis.adjustedPrice)}</Text>
+              <Text style={styles.marketBannerRec}>
+                {data.marketAnalysis.recommendation.replace(/_/g, " ")}
+              </Text>
+            </View>
+
+            {/* Comparable Listings */}
+            {data.marketAnalysis.comparables && data.marketAnalysis.comparables.length > 0 && (
+              <View style={styles.section}>
+                <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>
+                  Comparable Listings ({data.marketAnalysis.comparables.length})
+                </Text>
+                <View style={styles.compTable}>
+                  <View style={styles.compHeaderRow}>
+                    <Text style={[styles.compHeader, { flex: 3 }]}>VEHICLE</Text>
+                    <Text style={[styles.compHeader, { flex: 1, textAlign: "right" }]}>PRICE</Text>
+                    <Text style={[styles.compHeader, { flex: 1, textAlign: "right" }]}>MILEAGE</Text>
+                    <Text style={[styles.compHeader, { flex: 2 }]}>LOCATION</Text>
+                  </View>
+                  {data.marketAnalysis.comparables.slice(0, 6).map((c, i) => (
+                    <View key={i} style={styles.compRow}>
+                      <Text style={[styles.compCell, { flex: 3 }]}>{c.title}</Text>
+                      <Text style={[styles.compCellBold, { flex: 1, textAlign: "right" }]}>
+                        ${c.price.toLocaleString()}
+                      </Text>
+                      <Text style={[styles.compCell, { flex: 1, textAlign: "right" }]}>
+                        {(c.mileage / 1000).toFixed(0)}k mi
+                      </Text>
+                      <Text style={[styles.compCell, { flex: 2 }]}>{c.location}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Valuation Waterfall */}
+            <View style={styles.section}>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>
+                Valuation Breakdown
+              </Text>
+
+              <View style={styles.marketRow}>
+                <Text style={styles.marketLabel}>Market Baseline (VinAudit)</Text>
+                <Text style={styles.marketValue}>{fmtCurrency(data.marketAnalysis.baselinePrice)}</Text>
+              </View>
+
+              {data.marketAnalysis.fairValueAtBaseline != null && (
+                <View style={styles.marketRow}>
+                  <Text style={styles.marketLabel}>Fair Value at Good Condition (Score 85)</Text>
+                  <Text style={styles.marketValue}>{fmtCurrency(data.marketAnalysis.fairValueAtBaseline)}</Text>
+                </View>
+              )}
+
+              {data.marketAnalysis.conditionMultiplier != null && (
+                <View style={styles.marketRow}>
+                  <Text style={styles.marketLabel}>
+                    Condition (Score {data.marketAnalysis.conditionScore} / {data.marketAnalysis.conditionGrade?.replace(/_/g, " ")} / {data.marketAnalysis.conditionMultiplier.toFixed(2)}x)
+                  </Text>
+                  {(() => {
+                    const delta = Math.round(data.marketAnalysis.baselinePrice * data.marketAnalysis.conditionMultiplier!) - data.marketAnalysis.baselinePrice;
+                    return (
+                      <Text style={delta >= 0 ? styles.marketDeltaPos : styles.marketDeltaNeg}>
+                        {delta >= 0 ? "+" : ""}{fmtCurrency(delta)}
+                      </Text>
+                    );
+                  })()}
+                </View>
+              )}
+
+              {data.marketAnalysis.historyMultiplier != null && data.marketAnalysis.historyMultiplier !== 1 && (
+                <View style={styles.marketRow}>
+                  <Text style={styles.marketLabel}>
+                    History Adjustment ({data.marketAnalysis.historyMultiplier.toFixed(2)}x)
+                  </Text>
+                  {(() => {
+                    const condAdj = Math.round(data.marketAnalysis.baselinePrice * (data.marketAnalysis.conditionMultiplier ?? 1));
+                    const delta = Math.round(condAdj * data.marketAnalysis.historyMultiplier!) - condAdj;
+                    return (
+                      <Text style={delta >= 0 ? styles.marketDeltaPos : styles.marketDeltaNeg}>
+                        {delta >= 0 ? "+" : ""}{fmtCurrency(delta)}
+                      </Text>
+                    );
+                  })()}
+                </View>
+              )}
+
+              {data.marketAnalysis.adjustedValueBeforeRecon != null && (
+                <View style={styles.marketRow}>
+                  <Text style={styles.marketLabel}>Adjusted Value (before recon)</Text>
+                  <Text style={styles.marketValue}>{fmtCurrency(data.marketAnalysis.adjustedValueBeforeRecon)}</Text>
+                </View>
+              )}
+
+              {data.marketAnalysis.estReconCost != null && data.marketAnalysis.estReconCost > 0 && (
+                <View style={styles.marketRow}>
+                  <Text style={styles.marketLabel}>Est. Reconditioning Cost</Text>
+                  <Text style={styles.marketDeltaNeg}>-{fmtCurrency(data.marketAnalysis.estReconCost)}</Text>
+                </View>
+              )}
+
+              <View style={[styles.marketRow, { borderBottomWidth: 2, borderBottomColor: "#1f2937", paddingVertical: 6 }]}>
+                <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>Final Adjusted Value</Text>
+                <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>
+                  {fmtCurrency(data.marketAnalysis.adjustedPrice)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Price Bands */}
+            {data.marketAnalysis.priceBands && data.marketAnalysis.priceBands.length > 0 && (
+              <View style={styles.section}>
+                <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>
+                  Offer Guide
+                </Text>
+                {data.marketAnalysis.priceBands.map((band, i) => {
+                  const color =
+                    band.label === "STRONG_BUY" ? "#16a34a" :
+                    band.label === "FAIR_BUY" ? "#2563eb" :
+                    band.label === "OVERPAYING" ? "#d97706" : "#dc2626";
+                  const bg =
+                    band.label === "STRONG_BUY" ? "#f0fdf4" :
+                    band.label === "FAIR_BUY" ? "#eff6ff" :
+                    band.label === "OVERPAYING" ? "#fffbeb" : "#fef2f2";
+                  return (
+                    <View key={i} style={[styles.bandRow, { backgroundColor: bg }]}>
+                      <View style={[styles.bandDot, { backgroundColor: color }]} />
+                      <Text style={[styles.bandLabel, { color }]}>
+                        {band.label.replace(/_/g, " ")}
+                      </Text>
+                      <Text style={[styles.bandPrice, { color }]}>
+                        {band.label === "PASS"
+                          ? `> ${fmtCurrency(band.maxPriceCents)}`
+                          : `\u2264 ${fmtCurrency(band.maxPriceCents)}`}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Deal Economics */}
+            <View style={styles.section}>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>
+                Deal Economics
+              </Text>
+              {data.marketAnalysis.estRetailPrice != null && (
+                <View style={styles.marketRow}>
+                  <Text style={styles.marketLabel}>Est. Retail / Resale</Text>
+                  <Text style={styles.marketValue}>{fmtCurrency(data.marketAnalysis.estRetailPrice)}</Text>
+                </View>
+              )}
+              {data.marketAnalysis.estReconCost != null && data.marketAnalysis.estReconCost > 0 && (
+                <View style={styles.marketRow}>
+                  <Text style={styles.marketLabel}>Est. Recon Cost</Text>
+                  <Text style={styles.marketDeltaNeg}>-{fmtCurrency(data.marketAnalysis.estReconCost)}</Text>
+                </View>
+              )}
+              {data.marketAnalysis.estGrossProfit != null && (
+                <View style={[styles.marketRow, { borderBottomWidth: 0 }]}>
+                  <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>Est. Gross Profit</Text>
+                  <Text style={{
+                    fontSize: 10,
+                    fontFamily: "Helvetica-Bold",
+                    color: data.marketAnalysis.estGrossProfit >= 0 ? "#16a34a" : "#dc2626",
+                  }}>
+                    {fmtCurrency(data.marketAnalysis.estGrossProfit)}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
 
           <Text style={styles.footer}>

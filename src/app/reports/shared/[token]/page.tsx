@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Progress } from "@/components/ui/Progress";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, severityColor } from "@/lib/utils";
-import { AlertTriangle, CheckCircle, Camera, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle, Camera, Wrench, BarChart3 } from "lucide-react";
+import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
 
 export default function SharedReportPage({
   params,
@@ -127,6 +128,19 @@ export default function SharedReportPage({
           </div>
 
           {/* Findings */}
+          {/* Market Analysis */}
+          {report.inspection.marketAnalysis && (
+            <div className="px-8 py-6 border-b border-border-default">
+              <h3 className="text-lg font-bold text-text-primary mb-4">
+                <BarChart3 className="inline h-5 w-5 mr-1" />
+                Market Analysis
+              </h3>
+              <MarketAnalysisSection
+                data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
+              />
+            </div>
+          )}
+
           <div className="px-8 py-6 border-b border-border-default">
             <h3 className="text-lg font-bold text-text-primary mb-4">
               <Wrench className="inline h-5 w-5 mr-1" />

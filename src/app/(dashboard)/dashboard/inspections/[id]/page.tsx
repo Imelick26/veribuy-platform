@@ -32,6 +32,7 @@ import { VehicleDiagram } from "@/components/vehicle/VehicleDiagram";
 import { ReportModal } from "@/components/inspection/ReportModal";
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { computeInspectionConfidence } from "@/lib/confidence";
+import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
 import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
 
@@ -121,10 +122,12 @@ export default function InspectionDetailPage({
     },
   });
 
-  const { data: aiAnalysisResults } = trpc.inspection.getAIAnalysisResults.useQuery(
+  const { data: aiAnalysisData } = trpc.inspection.getAIAnalysisResults.useQuery(
     { inspectionId: id },
     { enabled: !!inspection }
   );
+  const aiAnalysisResults = aiAnalysisData?.aiResults;
+  const overallConditionResult = aiAnalysisData?.overallCondition;
 
   // Vehicle History
   const fetchHistory = trpc.inspection.fetchHistory.useMutation({
@@ -458,6 +461,7 @@ export default function InspectionDetailPage({
           onRunAIAnalysis={() => runAIAnalysis.mutate({ inspectionId: id })}
           isRunningAIAnalysis={runAIAnalysis.isPending}
           aiAnalysisResults={aiAnalysisResults || undefined}
+          overallConditionResult={overallConditionResult || undefined}
           onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
           isFetchingHistory={fetchHistory.isPending}
           onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}
@@ -465,6 +469,23 @@ export default function InspectionDetailPage({
           onViewReport={() => setShowReportModal(true)}
           inspectionConfidence={inspectionConfidence}
         />
+      )}
+
+      {/* Market Analysis (shown for completed/cancelled inspections that have market data) */}
+      {(isCompleted || isCancelled) && inspection.marketAnalysis && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-brand-600" />
+              <CardTitle>Market Analysis</CardTitle>
+            </div>
+          </CardHeader>
+          <div className="px-6 pb-6">
+            <MarketAnalysisSection
+              data={inspection.marketAnalysis as unknown as MarketAnalysisData}
+            />
+          </div>
+        </Card>
       )}
 
       {/* Vehicle Details + Score + Findings */}

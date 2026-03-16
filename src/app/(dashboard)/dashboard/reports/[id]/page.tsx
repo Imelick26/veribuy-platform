@@ -17,7 +17,9 @@ import {
   CheckCircle,
   Camera,
   Wrench,
+  BarChart3,
 } from "lucide-react";
+import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
 
 export default function ReportDetailPage({
   params,
@@ -199,6 +201,19 @@ export default function ReportDetailPage({
             ))}
           </div>
         </div>
+
+        {/* Market Analysis */}
+        {report.inspection.marketAnalysis && (
+          <div className="px-8 py-6 border-b border-border-default">
+            <h3 className="text-lg font-bold text-text-primary mb-4">
+              <BarChart3 className="inline h-5 w-5 mr-1" />
+              Market Analysis
+            </h3>
+            <MarketAnalysisSection
+              data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
+            />
+          </div>
+        )}
 
         {/* Findings */}
         <div className="px-8 py-6 border-b border-border-default">

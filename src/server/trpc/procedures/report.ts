@@ -19,6 +19,7 @@ export const reportRouter = router({
           media: true,
           inspector: { select: { name: true } },
           steps: true,
+          marketAnalysis: true,
         },
       });
 
@@ -92,6 +93,28 @@ export const reportRouter = router({
         })),
         riskChecklist,
         mediaCount: inspection.media.length,
+        marketAnalysis: inspection.marketAnalysis
+          ? {
+              baselinePrice: inspection.marketAnalysis.baselinePrice,
+              adjustedPrice: inspection.marketAnalysis.adjustedPrice,
+              recommendation: inspection.marketAnalysis.recommendation,
+              strongBuyMax: inspection.marketAnalysis.strongBuyMax,
+              fairBuyMax: inspection.marketAnalysis.fairBuyMax,
+              overpayingMax: inspection.marketAnalysis.overpayingMax,
+              estRetailPrice: inspection.marketAnalysis.estRetailPrice,
+              estReconCost: inspection.marketAnalysis.estReconCost,
+              estGrossProfit: inspection.marketAnalysis.estGrossProfit,
+              conditionScore: inspection.marketAnalysis.conditionScore,
+              conditionMultiplier: inspection.marketAnalysis.conditionMultiplier,
+              conditionGrade: inspection.marketAnalysis.conditionGrade,
+              historyMultiplier: inspection.marketAnalysis.historyMultiplier,
+              historyBreakdown: inspection.marketAnalysis.historyBreakdown as ReportData["marketAnalysis"] extends { historyBreakdown: infer T } ? T : never,
+              fairValueAtBaseline: inspection.marketAnalysis.fairValueAtBaseline,
+              adjustedValueBeforeRecon: inspection.marketAnalysis.adjustedValueBeforeRecon,
+              priceBands: inspection.marketAnalysis.priceBands as ReportData["marketAnalysis"] extends { priceBands: infer T } ? T : never,
+              comparables: inspection.marketAnalysis.comparables as Array<{ title: string; price: number; mileage: number; location: string; source: string }>,
+            }
+          : undefined,
       };
 
       // Generate PDF
