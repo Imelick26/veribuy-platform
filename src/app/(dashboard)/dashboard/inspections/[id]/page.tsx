@@ -25,11 +25,25 @@ import {
   Wrench,
   ShieldAlert,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { StepPanel } from "@/components/inspection/StepPanel";
 import { RiskChecklist } from "@/components/inspection/RiskChecklist";
 import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
 import { VehicleDiagram } from "@/components/vehicle/VehicleDiagram";
 import { ReportModal } from "@/components/inspection/ReportModal";
+
+// Dynamic import to avoid SSR issues with Three.js
+const VehicleViewer = dynamic(
+  () => import("@/components/vehicle/VehicleViewer").then((m) => ({ default: m.VehicleViewer })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-[400px] bg-[#1a1f2e] rounded-xl">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
+      </div>
+    ),
+  }
+);
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { computeInspectionConfidence } from "@/lib/confidence";
 import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
@@ -419,15 +433,15 @@ export default function InspectionDetailPage({
       {riskProfile && riskProfile.aggregatedRisks.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-0 overflow-hidden">
-            <VehicleDiagram
-              hotspots={riskProfile.aggregatedRisks.map((r) => ({
-                id: r.id,
-                position: [r.position.x, r.position.y, r.position.z] as [number, number, number],
-                severity: r.severity as "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO",
-                label: r.title,
-              }))}
-              onHotspotClick={(hotspotId) => setActiveHotspot(hotspotId === activeHotspot ? null : hotspotId)}
-              activeHotspot={activeHotspot}
+            <VehicleViewer
+              vehicle={{
+                bodyStyle: inspection.vehicle.bodyStyle,
+                nhtsaData: inspection.vehicle.nhtsaData as Record<string, unknown> | null,
+              }}
+              risks={riskProfile.aggregatedRisks}
+              activeRiskId={activeHotspot}
+              onRiskClick={(riskId) => setActiveHotspot(riskId === activeHotspot ? null : riskId)}
+              className="h-[400px]"
             />
           </Card>
           <Card className="p-4">
