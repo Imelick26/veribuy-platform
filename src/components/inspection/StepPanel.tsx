@@ -143,7 +143,7 @@ export function StepPanel({
           ) : (
             <div className="space-y-4">
               {/* Summary stats */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 <div className="text-center p-3 rounded-lg bg-surface-sunken">
                   <p className="text-2xl font-bold text-text-primary">{riskProfile.aggregatedRisks.length}</p>
                   <p className="text-xs text-text-secondary">Total Risks</p>
@@ -387,7 +387,7 @@ export function StepPanel({
               )}
 
               {/* Results summary */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
                   <p className="text-2xl font-bold text-red-700">
                     {aiAnalysisResults.filter(r => r.verdict === "CONFIRMED").length}

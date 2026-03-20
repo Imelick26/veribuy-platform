@@ -281,7 +281,7 @@ export default function SettingsPage() {
             {/* Purchase Packs */}
             <div className="space-y-2">
               <p className="text-sm font-medium text-text-primary">Purchase Additional Inspections</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {PACKS.map((pack) => (
                   <button
                     key={pack.size}

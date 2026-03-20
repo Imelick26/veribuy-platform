@@ -32,6 +32,28 @@ export default function ReportsPage() {
             <p className="text-text-secondary">Reports are generated when inspections are completed</p>
           </div>
         ) : (
+          <>
+          {/* Mobile card view */}
+          <div className="md:hidden divide-y divide-border-default">
+            {reports.map((r) => (
+              <div key={r.id} className="px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/reports/${r.id}`)}>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-medium text-text-primary text-sm">
+                    {r.inspection.vehicle.year} {r.inspection.vehicle.make} {r.inspection.vehicle.model}
+                  </p>
+                  <Badge variant="info">{r.inspection._count.findings} findings</Badge>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-text-secondary">
+                  <span className="font-mono">{r.number}</span>
+                  <span>{formatDate(r.generatedAt)}</span>
+                  <span>{r.viewCount} views</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border-default">
@@ -73,6 +95,8 @@ export default function ReportsPage() {
               ))}
             </tbody>
           </table>
+          </div>
+          </>
         )}
       </Card>
     </div>

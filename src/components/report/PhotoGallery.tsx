@@ -109,7 +109,7 @@ function Lightbox({
         </button>
       )}
 
-      <div className="max-w-5xl max-h-[85vh] px-16" onClick={(e) => e.stopPropagation()}>
+      <div className="max-w-5xl max-h-[85vh] px-4 sm:px-16" onClick={(e) => e.stopPropagation()}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={photo.url}
@@ -171,7 +171,7 @@ export function PhotoGallery({ media, findings }: PhotoGalleryProps) {
   return (
     <>
       {/* Standard Vehicle Photos */}
-      <div className="px-8 py-6 border-b border-border-default">
+      <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-border-default">
         <h3 className="text-lg font-bold text-text-primary mb-4">
           <Camera className="inline h-5 w-5 mr-1" />
           Vehicle Photos {standardPhotos.length > 0 && `(${standardPhotos.length})`}
@@ -183,7 +183,7 @@ export function PhotoGallery({ media, findings }: PhotoGalleryProps) {
             <p className="text-xs mt-1">Photos will appear here once they are uploaded during the inspection.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {standardPhotos.map((m, i) => (
               <button
                 key={m.id}
@@ -209,7 +209,7 @@ export function PhotoGallery({ media, findings }: PhotoGalleryProps) {
 
       {/* Additional Photos — collapsible */}
       {(evidencePhotos.length > 0 || otherPhotos.length > 0) && (
-        <div className="px-8 py-4 border-b border-border-default">
+        <div className="px-4 sm:px-8 py-4 border-b border-border-default">
           <button
             onClick={() => setShowAllPhotos(!showAllPhotos)}
             className="w-full flex items-center justify-between py-2 text-left hover:bg-surface-hover rounded-lg px-2 -mx-2 transition-colors"

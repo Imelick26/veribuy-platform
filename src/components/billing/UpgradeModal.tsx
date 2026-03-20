@@ -117,7 +117,7 @@ export function UpgradeModal({ open, onClose, usage }: UpgradeModalProps) {
         )}
 
         {/* Pack Cards */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
           {PACKS.map((pack) => (
             <button
               key={pack.size}

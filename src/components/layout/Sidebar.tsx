@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { useSidebarStore } from "@/stores/sidebar-store";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -38,8 +39,10 @@ export function Sidebar() {
   const atLimit = usage ? usage.used >= (usage.limit + usage.bonusInspections) : false;
   const [showLimitModal, setShowLimitModal] = useState(false);
   const router = useRouter();
+  const { isOpen, close } = useSidebarStore();
 
   function handleNewInspection(e: React.MouseEvent) {
+    close();
     if (atLimit) {
       e.preventDefault();
       setShowLimitModal(true);
@@ -50,7 +53,21 @@ export function Sidebar() {
 
   return (
     <>
-    <aside className="flex h-screen w-64 flex-col bg-surface-raised border-r border-border-default">
+    {/* Backdrop overlay — mobile only */}
+    {isOpen && (
+      <div
+        className="fixed inset-0 z-40 bg-black/40 md:hidden"
+        onClick={close}
+      />
+    )}
+
+    <aside
+      className={cn(
+        "flex h-screen w-64 flex-col bg-surface-raised border-r border-border-default",
+        "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
+        isOpen ? "translate-x-0" : "-translate-x-full"
+      )}
+    >
       {/* Logo */}
       <div className="flex h-14 items-center gap-2 px-5 border-b border-border-default">
         <Image src="/logo.png" alt="VeriBuy" width={28} height={28} className="h-7 w-7" />
@@ -78,6 +95,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={close}
               className={cn(
                 "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
                 isActive
@@ -97,6 +115,7 @@ export function Sidebar() {
             <div className="my-2 border-t border-border-default" />
             <Link
               href="/admin"
+              onClick={close}
               className={cn(
                 "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
                 pathname?.startsWith("/admin")
@@ -114,7 +133,7 @@ export function Sidebar() {
       {/* Sign out */}
       <div className="border-t border-border-default px-2 py-2">
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => { close(); signOut({ callbackUrl: "/login" }); }}
           className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-text-secondary hover:bg-[#fde8e8] hover:text-red-700 transition-colors cursor-pointer"
         >
           <LogOut className="h-4 w-4" />

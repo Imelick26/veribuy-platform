@@ -38,7 +38,7 @@ const VehicleViewer = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center h-[400px] bg-[#1a1f2e] rounded-xl">
+      <div className="flex items-center justify-center h-[280px] sm:h-[400px] bg-[#1a1f2e] rounded-xl">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-500" />
       </div>
     ),
@@ -346,28 +346,30 @@ export default function InspectionDetailPage({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard/inspections">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-text-primary">
-              {inspection.vehicle.year} {inspection.vehicle.make} {inspection.vehicle.model}
-            </h1>
-            <Badge
-              variant={isCompleted ? "success" : isCancelled ? "danger" : "info"}
-            >
-              {inspection.status.replace(/_/g, " ")}
-            </Badge>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Link href="/dashboard/inspections">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-text-primary truncate">
+                {inspection.vehicle.year} {inspection.vehicle.make} {inspection.vehicle.model}
+              </h1>
+              <Badge
+                variant={isCompleted ? "success" : isCancelled ? "danger" : "info"}
+              >
+                {inspection.status.replace(/_/g, " ")}
+              </Badge>
+            </div>
+            <p className="text-text-secondary font-mono text-xs sm:text-sm truncate">
+              {inspection.number} &middot; VIN: {inspection.vehicle.vin}
+            </p>
           </div>
-          <p className="text-text-secondary font-mono text-sm">
-            {inspection.number} &middot; VIN: {inspection.vehicle.vin}
-          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 pl-10 sm:pl-0">
           {!isCompleted && !isCancelled && (
             <Button
               onClick={() => setShowFindingForm(true)}
@@ -391,7 +393,7 @@ export default function InspectionDetailPage({
         </div>
         <Progress value={progressPct} color={progressPct === 100 ? "green" : "brand"} />
 
-        <div className="mt-5 grid grid-cols-7 gap-2">
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-2 md:grid md:grid-cols-7 md:overflow-visible">
           {STEP_ORDER.map((stepKey, idx) => {
             const step = inspection.steps.find((s) => s.step === stepKey);
             const meta = STEP_META[stepKey] || { label: stepKey, icon: Circle };
@@ -400,7 +402,7 @@ export default function InspectionDetailPage({
             const isActive = idx === currentStepIndex;
 
             return (
-              <div key={stepKey} className="text-center">
+              <div key={stepKey} className="text-center flex-shrink-0 min-w-[4.5rem] md:min-w-0">
                 <div
                   className={`mx-auto h-8 w-8 rounded-full flex items-center justify-center mb-1 transition-colors ${
                     isStepCompleted
@@ -442,7 +444,7 @@ export default function InspectionDetailPage({
               risks={riskProfile.aggregatedRisks}
               activeRiskId={activeHotspot}
               onRiskClick={(riskId) => setActiveHotspot(riskId === activeHotspot ? null : riskId)}
-              className="h-[400px]"
+              className="h-[280px] sm:h-[400px]"
             />
           </Card>
           <Card className="p-4">

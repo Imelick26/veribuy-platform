@@ -43,6 +43,40 @@ export default function InspectionsPage() {
             </Link>
           </div>
         ) : (
+          <>
+          {/* Mobile card view */}
+          <div className="md:hidden divide-y divide-border-default">
+            {inspections.map((insp) => (
+              <Link key={insp.id} href={`/dashboard/inspections/${insp.id}`} className="block px-4 py-3 hover:bg-surface-hover transition-colors">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="font-medium text-text-primary text-sm">
+                    {insp.vehicle.year} {insp.vehicle.make} {insp.vehicle.model}
+                  </p>
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(insp.status)}`}>
+                    {insp.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-text-secondary">
+                  <span className="font-mono">{insp.number}</span>
+                  <span>{formatDate(insp.createdAt)}</span>
+                  {insp.overallScore != null && (
+                    <span className={`font-semibold ${insp.overallScore >= 70 ? "text-green-700" : insp.overallScore >= 50 ? "text-text-secondary" : "text-red-700"}`}>
+                      {insp.overallScore}/100
+                    </span>
+                  )}
+                  {insp._count.media > 0 && (
+                    <span className="inline-flex items-center gap-1 text-brand-600">
+                      <Camera className="h-3 w-3" />
+                      {insp._count.media}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border-default">
@@ -104,6 +138,8 @@ export default function InspectionsPage() {
               ))}
             </tbody>
           </table>
+          </div>
+          </>
         )}
       </Card>
     </div>
