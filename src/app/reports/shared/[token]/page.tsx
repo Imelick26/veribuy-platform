@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Progress } from "@/components/ui/Progress";
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, severityColor } from "@/lib/utils";
-import { AlertTriangle, CheckCircle, Camera, Wrench, BarChart3 } from "lucide-react";
+import { AlertTriangle, CheckCircle, Wrench, BarChart3 } from "lucide-react";
 import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
+import { PhotoGallery } from "@/components/report/PhotoGallery";
 
 export default function SharedReportPage({
   params,
@@ -170,29 +171,26 @@ export default function SharedReportPage({
                         Estimated repair: {formatCurrency(f.repairCostLow || 0)} – {formatCurrency(f.repairCostHigh || 0)}
                       </p>
                     )}
+                    {f.media && f.media.length > 0 && (
+                      <div className="flex gap-2 mt-3">
+                        {f.media.map((m) => (
+                          m.url && (
+                            <div key={m.id} className="h-16 w-16 rounded-lg bg-surface-sunken overflow-hidden">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={m.url} alt="Evidence" className="h-full w-full object-cover" />
+                            </div>
+                          )
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Media Gallery */}
-          {media && media.length > 0 && (
-            <div className="px-8 py-6 border-b border-border-default">
-              <h3 className="text-lg font-bold text-text-primary mb-4">
-                <Camera className="inline h-5 w-5 mr-1" />
-                Photo Gallery
-              </h3>
-              <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-                {media.filter((m) => m.url).map((m) => (
-                  <div key={m.id} className="rounded-lg bg-surface-sunken overflow-hidden aspect-square">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={m.url!} alt={m.captureType || "Photo"} className="h-full w-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Photo Gallery — Standard + Evidence + All */}
+          <PhotoGallery media={media ?? []} findings={findings} />
 
           {/* Footer */}
           <div className="px-8 py-4 bg-surface-sunken text-center">

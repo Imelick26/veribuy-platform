@@ -15,11 +15,11 @@ import {
   Share2,
   AlertTriangle,
   CheckCircle,
-  Camera,
   Wrench,
   BarChart3,
 } from "lucide-react";
 import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
+import { PhotoGallery } from "@/components/report/PhotoGallery";
 
 export default function ReportDetailPage({
   params,
@@ -273,28 +273,8 @@ export default function ReportDetailPage({
           )}
         </div>
 
-        {/* Media Gallery */}
-        {media && media.length > 0 && (
-          <div className="px-8 py-6 border-b border-border-default">
-            <h3 className="text-lg font-bold text-text-primary mb-4">
-              <Camera className="inline h-5 w-5 mr-1" />
-              Photo Gallery ({media.length})
-            </h3>
-            <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
-              {media.filter((m) => m.url).map((m) => (
-                <div key={m.id} className="rounded-lg bg-surface-sunken overflow-hidden aspect-square">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.url!} alt={m.captureType || "Photo"} className="h-full w-full object-cover" />
-                  {m.captureType && (
-                    <p className="text-[10px] text-text-secondary text-center py-1 bg-surface-raised">
-                      {m.captureType.replace(/_/g, " ")}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Photo Gallery — Standard + Evidence + All */}
+        <PhotoGallery media={media ?? []} findings={findings} />
 
         {/* Footer */}
         <div className="px-8 py-4 bg-surface-sunken text-center">

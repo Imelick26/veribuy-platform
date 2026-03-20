@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
-import { Plus, ClipboardCheck } from "lucide-react";
+import { Plus, ClipboardCheck, Camera } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { formatDate, statusColor } from "@/lib/utils";
 
@@ -51,6 +51,7 @@ export default function InspectionsPage() {
                 <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Inspector</th>
                 <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Status</th>
                 <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Score</th>
+                <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Photos</th>
                 <th className="text-left text-xs font-medium text-text-secondary uppercase tracking-wider px-5 py-2.5">Date</th>
               </tr>
             </thead>
@@ -80,6 +81,20 @@ export default function InspectionsPage() {
                       }`}>
                         {insp.overallScore}/100
                       </span>
+                    ) : (
+                      <span className="text-text-tertiary">&mdash;</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-sm">
+                    {insp._count.media > 0 ? (
+                      <Link
+                        href={`/dashboard/inspections/${insp.id}#photos`}
+                        className="inline-flex items-center gap-1.5 text-brand-600 hover:text-brand-700 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        <span className="font-medium">{insp._count.media}</span>
+                      </Link>
                     ) : (
                       <span className="text-text-tertiary">&mdash;</span>
                     )}

@@ -47,6 +47,7 @@ const VehicleViewer = dynamic(
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { computeInspectionConfidence } from "@/lib/confidence";
 import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
+import { PhotoGallery } from "@/components/report/PhotoGallery";
 import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
 
@@ -523,6 +524,11 @@ export default function InspectionDetailPage({
           </div>
         </Card>
       )}
+
+      {/* Photo Gallery — always visible */}
+      <Card id="photos" className="overflow-hidden p-0">
+        <PhotoGallery media={inspection.media ?? []} findings={inspection.findings} />
+      </Card>
 
       {/* Vehicle Details + Score + Findings */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

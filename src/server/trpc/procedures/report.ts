@@ -5,6 +5,7 @@ import { generateReportPDF } from "@/lib/pdf/generate-report";
 import { supabaseAdmin, MEDIA_BUCKET } from "@/lib/supabase";
 import type { ReportData } from "@/lib/pdf/report-template";
 import type { RiskCheckStatus } from "@/types/risk";
+import { recalculateScore } from "@/lib/scoring";
 
 export const reportRouter = router({
   // Generate report from completed inspection
@@ -24,6 +25,11 @@ export const reportRouter = router({
       });
 
       if (!inspection) throw new Error("Inspection not found");
+
+      // Ensure condition scores are up-to-date before generating report
+      if (inspection.findings.length > 0) {
+        await recalculateScore(ctx.db, input.inspectionId);
+      }
 
       const org = await ctx.db.organization.findUnique({
         where: { id: ctx.orgId },
@@ -63,6 +69,22 @@ export const reportRouter = router({
         }
       }
 
+      // Categorize media for the report
+      const STANDARD_CAPTURES = new Set([
+        "FRONT_CENTER", "FRONT_34_DRIVER", "FRONT_34_PASSENGER",
+        "DRIVER_SIDE", "PASSENGER_SIDE", "REAR_34_DRIVER",
+        "REAR_34_PASSENGER", "REAR_CENTER", "ROOF",
+        "UNDERCARRIAGE", "ENGINE_BAY", "UNDER_HOOD_LABEL",
+      ]);
+
+      const standardPhotos = inspection.media
+        .filter((m) => m.url && m.captureType && STANDARD_CAPTURES.has(m.captureType))
+        .map((m) => ({ url: m.url!, captureType: m.captureType! }));
+
+      const allMedia = inspection.media
+        .filter((m) => m.url && m.type === "PHOTO")
+        .map((m) => ({ url: m.url!, captureType: m.captureType || "OTHER" }));
+
       // Build report data for PDF
       const reportData: ReportData = {
         number,
@@ -90,9 +112,14 @@ export const reportRouter = router({
           category: f.category,
           repairCostLow: f.repairCostLow,
           repairCostHigh: f.repairCostHigh,
+          media: f.media
+            ?.filter((m) => m.url)
+            .map((m) => ({ url: m.url!, captureType: m.captureType || "FINDING_EVIDENCE" })),
         })),
         riskChecklist,
         mediaCount: inspection.media.length,
+        standardPhotos,
+        allMedia,
         marketAnalysis: inspection.marketAnalysis
           ? {
               baselinePrice: inspection.marketAnalysis.baselinePrice,

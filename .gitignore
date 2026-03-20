@@ -43,3 +43,17 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# temp/dev files
+PLAN.md
+test-report.pdf
+market-valuation-calibration.xlsx
+scripts/temp-*
+scripts/test-sedan.glb
+scripts/check-transforms.mjs
+scripts/split-vehicles-*.mjs
+scripts/validate-glb.mjs
+scripts/verify-bounds.mjs
+scripts/upload-to-supabase.mjs
+scripts/generate-calibration-xlsx.*
+scripts/test-ai-analysis.ts

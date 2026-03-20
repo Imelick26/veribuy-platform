@@ -61,3 +61,24 @@ const enforceManager = t.middleware(async ({ ctx, next }) => {
 });
 
 export const managerProcedure = t.procedure.use(enforceManager);
+
+// Middleware: require SUPER_ADMIN role
+const enforceSuperAdmin = t.middleware(async ({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  const role = (ctx.session.user as Record<string, unknown>).role;
+  if (role !== "SUPER_ADMIN") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Super admin access required" });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      session: ctx.session,
+      userId: ctx.session.user.id,
+      orgId: (ctx.session.user as Record<string, unknown>).orgId as string,
+    },
+  });
+});
+
+export const superAdminProcedure = t.procedure.use(enforceSuperAdmin);

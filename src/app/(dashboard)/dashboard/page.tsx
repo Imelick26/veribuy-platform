@@ -4,23 +4,38 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Ca
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   ClipboardCheck,
-  Car,
   FileText,
   Plus,
   ArrowRight,
   TrendingUp,
   CheckCircle,
+  Gauge,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
 
 export default function DashboardPage() {
   const { data: inspections } = trpc.inspection.list.useQuery({ limit: 5 });
   const { data: reports } = trpc.report.list.useQuery({ limit: 5 });
-
+  const { data: usage } = trpc.inspection.usageStats.useQuery();
+  const atLimit = usage ? usage.used >= (usage.limit + usage.bonusInspections) : false;
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const router = useRouter();
   const recentInspections = inspections?.inspections || [];
   const recentReports = reports?.reports || [];
+
+  function handleNewInspection(e: React.MouseEvent) {
+    e.preventDefault();
+    if (atLimit) {
+      setShowLimitModal(true);
+    } else {
+      router.push("/dashboard/inspections/new");
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -62,10 +77,14 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 mb-1">
-                <Car className="h-3.5 w-3.5 text-text-tertiary" />
-                <p className="text-sm text-text-secondary">Vehicles</p>
+                <Gauge className="h-3.5 w-3.5 text-text-tertiary" />
+                <p className="text-sm text-text-secondary">Monthly Usage</p>
               </div>
-              <p className="text-2xl font-bold text-text-primary">&mdash;</p>
+              <p className="text-2xl font-bold text-text-primary">
+                {usage
+                  ? `${usage.used} / ${usage.limit}${usage.bonusInspections > 0 ? ` (+${usage.bonusInspections})` : ""}`
+                  : "\u2014"}
+              </p>
             </div>
           </div>
         </Card>
@@ -100,11 +119,9 @@ export default function DashboardPage() {
             <div className="text-center py-8">
               <ClipboardCheck className="h-5 w-5 text-text-tertiary mx-auto mb-2" />
               <p className="text-sm text-text-secondary mb-3">No inspections yet</p>
-              <Link href="/dashboard/inspections/new">
-                <Button size="sm">
-                  <Plus className="h-3.5 w-3.5" /> Start First Inspection
-                </Button>
-              </Link>
+              <Button size="sm" onClick={handleNewInspection}>
+                <Plus className="h-3.5 w-3.5" /> Start First Inspection
+              </Button>
             </div>
           ) : (
             <div className="space-y-1">
@@ -141,9 +158,9 @@ export default function DashboardPage() {
             <CardDescription>Common tasks to get you started</CardDescription>
           </CardHeader>
           <div className="space-y-1">
-            <Link
-              href="/dashboard/inspections/new"
-              className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-hover transition-colors"
+            <button
+              onClick={handleNewInspection}
+              className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-hover transition-colors w-full text-left cursor-pointer"
             >
               <Plus className="h-4 w-4 text-text-tertiary flex-shrink-0" />
               <div className="flex-1 min-w-0">
@@ -151,7 +168,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-text-secondary">Start a vehicle inspection by entering a VIN</p>
               </div>
               <ArrowRight className="h-3.5 w-3.5 text-text-tertiary flex-shrink-0" />
-            </Link>
+            </button>
             <Link
               href="/dashboard/reports"
               className="flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-surface-hover transition-colors"
@@ -177,6 +194,14 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      {usage && (
+        <UpgradeModal
+          open={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          usage={usage}
+        />
+      )}
     </div>
   );
 }

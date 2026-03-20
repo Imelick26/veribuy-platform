@@ -4,6 +4,7 @@ import {
   Page,
   Text,
   View,
+  Image,
   StyleSheet,
   Font,
 } from "@react-pdf/renderer";
@@ -12,6 +13,11 @@ import {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
+interface ReportMedia {
+  url: string;
+  captureType: string;
+}
+
 interface ReportFinding {
   title: string;
   description: string;
@@ -19,6 +25,7 @@ interface ReportFinding {
   category: string;
   repairCostLow: number | null;
   repairCostHigh: number | null;
+  media?: ReportMedia[];
 }
 
 interface ReportMarketComparable {
@@ -88,6 +95,8 @@ export interface ReportData {
     unableToInspect: number;
   };
   mediaCount: number;
+  standardPhotos?: ReportMedia[];
+  allMedia?: ReportMedia[];
   marketAnalysis?: ReportMarketAnalysis | null;
 }
 
@@ -127,6 +136,34 @@ function scoreColor(score: number | null): string {
   if (score >= 70) return "#16a34a";
   if (score >= 50) return "#ca8a04";
   return "#dc2626";
+}
+
+const STANDARD_CAPTURE_TYPES = [
+  "FRONT_CENTER", "FRONT_34_DRIVER", "FRONT_34_PASSENGER",
+  "DRIVER_SIDE", "PASSENGER_SIDE", "REAR_34_DRIVER",
+  "REAR_34_PASSENGER", "REAR_CENTER", "ROOF",
+  "UNDERCARRIAGE", "ENGINE_BAY", "UNDER_HOOD_LABEL",
+] as const;
+
+function captureLabel(type: string): string {
+  const labels: Record<string, string> = {
+    FRONT_CENTER: "Front",
+    FRONT_34_DRIVER: "Front ¾ Driver",
+    FRONT_34_PASSENGER: "Front ¾ Pass.",
+    DRIVER_SIDE: "Driver Side",
+    PASSENGER_SIDE: "Passenger Side",
+    REAR_34_DRIVER: "Rear ¾ Driver",
+    REAR_34_PASSENGER: "Rear ¾ Pass.",
+    REAR_CENTER: "Rear",
+    ROOF: "Roof",
+    UNDERCARRIAGE: "Undercarriage",
+    ENGINE_BAY: "Engine Bay",
+    UNDER_HOOD_LABEL: "Hood Label",
+    INTERIOR_WALKTHROUGH: "Interior",
+    WALKAROUND_VIDEO: "Walkaround",
+    FINDING_EVIDENCE: "Evidence",
+  };
+  return labels[type] || type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /* ------------------------------------------------------------------ */
@@ -296,6 +333,42 @@ const styles = StyleSheet.create({
   compCell: { fontSize: 8, color: "#4b5563" },
   compCellBold: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#1f2937" },
   compHeader: { fontSize: 7, fontFamily: "Helvetica-Bold", color: "#6b7280" },
+
+  /* ---- Photos ---- */
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  photoCell: {
+    width: "31%",
+    marginBottom: 4,
+  },
+  photoImage: {
+    width: "100%",
+    height: 120,
+    borderRadius: 4,
+    objectFit: "cover" as const,
+    backgroundColor: "#f3f4f6",
+  },
+  photoLabel: {
+    fontSize: 7,
+    color: "#6b7280",
+    textAlign: "center",
+    marginTop: 2,
+  },
+  findingPhotoRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 6,
+  },
+  findingPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 4,
+    objectFit: "cover" as const,
+    backgroundColor: "#f3f4f6",
+  },
 
   /* ---- Footer ---- */
   footer: {
@@ -482,6 +555,13 @@ export function ReportDocument({ data }: { data: ReportData }) {
                       Estimated repair: {fmtCurrency(f.repairCostLow || 0)} – {fmtCurrency(f.repairCostHigh || 0)}
                     </Text>
                   ) : null}
+                  {f.media && f.media.length > 0 && (
+                    <View style={styles.findingPhotoRow}>
+                      {f.media.slice(0, 4).map((m, mi) => (
+                        <Image key={mi} src={m.url} style={styles.findingPhoto} />
+                      ))}
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -492,6 +572,27 @@ export function ReportDocument({ data }: { data: ReportData }) {
           </Text>
         </Page>
       )}
+      {/* ---- Vehicle Photos Page ---- */}
+      {data.standardPhotos && data.standardPhotos.length > 0 && (
+        <Page size="LETTER" style={styles.page}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Vehicle Photos ({data.standardPhotos.length})</Text>
+            <View style={styles.photoGrid}>
+              {data.standardPhotos.map((photo, i) => (
+                <View key={i} style={styles.photoCell}>
+                  <Image src={photo.url} style={styles.photoImage} />
+                  <Text style={styles.photoLabel}>{captureLabel(photo.captureType)}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <Text style={styles.footer}>
+            Report #{data.number} — {data.vehicle.year} {data.vehicle.make} {data.vehicle.model} — VeriBuy
+          </Text>
+        </Page>
+      )}
+
       {/* ---- Page 3: Market Analysis ---- */}
       {data.marketAnalysis && (
         <Page size="LETTER" style={styles.page}>

@@ -13,8 +13,13 @@ import {
   Users,
   LogOut,
   Plus,
+  Shield,
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { trpc } from "@/lib/trpc";
+import { useState } from "react";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -27,8 +32,24 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isSuperAdmin = (session?.user as Record<string, unknown> | undefined)?.role === "SUPER_ADMIN";
+  const { data: usage } = trpc.inspection.usageStats.useQuery();
+  const atLimit = usage ? usage.used >= (usage.limit + usage.bonusInspections) : false;
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const router = useRouter();
+
+  function handleNewInspection(e: React.MouseEvent) {
+    if (atLimit) {
+      e.preventDefault();
+      setShowLimitModal(true);
+    } else {
+      router.push("/dashboard/inspections/new");
+    }
+  }
 
   return (
+    <>
     <aside className="flex h-screen w-64 flex-col bg-surface-raised border-r border-border-default">
       {/* Logo */}
       <div className="flex h-14 items-center gap-2 px-5 border-b border-border-default">
@@ -38,13 +59,13 @@ export function Sidebar() {
 
       {/* New Inspection CTA */}
       <div className="px-3 pt-3 pb-1">
-        <Link
-          href="/dashboard/inspections/new"
-          className="flex items-center justify-center gap-2 w-full rounded-lg bg-brand-gradient text-white text-sm font-medium py-2 shadow-brand-glow hover:brightness-110 transition-all"
+        <button
+          onClick={handleNewInspection}
+          className="flex items-center justify-center gap-2 w-full rounded-lg bg-brand-gradient text-white text-sm font-medium py-2 shadow-brand-glow hover:brightness-110 transition-all cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" />
           New Inspection
-        </Link>
+        </button>
       </div>
 
       {/* Navigation */}
@@ -69,6 +90,25 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Admin link — SUPER_ADMIN only */}
+        {isSuperAdmin && (
+          <>
+            <div className="my-2 border-t border-border-default" />
+            <Link
+              href="/admin"
+              className={cn(
+                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                pathname?.startsWith("/admin")
+                  ? "bg-surface-hover text-text-primary"
+                  : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
+              )}
+            >
+              <Shield className={cn("h-4 w-4 flex-shrink-0", pathname?.startsWith("/admin") ? "text-text-secondary" : "text-text-tertiary")} />
+              Admin
+            </Link>
+          </>
+        )}
       </nav>
 
       {/* Sign out */}
@@ -82,5 +122,14 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+
+    {usage && (
+      <UpgradeModal
+        open={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        usage={usage}
+      />
+    )}
+    </>
   );
 }

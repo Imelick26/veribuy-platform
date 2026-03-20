@@ -1,10 +1,12 @@
 import { z } from "zod/v4";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
 import { analyzeRiskMedia, analyzeOverallCondition } from "@/lib/ai/media-analyzer";
 import { fetchMarketValue } from "@/lib/marketcheck";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { calculateFairPrice, calculateDealEconomics, type HistoryData } from "@/lib/market-valuation";
 import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult } from "@/types/risk";
+import { recalculateScore } from "@/lib/scoring";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -29,6 +31,34 @@ export const inspectionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Enforce monthly inspection limit (base + bonus)
+      const org = await ctx.db.organization.findUnique({
+        where: { id: ctx.orgId },
+        select: { maxInspectionsPerMonth: true, bonusInspections: true },
+      });
+      if (org) {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+        const monthlyCount = await ctx.db.inspection.count({
+          where: { orgId: ctx.orgId, createdAt: { gte: startOfMonth } },
+        });
+        const effectiveLimit = org.maxInspectionsPerMonth + (org.bonusInspections ?? 0);
+        if (monthlyCount >= effectiveLimit) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Monthly inspection limit reached. Purchase additional inspections or contact VeriBuy to upgrade your plan.",
+          });
+        }
+        // Consume a bonus inspection if base monthly quota is exhausted
+        if (monthlyCount >= org.maxInspectionsPerMonth && (org.bonusInspections ?? 0) > 0) {
+          await ctx.db.organization.update({
+            where: { id: ctx.orgId },
+            data: { bonusInspections: { decrement: 1 } },
+          });
+        }
+      }
+
       const number = await generateInspectionNumber(ctx.db);
 
       const inspection = await ctx.db.inspection.create({
@@ -696,48 +726,25 @@ export const inspectionRouter = router({
       const data = step.data as Record<string, unknown>;
       return (data.checkStatuses || {}) as Record<string, { riskId: string; status: string; notes?: string; mediaIds?: string[]; hasPhotoEvidence?: boolean; checkedAt?: string }>;
     }),
+
+  // Monthly usage stats for the org
+  usageStats: protectedProcedure.query(async ({ ctx }) => {
+    const org = await ctx.db.organization.findUnique({
+      where: { id: ctx.orgId },
+      select: { maxInspectionsPerMonth: true, bonusInspections: true },
+    });
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const used = await ctx.db.inspection.count({
+      where: { orgId: ctx.orgId, createdAt: { gte: startOfMonth } },
+    });
+    return {
+      used,
+      limit: org?.maxInspectionsPerMonth ?? 10,
+      bonusInspections: org?.bonusInspections ?? 0,
+    };
+  }),
 });
 
-// Condition score calculation
-async function recalculateScore(db: typeof import("@/server/db").db, inspectionId: string) {
-  const findings = await db.finding.findMany({
-    where: { inspectionId },
-  });
-
-  const weights = { structural: 0.45, cosmetic: 0.30, electronics: 0.25 };
-  const deductions: Record<string, number> = {
-    CRITICAL: 30, MAJOR: 15, MODERATE: 7, MINOR: 3, INFO: 0,
-  };
-
-  const scores = { structural: 100, cosmetic: 100, electronics: 100 };
-
-  for (const f of findings) {
-    const ded = deductions[f.severity] || 0;
-    const bucket = mapCategory(f.category);
-    scores[bucket] = Math.max(0, scores[bucket] - ded);
-  }
-
-  const overall = Math.round(
-    scores.structural * weights.structural +
-    scores.cosmetic * weights.cosmetic +
-    scores.electronics * weights.electronics
-  );
-
-  return db.inspection.update({
-    where: { id: inspectionId },
-    data: {
-      overallScore: overall,
-      structuralScore: scores.structural,
-      cosmeticScore: scores.cosmetic,
-      electronicsScore: scores.electronics,
-    },
-  });
-}
-
-function mapCategory(cat: string): "structural" | "cosmetic" | "electronics" {
-  const structural = ["STRUCTURAL", "DRIVETRAIN", "ENGINE", "TRANSMISSION", "BRAKES", "SUSPENSION"];
-  const electronics = ["ELECTRICAL", "ELECTRONICS", "SAFETY"];
-  if (structural.includes(cat)) return "structural";
-  if (electronics.includes(cat)) return "electronics";
-  return "cosmetic";
-}
+// Score calculation is now in @/lib/scoring.ts (shared with report generation)

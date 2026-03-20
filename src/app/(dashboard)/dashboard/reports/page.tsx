@@ -5,9 +5,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { trpc } from "@/lib/trpc";
 import { FileText, Download, Share2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { formatDate } from "@/lib/utils";
 
 export default function ReportsPage() {
+  const router = useRouter();
   const { data, isLoading } = trpc.report.list.useQuery({ limit: 50 });
   const reports = data?.reports || [];
 
@@ -43,7 +45,7 @@ export default function ReportsPage() {
             </thead>
             <tbody className="divide-y divide-border-default">
               {reports.map((r) => (
-                <tr key={r.id} className="hover:bg-surface-hover transition-colors">
+                <tr key={r.id} className="hover:bg-surface-hover transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/reports/${r.id}`)}>
                   <td className="px-5 py-3 font-mono text-sm text-text-primary">{r.number}</td>
                   <td className="px-5 py-3">
                     <p className="font-medium text-text-primary">
