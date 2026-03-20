@@ -1,0 +1,191 @@
+"use client";
+
+/**
+ * Risk/damage marker layer.
+ *
+ * Renders animated hotspot markers at anatomically-correct positions on the
+ * vehicle model. Each marker's position is resolved via the archetype's
+ * inspection zone sub-positions, so a "radiator leak" marker appears at the
+ * front grille, not at a generic engine center.
+ *
+ * Markers are children of the model group so they rotate WITH the vehicle.
+ */
+
+import { useRef, useState } from "react";
+import { useFrame } from "@react-three/fiber";
+import { Html } from "@react-three/drei";
+import * as THREE from "three";
+import type { VehicleArchetypeId } from "@/types/vehicle";
+import { resolveMarkerPosition } from "@/lib/inspection-zones";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export interface RiskMarker {
+  id: string;
+  severity: "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR" | "INFO";
+  title: string;
+  category: string;
+  /** Component hint for sub-position resolution (e.g., "radiator", "oil") */
+  componentHint?: string | null;
+  cost?: { low: number; high: number };
+}
+
+interface DamageMarkersProps {
+  risks: RiskMarker[];
+  archetypeId: VehicleArchetypeId;
+  activeRiskId: string | null;
+  onRiskClick?: (riskId: string) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Severity colors — green/yellow/red diagnostic palette
+// ---------------------------------------------------------------------------
+
+const SEVERITY_COLORS: Record<string, string> = {
+  CRITICAL: "#ef4444",
+  MAJOR: "#f97316",
+  MODERATE: "#eab308",
+  MINOR: "#22c55e",
+  INFO: "#3b82f6",
+};
+
+// ---------------------------------------------------------------------------
+// Individual marker
+// ---------------------------------------------------------------------------
+
+function Marker({
+  risk,
+  position,
+  isActive,
+  onClick,
+}: {
+  risk: RiskMarker;
+  position: [number, number, number];
+  isActive: boolean;
+  onClick?: () => void;
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
+
+  // Breathing pulse animation
+  useFrame((state) => {
+    if (meshRef.current) {
+      const scale =
+        isActive || hovered
+          ? 1.5
+          : 1 + Math.sin(state.clock.elapsedTime * 2) * 0.15;
+      meshRef.current.scale.setScalar(scale);
+    }
+  });
+
+  const color = SEVERITY_COLORS[risk.severity] || "#666";
+  const showTooltip = hovered || isActive;
+
+  return (
+    <group position={position}>
+      {/* Main sphere — large enough to see through transparent body */}
+      <mesh
+        ref={meshRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.();
+        }}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+        renderOrder={10}
+      >
+        <sphereGeometry args={[0.12, 16, 16]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={isActive || hovered ? 1.2 : 0.8}
+          transparent
+          opacity={0.95}
+          depthTest={false}
+        />
+      </mesh>
+
+      {/* Outer pulse ring */}
+      <mesh renderOrder={9}>
+        <sphereGeometry args={[0.2, 16, 16]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.3}
+          transparent
+          opacity={0.25}
+          depthTest={false}
+        />
+      </mesh>
+
+      {/* Tooltip */}
+      {showTooltip && (
+        <Html
+          distanceFactor={4}
+          style={{ pointerEvents: "none" }}
+        >
+          <div className="whitespace-nowrap rounded-lg bg-slate-900/95 px-3 py-2 shadow-xl backdrop-blur-sm border border-slate-700/50 min-w-[140px]">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span
+                className="inline-block h-2 w-2 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+              <span className="text-[11px] font-semibold text-white">
+                {risk.title}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px]">
+              <span
+                className="font-medium"
+                style={{ color }}
+              >
+                {risk.severity}
+              </span>
+              {risk.cost && (
+                <span className="text-slate-400">
+                  ${(risk.cost.low / 100).toLocaleString()} – $
+                  {(risk.cost.high / 100).toLocaleString()}
+                </span>
+              )}
+            </div>
+          </div>
+        </Html>
+      )}
+    </group>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Marker layer
+// ---------------------------------------------------------------------------
+
+export function DamageMarkers({
+  risks,
+  archetypeId,
+  activeRiskId,
+  onRiskClick,
+}: DamageMarkersProps) {
+  return (
+    <group>
+      {risks.map((risk) => {
+        const position = resolveMarkerPosition(
+          risk.category,
+          archetypeId,
+          risk.componentHint
+        );
+
+        return (
+          <Marker
+            key={risk.id}
+            risk={risk}
+            position={position}
+            isActive={activeRiskId === risk.id}
+            onClick={() => onRiskClick?.(risk.id)}
+          />
+        );
+      })}
+    </group>
+  );
+}

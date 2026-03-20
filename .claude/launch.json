@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5180", "--host"],
-      "port": 5180
+      "name": "veribuy-dev",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "cd /d C:\\Users\\melic\\Desktop\\veribuy-platform && npm run dev"],
+      "port": 3000
     }
   ]
 }
