@@ -15,12 +15,20 @@
   --color-brand-800: #320050;
   --color-brand-900: #1a0033;
 
+  /* Accent Colors */
+  --color-accent-pink: #ff4289;
+  --color-accent-magenta: #be00a4;
+
   /* Severity Colors */
   --color-severity-critical: #b91c1c;
   --color-severity-major: #ea580c;
   --color-severity-moderate: #ca8a04;
   --color-severity-minor: #16a34a;
   --color-severity-info: #2563eb;
+
+  /* Landing Page Animations */
+  --animate-pulse-glow: pulse-glow 3s ease-in-out infinite;
+  --animate-fade-in-up: fadeInUp 0.6s ease-out forwards;
 }
 
 /* === Body === */
@@ -148,4 +156,50 @@ body {
   border-radius: 9999px;
   background: linear-gradient(135deg, #ff4289, #be00a4, #5c0099);
   z-index: -1;
+}
+
+/* === Landing Page Utilities === */
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Glass Card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-hover:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(190, 0, 164, 0.3);
+  box-shadow: 0 0 30px rgba(190, 0, 164, 0.15);
+}
+
+/* Grid Background */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Section divider gradient */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(190, 0, 164, 0.3), transparent);
+}
+
+/* Badge shimmer */
+.badge-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
 }

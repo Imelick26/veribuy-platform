@@ -51,6 +51,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    authorized({ request }) {
+      // Allow /dev routes without auth (for development/testing)
+      if (request.nextUrl.pathname.startsWith("/dev")) return true;
+      // Allow public routes
+      if (request.nextUrl.pathname === "/") return true;
+      if (request.nextUrl.pathname.startsWith("/login")) return true;
+      if (request.nextUrl.pathname.startsWith("/register")) return true;
+      if (request.nextUrl.pathname.startsWith("/api")) return true;
+      // Default: require auth
+      return undefined;
+    },
     async jwt({ token, user }) {
       if (user) {
         const dbUser = await db.user.findUnique({
