@@ -29,35 +29,62 @@ export default function VehiclesPage() {
             <p className="text-text-secondary">Vehicles are added when you start an inspection</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border-default">
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Vehicle</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">VIN</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Drivetrain</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Inspections</th>
-                <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Added</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-default">
+          <>
+            {/* Mobile card view */}
+            <div className="md:hidden divide-y divide-border-default">
               {vehicles.map((v) => (
-                <tr key={v.id} className="hover:bg-surface-hover transition-colors">
-                  <td className="px-5 py-3">
-                    <p className="font-medium text-text-primary">
+                <div key={v.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-medium text-text-primary text-sm">
                       {v.year} {v.make} {v.model} {v.trim || ""}
                     </p>
-                    <p className="text-xs text-text-secondary">{v.bodyStyle}</p>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-sm text-text-secondary">{v.vin}</td>
-                  <td className="px-5 py-3 text-sm text-text-secondary">{v.drivetrain || "\u2014"}</td>
-                  <td className="px-5 py-3">
-                    <Badge variant="info">{v._count.inspections}</Badge>
-                  </td>
-                  <td className="px-5 py-3 text-sm text-text-tertiary">{formatDate(v.createdAt)}</td>
-                </tr>
+                    <Badge variant="info">{v._count.inspections} insp.</Badge>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-text-secondary">
+                    <span className="font-mono truncate">{v.vin}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-text-tertiary mt-1">
+                    {v.bodyStyle && <span>{v.bodyStyle}</span>}
+                    {v.drivetrain && <span>{v.drivetrain}</span>}
+                    <span>{formatDate(v.createdAt)}</span>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Desktop table view */}
+            <div className="hidden md:block">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border-default">
+                    <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Vehicle</th>
+                    <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">VIN</th>
+                    <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Drivetrain</th>
+                    <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Inspections</th>
+                    <th className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider px-5 py-2.5">Added</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-default">
+                  {vehicles.map((v) => (
+                    <tr key={v.id} className="hover:bg-surface-hover transition-colors">
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-text-primary">
+                          {v.year} {v.make} {v.model} {v.trim || ""}
+                        </p>
+                        <p className="text-xs text-text-secondary">{v.bodyStyle}</p>
+                      </td>
+                      <td className="px-5 py-3 font-mono text-sm text-text-secondary">{v.vin}</td>
+                      <td className="px-5 py-3 text-sm text-text-secondary">{v.drivetrain || "\u2014"}</td>
+                      <td className="px-5 py-3">
+                        <Badge variant="info">{v._count.inspections}</Badge>
+                      </td>
+                      <td className="px-5 py-3 text-sm text-text-tertiary">{formatDate(v.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
     </div>
