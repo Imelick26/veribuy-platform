@@ -370,7 +370,7 @@ export default function InspectionDetailPage({
           </div>
         </div>
         <div className="flex gap-2 pl-10 sm:pl-0">
-          {!isCompleted && !isCancelled && (
+          {!isCompleted && !isCancelled && currentStepIndex > 0 && (
             <Button
               onClick={() => setShowFindingForm(true)}
               variant="secondary"

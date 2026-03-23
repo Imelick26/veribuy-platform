@@ -28,6 +28,8 @@ export default function ReportDetailPage({
 }) {
   const { id } = use(params);
   const { data: report, isLoading } = trpc.report.get.useQuery({ id });
+  const utils = trpc.useUtils();
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   if (isLoading) {
     return (
@@ -49,9 +51,6 @@ export default function ReportDetailPage({
       </div>
     );
   }
-
-  const utils = trpc.useUtils();
-  const [pdfLoading, setPdfLoading] = useState(false);
 
   async function handleDownloadPDF() {
     setPdfLoading(true);

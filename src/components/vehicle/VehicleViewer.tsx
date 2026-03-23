@@ -24,14 +24,9 @@ import { classifyVehicle } from "@/lib/vehicle-archetypes";
 import { getModelConfig } from "@/lib/vehicle-models";
 import { useVehicleViewerStore } from "@/stores/vehicle-viewer-store";
 import { VehicleModel } from "./VehicleModel";
-import { InspectionOverlay } from "./InspectionOverlay";
 import { DamageMarkers, type RiskMarker } from "./DamageMarkers";
-import { RiskHeatmap } from "./RiskHeatmap";
 import {
-  Eye,
-  EyeOff,
   Crosshair,
-  Thermometer,
   RotateCcw,
   MoveHorizontal,
 } from "lucide-react";
@@ -165,8 +160,6 @@ function Scene({
   onRiskClick?: (riskId: string) => void;
   onZoneClick?: (zoneId: string) => void;
 }) {
-  const viewMode = useVehicleViewerStore((s) => s.viewMode);
-  const activeZone = useVehicleViewerStore((s) => s.activeZone);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlsRef = useRef<any>(null);
 
@@ -180,29 +173,13 @@ function Scene({
       {/* Vehicle model */}
       <VehicleModel config={config} />
 
-      {/* Inspection zone overlays */}
-      {viewMode === "zones" && (
-        <InspectionOverlay
-          zones={config.inspectionZones}
-          activeZone={activeZone}
-          onZoneClick={onZoneClick}
-        />
-      )}
-
-      {/* Damage markers */}
-      {viewMode === "findings" && (
-        <DamageMarkers
-          risks={risks}
-          archetypeId={config.archetypeId}
-          activeRiskId={activeRiskId}
-          onRiskClick={onRiskClick}
-        />
-      )}
-
-      {/* Risk heatmap */}
-      {viewMode === "heatmap" && (
-        <RiskHeatmap risks={risks} archetypeId={config.archetypeId} />
-      )}
+      {/* Always show damage markers (hotspots) */}
+      <DamageMarkers
+        risks={risks}
+        archetypeId={config.archetypeId}
+        activeRiskId={activeRiskId}
+        onRiskClick={onRiskClick}
+      />
 
       {/* Ground grid (stationary) */}
       <gridHelper
@@ -241,12 +218,6 @@ const PRESET_LABELS = [
   { name: "top", label: "Top", icon: Crosshair },
 ] as const;
 
-const VIEW_MODES = [
-  { mode: "findings", label: "Findings", icon: Crosshair },
-  { mode: "zones", label: "Zones", icon: Eye },
-  { mode: "heatmap", label: "Heatmap", icon: Thermometer },
-  { mode: "clean", label: "Clean", icon: EyeOff },
-] as const;
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -262,8 +233,6 @@ export function VehicleViewer({
 }: VehicleViewerProps) {
   const cameraPreset = useVehicleViewerStore((s) => s.cameraPreset);
   const setCameraPreset = useVehicleViewerStore((s) => s.setCameraPreset);
-  const viewMode = useVehicleViewerStore((s) => s.viewMode);
-  const setViewMode = useVehicleViewerStore((s) => s.setViewMode);
   const setArchetypeId = useVehicleViewerStore((s) => s.setArchetypeId);
 
   // Classify vehicle
@@ -337,23 +306,7 @@ export function VehicleViewer({
         ))}
       </div>
 
-      {/* View mode toggle */}
-      <div className="absolute bottom-3 left-3 z-10 flex gap-1">
-        {VIEW_MODES.map(({ mode, label, icon: Icon }) => (
-          <button
-            key={mode}
-            onClick={() => setViewMode(mode)}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
-              viewMode === mode
-                ? "bg-blue-600/80 text-white"
-                : "bg-slate-800/60 text-slate-400 hover:bg-slate-700/70 hover:text-slate-200"
-            } backdrop-blur-sm`}
-          >
-            <Icon className="h-3 w-3" />
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Hotspots always visible — no mode toggle needed */}
 
       {/* 3D Canvas */}
       <Suspense

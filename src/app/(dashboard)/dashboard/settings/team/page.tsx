@@ -26,7 +26,7 @@ export default function TeamPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
 
-  const isOwner = me?.role === "OWNER";
+  const isOwner = me?.role === "OWNER" || me?.role === "SUPER_ADMIN";
 
   function handleInvite(e: React.FormEvent) {
     e.preventDefault();
