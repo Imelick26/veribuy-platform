@@ -360,8 +360,8 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] mb-8 text-gray-900"
             >
-              The Industry&apos;s First AI-Based Condition Intelligence Platform.{" "}
-              <span className="text-brand-gradient">Setting the New Standard for Truth.</span>
+              AI-Powered Condition Intelligence.{" "}
+              <span className="text-brand-gradient">The New Standard for Truth.</span>
             </motion.h1>
 
             {/* Subheadline */}
@@ -439,7 +439,7 @@ export default function LandingPage() {
               The Problem
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
-              Million-dollar inventory decisions shouldn&apos;t rely on a quick walk-around
+              5-figure inventory decisions shouldn&apos;t rely on a quick walk-around
             </h2>
             <p className="mt-6 text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
               The used car business moves fast. But the tools most dealers rely on
