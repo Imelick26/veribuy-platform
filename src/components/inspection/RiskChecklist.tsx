@@ -343,7 +343,7 @@ export function RiskChecklist({
                           onClick={() => handleSkip(risk.id)}
                           className="text-[11px] text-text-tertiary hover:text-text-secondary underline"
                         >
-                          Unable to inspect
+                          Skip
                         </button>
                       )}
                     </div>

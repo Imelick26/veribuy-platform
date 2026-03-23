@@ -338,7 +338,7 @@ export function GuidedRiskCheck({
             onClick={onSkip}
             className="text-[11px] text-text-tertiary hover:text-text-secondary underline"
           >
-            Unable to inspect
+            Skip
           </button>
         )}
       </div>

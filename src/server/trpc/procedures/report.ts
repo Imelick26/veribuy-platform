@@ -57,14 +57,15 @@ export const reportRouter = router({
           | Record<string, RiskCheckStatus>
           | undefined;
         if (checkStatuses) {
-          const values = Object.values(checkStatuses);
+          // Exclude skipped items from report — silent omission
+          const inspected = Object.values(checkStatuses).filter(
+            (v) => v.status !== "UNABLE_TO_INSPECT"
+          );
           riskChecklist = {
-            total: values.length,
-            confirmed: values.filter((v) => v.status === "CONFIRMED").length,
-            cleared: values.filter((v) => v.status === "NOT_FOUND").length,
-            unableToInspect: values.filter(
-              (v) => v.status === "UNABLE_TO_INSPECT"
-            ).length,
+            total: inspected.length,
+            confirmed: inspected.filter((v) => v.status === "CONFIRMED").length,
+            cleared: inspected.filter((v) => v.status === "NOT_FOUND").length,
+            unableToInspect: 0,
           };
         }
       }

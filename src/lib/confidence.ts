@@ -3,7 +3,7 @@ import type { RiskCheckStatus, AggregatedRisk, AIAnalysisResult } from "@/types/
 export interface RiskConfidence {
   riskId: string;
   confidence: number; // 0.0 - 1.0
-  tier: "VERIFIED" | "EVIDENCED" | "MANUAL" | "UNCHECKED";
+  tier: "VERIFIED" | "EVIDENCED" | "MANUAL" | "SKIPPED" | "UNCHECKED";
   label: string;
 }
 
@@ -18,6 +18,7 @@ const CONFIDENCE_TIERS = {
   VERIFIED: { base: 0.9, label: "AI Verified" },
   EVIDENCED: { base: 0.7, label: "Photo Evidence" },
   MANUAL: { base: 0.45, label: "Manual Only" },
+  SKIPPED: { base: 0.15, label: "Skipped" },
   UNCHECKED: { base: 0.0, label: "Not Checked" },
 };
 
@@ -32,6 +33,16 @@ export function computeRiskConfidence(
       confidence: CONFIDENCE_TIERS.UNCHECKED.base,
       tier: "UNCHECKED",
       label: CONFIDENCE_TIERS.UNCHECKED.label,
+    };
+  }
+
+  // Skipped risks get low confidence — AI may still analyze from standard photos
+  if (checkStatus.status === "UNABLE_TO_INSPECT") {
+    return {
+      riskId,
+      confidence: CONFIDENCE_TIERS.SKIPPED.base,
+      tier: "SKIPPED",
+      label: CONFIDENCE_TIERS.SKIPPED.label,
     };
   }
 
