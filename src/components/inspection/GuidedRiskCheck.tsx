@@ -320,21 +320,7 @@ export function GuidedRiskCheck({
           {/* For photo-only checks, the verdict comes from AI analysis later */}
           {!hasQuestions && status === "NOT_CHECKED" && (
             <p className="text-xs text-text-secondary">
-              AI will analyze this photo during the analysis step. You can also manually mark it:
-              <span className="flex gap-2 mt-1.5">
-                <button
-                  onClick={() => onManualOverride("NOT_FOUND")}
-                  className="text-green-700 underline font-medium"
-                >
-                  Looks good
-                </button>
-                <button
-                  onClick={() => onManualOverride("CONFIRMED")}
-                  className="text-red-700 underline font-medium"
-                >
-                  Issue found
-                </button>
-              </span>
+              AI will analyze this photo during the analysis step.
             </p>
           )}
         </div>
