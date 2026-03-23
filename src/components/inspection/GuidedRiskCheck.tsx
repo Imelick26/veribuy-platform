@@ -1,17 +1,22 @@
 "use client";
 
 import { useRef } from "react";
-import { Camera, CheckCircle, XCircle, Loader2, AlertTriangle, MapPin, Wrench, DollarSign } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { Camera, CheckCircle, Loader2, AlertTriangle, MapPin, Wrench, DollarSign, ImageIcon } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import type { AggregatedRisk, QuestionAnswer, InspectionQuestion } from "@/types/risk";
+import type { AggregatedRisk, QuestionAnswer } from "@/types/risk";
 
 interface GuidedRiskCheckProps {
   risk: AggregatedRisk;
   questionAnswers: QuestionAnswer[];
   onAnswerQuestion: (questionId: string, answer: "yes" | "no") => void;
   onUploadMedia?: (questionId: string, file: File) => Promise<string | null>;
+  /** For photo-check: capture the primary evidence photo for this risk */
+  onCaptureRiskPhoto?: (file: File) => Promise<string | null>;
   uploadingQuestionId?: string | null;
+  /** Is the primary risk photo currently uploading? */
+  uploadingRiskPhoto?: boolean;
+  /** Number of photos already captured for this risk */
+  riskPhotoCount?: number;
   onSkip: () => void;
   onManualOverride: (status: "CONFIRMED" | "NOT_FOUND") => void;
   status: string;
@@ -22,13 +27,21 @@ export function GuidedRiskCheck({
   questionAnswers,
   onAnswerQuestion,
   onUploadMedia,
+  onCaptureRiskPhoto,
   uploadingQuestionId,
+  uploadingRiskPhoto,
+  riskPhotoCount = 0,
   onSkip,
   onManualOverride,
   status,
 }: GuidedRiskCheckProps) {
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const riskPhotoRef = useRef<HTMLInputElement | null>(null);
+
+  const checkMethod = risk.checkMethod || "photo";
   const questions = risk.inspectionQuestions || [];
+  const hasQuestions = questions.length > 0 && (checkMethod === "manual" || checkMethod === "both");
+  const hasPhotoCapture = checkMethod === "photo" || checkMethod === "both";
 
   // Build answer lookup
   const answerMap = new Map<string, QuestionAnswer>();
@@ -36,14 +49,21 @@ export function GuidedRiskCheck({
     answerMap.set(qa.questionId, qa);
   }
 
-  // Compute results
+  // Question results
   const answeredCount = questions.filter((q) => answerMap.has(q.id) && answerMap.get(q.id)!.answer != null).length;
-  const allAnswered = answeredCount >= questions.length;
+  const allQuestionsAnswered = !hasQuestions || answeredCount >= questions.length;
   const failedQuestions = questions.filter((q) => {
     const qa = answerMap.get(q.id);
     return qa && qa.answer === q.failureAnswer;
   });
   const hasFailures = failedQuestions.length > 0;
+
+  // Photo capture state
+  const hasPhotos = riskPhotoCount > 0;
+  const photoComplete = !hasPhotoCapture || hasPhotos;
+
+  // Overall readiness
+  const isComplete = photoComplete && allQuestionsAnswered;
 
   const handleFileSelect = async (questionId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,6 +71,16 @@ export function GuidedRiskCheck({
     await onUploadMedia(questionId, file);
     e.target.value = "";
   };
+
+  const handleRiskPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onCaptureRiskPhoto) return;
+    await onCaptureRiskPhoto(file);
+    e.target.value = "";
+  };
+
+  // Get the best capture prompt
+  const capturePrompt = risk.capturePrompts?.[0] || `Photograph the ${risk.whatToCheck || risk.title}`;
 
   return (
     <div className="space-y-3">
@@ -84,110 +114,173 @@ export function GuidedRiskCheck({
         )}
       </div>
 
-      {/* Questions */}
-      <div className="space-y-2">
-        {questions.map((q, idx) => {
-          const qa = answerMap.get(q.id);
-          const answer = qa?.answer;
-          const isFailure = answer === q.failureAnswer;
-          const isAnswered = answer === "yes" || answer === "no";
-          const showMediaPrompt = isFailure && q.mediaPrompt;
-          const questionMedia = qa?.mediaIds || [];
+      {/* ─── PHOTO CAPTURE SECTION (photo / both) ─── */}
+      {hasPhotoCapture && (
+        <div className={cn(
+          "rounded-lg border p-3 transition-all",
+          hasPhotos ? "border-green-200 bg-green-50/50" : "border-brand-400 bg-brand-50/30"
+        )}>
+          <div className="flex items-start gap-2 mb-2">
+            <ImageIcon className={cn("h-4 w-4 shrink-0 mt-0.5", hasPhotos ? "text-green-600" : "text-brand-600")} />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-text-primary">
+                {hasPhotos ? "Photo captured" : "Capture photo"}
+              </p>
+              <p className="text-xs text-text-secondary mt-0.5">{capturePrompt}</p>
+            </div>
+          </div>
 
-          return (
-            <div
-              key={q.id}
+          <div className="flex items-center gap-2 ml-6">
+            <button
+              onClick={() => riskPhotoRef.current?.click()}
+              disabled={uploadingRiskPhoto}
               className={cn(
-                "rounded-lg border p-2.5 transition-all",
-                isAnswered && isFailure ? "border-red-300 bg-red-50" :
-                isAnswered ? "border-green-200 bg-green-50/50" :
-                "border-border-default bg-surface-raised"
+                "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
+                hasPhotos
+                  ? "bg-green-100 text-green-700 hover:bg-green-200"
+                  : "bg-brand-gradient text-white hover:brightness-110"
               )}
             >
-              {/* Question number + text */}
-              <div className="flex items-start gap-2 mb-2">
-                <span className={cn(
-                  "shrink-0 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold",
-                  isAnswered && isFailure ? "bg-red-200 text-red-800" :
-                  isAnswered ? "bg-green-200 text-green-800" :
-                  "bg-surface-overlay text-text-tertiary"
-                )}>
-                  {isAnswered ? (isFailure ? "✗" : "✓") : idx + 1}
-                </span>
-                <p className="text-sm text-text-primary leading-snug flex-1">
-                  {q.question}
-                </p>
-              </div>
+              {uploadingRiskPhoto ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Camera className="h-3.5 w-3.5" />
+              )}
+              {hasPhotos ? `${riskPhotoCount} photo${riskPhotoCount > 1 ? "s" : ""} · Add more` : "Take Photo"}
+            </button>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              capture="environment"
+              className="hidden"
+              ref={riskPhotoRef}
+              onChange={handleRiskPhotoSelect}
+            />
+          </div>
 
-              {/* Yes / No buttons */}
-              <div className="flex items-center gap-2 ml-7">
-                <button
-                  onClick={() => onAnswerQuestion(q.id, "yes")}
+          {/* Signs of failure hints */}
+          {!hasPhotos && risk.signsOfFailure && risk.signsOfFailure.length > 0 && (
+            <div className="ml-6 mt-2">
+              <p className="text-[11px] font-semibold text-text-secondary mb-0.5">Look for:</p>
+              <ul className="text-[11px] text-text-tertiary list-disc list-inside">
+                {risk.signsOfFailure.slice(0, 3).map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── MANUAL QUESTIONS SECTION (manual / both) ─── */}
+      {hasQuestions && (
+        <>
+          {checkMethod === "both" && (
+            <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
+              Hands-on checks
+            </p>
+          )}
+          <div className="space-y-2">
+            {questions.map((q, idx) => {
+              const qa = answerMap.get(q.id);
+              const answer = qa?.answer;
+              const isFailure = answer === q.failureAnswer;
+              const isAnswered = answer === "yes" || answer === "no";
+              const showMediaPrompt = isFailure && q.mediaPrompt;
+              const questionMedia = qa?.mediaIds || [];
+
+              return (
+                <div
+                  key={q.id}
                   className={cn(
-                    "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                    answer === "yes"
-                      ? (q.failureAnswer === "yes" ? "bg-red-600 text-white" : "bg-green-600 text-white")
-                      : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
+                    "rounded-lg border p-2.5 transition-all",
+                    isAnswered && isFailure ? "border-red-300 bg-red-50" :
+                    isAnswered ? "border-green-200 bg-green-50/50" :
+                    "border-border-default bg-surface-raised"
                   )}
                 >
-                  Yes
-                </button>
-                <button
-                  onClick={() => onAnswerQuestion(q.id, "no")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                    answer === "no"
-                      ? (q.failureAnswer === "no" ? "bg-red-600 text-white" : "bg-green-600 text-white")
-                      : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
-                  )}
-                >
-                  No
-                </button>
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className={cn(
+                      "shrink-0 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold",
+                      isAnswered && isFailure ? "bg-red-200 text-red-800" :
+                      isAnswered ? "bg-green-200 text-green-800" :
+                      "bg-surface-overlay text-text-tertiary"
+                    )}>
+                      {isAnswered ? (isFailure ? "✗" : "✓") : idx + 1}
+                    </span>
+                    <p className="text-sm text-text-primary leading-snug flex-1">
+                      {q.question}
+                    </p>
+                  </div>
 
-                {/* Inline camera when failure detected + mediaPrompt exists */}
-                {showMediaPrompt && onUploadMedia && (
-                  <>
+                  <div className="flex items-center gap-2 ml-7">
                     <button
-                      onClick={() => fileInputRefs.current[q.id]?.click()}
+                      onClick={() => onAnswerQuestion(q.id, "yes")}
                       className={cn(
-                        "ml-auto flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors",
-                        questionMedia.length > 0
-                          ? "bg-brand-100 text-brand-700"
-                          : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                        "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                        answer === "yes"
+                          ? (q.failureAnswer === "yes" ? "bg-red-600 text-white" : "bg-green-600 text-white")
+                          : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
                       )}
                     >
-                      {uploadingQuestionId === q.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Camera className="h-3.5 w-3.5" />
-                      )}
-                      {questionMedia.length > 0 ? `${questionMedia.length} photo${questionMedia.length > 1 ? "s" : ""}` : "Add Photo"}
+                      Yes
                     </button>
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      capture="environment"
-                      className="hidden"
-                      ref={(el) => { fileInputRefs.current[q.id] = el; }}
-                      onChange={(e) => handleFileSelect(q.id, e)}
-                    />
-                  </>
-                )}
-              </div>
+                    <button
+                      onClick={() => onAnswerQuestion(q.id, "no")}
+                      className={cn(
+                        "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                        answer === "no"
+                          ? (q.failureAnswer === "no" ? "bg-red-600 text-white" : "bg-green-600 text-white")
+                          : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
+                      )}
+                    >
+                      No
+                    </button>
 
-              {/* Media prompt hint */}
-              {showMediaPrompt && questionMedia.length === 0 && (
-                <p className="text-[11px] text-amber-600 ml-7 mt-1.5 italic">
-                  📸 {q.mediaPrompt}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    {showMediaPrompt && onUploadMedia && (
+                      <>
+                        <button
+                          onClick={() => fileInputRefs.current[q.id]?.click()}
+                          className={cn(
+                            "ml-auto flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors",
+                            questionMedia.length > 0
+                              ? "bg-brand-100 text-brand-700"
+                              : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                          )}
+                        >
+                          {uploadingQuestionId === q.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Camera className="h-3.5 w-3.5" />
+                          )}
+                          {questionMedia.length > 0 ? `${questionMedia.length}` : "Photo"}
+                        </button>
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          capture="environment"
+                          className="hidden"
+                          ref={(el) => { fileInputRefs.current[q.id] = el; }}
+                          onChange={(e) => handleFileSelect(q.id, e)}
+                        />
+                      </>
+                    )}
+                  </div>
 
-      {/* Auto-verdict summary */}
-      {allAnswered && (
+                  {showMediaPrompt && questionMedia.length === 0 && (
+                    <p className="text-[11px] text-amber-600 ml-7 mt-1.5 italic">
+                      📸 {q.mediaPrompt}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ─── VERDICT SUMMARY ─── */}
+      {isComplete && (
         <div className={cn(
           "rounded-lg p-3 border",
           hasFailures ? "bg-red-50 border-red-300" : "bg-green-50 border-green-200"
@@ -204,13 +297,13 @@ export function GuidedRiskCheck({
               <>
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <span className="text-sm font-semibold text-green-700">
-                  All checks passed
+                  {hasQuestions ? "All checks passed" : "Photo captured for AI analysis"}
                 </span>
               </>
             )}
           </div>
 
-          {status === "NOT_CHECKED" && (
+          {status === "NOT_CHECKED" && hasQuestions && (
             <button
               onClick={() => onManualOverride(hasFailures ? "CONFIRMED" : "NOT_FOUND")}
               className={cn(
@@ -223,13 +316,36 @@ export function GuidedRiskCheck({
               {hasFailures ? "Mark as Issue Found" : "Mark as Clear"}
             </button>
           )}
+
+          {/* For photo-only checks, the verdict comes from AI analysis later */}
+          {!hasQuestions && status === "NOT_CHECKED" && (
+            <p className="text-xs text-text-secondary">
+              AI will analyze this photo during the analysis step. You can also manually mark it:
+              <span className="flex gap-2 mt-1.5">
+                <button
+                  onClick={() => onManualOverride("NOT_FOUND")}
+                  className="text-green-700 underline font-medium"
+                >
+                  Looks good
+                </button>
+                <button
+                  onClick={() => onManualOverride("CONFIRMED")}
+                  className="text-red-700 underline font-medium"
+                >
+                  Issue found
+                </button>
+              </span>
+            </p>
+          )}
         </div>
       )}
 
       {/* Progress + skip */}
       <div className="flex items-center justify-between">
         <span className="text-[11px] text-text-tertiary">
-          {answeredCount}/{questions.length} questions answered
+          {hasQuestions && `${answeredCount}/${questions.length} checks`}
+          {hasQuestions && hasPhotoCapture && " · "}
+          {hasPhotoCapture && `${riskPhotoCount} photo${riskPhotoCount !== 1 ? "s" : ""}`}
         </span>
         {status === "NOT_CHECKED" && (
           <button

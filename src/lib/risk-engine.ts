@@ -14,6 +14,7 @@ interface KnownIssueInput {
   category: string;
   severity: Severity;
   likelihood: Likelihood;
+  checkMethod?: "photo" | "manual" | "both";
   whatToCheck: string;
   whereToLook: string;
   howToInspect: string;
@@ -82,6 +83,7 @@ export function buildRiskProfile(input: BuildProfileInput): AggregatedRiskProfil
         : getCapturePromptList(category),
       inspectionGuidance: issue.howToInspect,
       // New structured fields
+      checkMethod: issue.checkMethod || "photo",
       whatToCheck: issue.whatToCheck,
       whereToLook: issue.whereToLook,
       howToInspect: issue.howToInspect,

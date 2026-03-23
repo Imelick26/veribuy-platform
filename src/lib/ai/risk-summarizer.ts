@@ -12,6 +12,7 @@ interface KnownIssueOutput {
   category: string;
   severity: "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR";
   likelihood: Likelihood;
+  checkMethod: "photo" | "manual" | "both";
   whatToCheck: string;
   whereToLook: string;
   howToInspect: string;
@@ -93,11 +94,19 @@ DO NOT INCLUDE generic items that any dealer can spot in seconds. The following 
 - Brake pad thickness (unless this platform has a SPECIFIC known brake issue)
 Focus ONLY on platform-specific known failure points that require expert knowledge of this vehicle.
 
-INSPECTION QUESTIONS:
-For each issue, also generate 2-5 specific YES/NO inspection questions in the "inspectionQuestions" array. These must be precise, hands-on checks the inspector performs sequentially at the vehicle. Each question must be answerable with "yes" or "no". Specify which answer ("yes" or "no") indicates a FAILURE via "failureAnswer". Optionally include a "mediaPrompt" telling the inspector what to photograph if the answer indicates a problem.
-Example: For steering column play on a Ford F-250, a good question would be:
+CHECK METHOD — CRITICAL DECISION FOR EACH ISSUE:
+For each issue, you MUST decide how it should be inspected by setting "checkMethod":
+- "photo" — DEFAULT. The issue CAN be detected or documented by taking a photograph of the affected area (e.g., oil leaks, rust, corrosion, worn bushings, cracked hoses, fluid residue, damaged components). The inspector takes a photo and AI vision analyzes it. For these, "capturePrompts" must describe exactly what to photograph. Do NOT include "inspectionQuestions".
+- "manual" — ONLY use when photos genuinely cannot capture the issue and it requires hands-on physical testing (e.g., steering play, transmission slip under load, engine knock sound, brake pulsation feel, A/C cooling output). For these, include 2-5 YES/NO "inspectionQuestions". Do NOT include "capturePrompts".
+- "both" — The issue benefits from BOTH a photo AND hands-on checks (e.g., ball joints — photograph for visual wear AND test for play by rocking the wheel). Include both "capturePrompts" and "inspectionQuestions".
+
+IMPORTANT: Default to "photo" whenever possible. Photo capture is the core of this tool. Only use "manual" when the issue truly cannot be seen in a photograph (sounds, vibrations, temperature, feel, functional tests). Most issues (70%+) should be "photo" or "both".
+
+INSPECTION QUESTIONS (for "manual" and "both" check methods):
+Each question must be a precise, hands-on check the inspector performs at the vehicle. Must be answerable with "yes" or "no". Set "failureAnswer" to whichever answer indicates a PROBLEM. Optionally include "mediaPrompt" for what to photograph/record if failure is detected.
+Example for steering column play:
   {"question": "Turn the steering wheel left and right with the engine off. Is there more than 1/4 inch of free play before the wheels start to turn?", "failureAnswer": "yes", "mediaPrompt": "Record the steering wheel play showing how far it moves before the wheels respond"}
-Questions should test things that CANNOT be determined from photos alone — sounds, feel, movement, temperature, smell, function tests, etc.
+Questions should test things photos CANNOT capture: sounds, feel, movement, temperature, smell, function tests, etc.
 
 CATEGORIES (use exactly these values):
 ENGINE, TRANSMISSION, DRIVETRAIN, STRUCTURAL, SUSPENSION, BRAKES, TIRES_WHEELS, ELECTRICAL, ELECTRONICS, SAFETY, COSMETIC_EXTERIOR, COSMETIC_INTERIOR, HVAC, OTHER`;
@@ -114,6 +123,7 @@ Generate the known-issues inspection checklist for this vehicle. For each known 
   "category": "one of the CATEGORIES above",
   "severity": "CRITICAL | MAJOR | MODERATE | MINOR",
   "likelihood": "VERY_COMMON | COMMON | OCCASIONAL | RARE",
+  "checkMethod": "photo | manual | both",
   "whatToCheck": "The specific component or system",
   "whereToLook": "Exact location on the vehicle",
   "howToInspect": "Step-by-step instructions for checking this item",
@@ -163,8 +173,17 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
         item.whyItMatters
     );
 
-    // Post-process: assign sequential IDs and order to inspection questions
+    // Post-process: normalize checkMethod and assign IDs to inspection questions
     for (const item of validated) {
+      // Default checkMethod to "photo" if not specified or invalid
+      if (!item.checkMethod || !["photo", "manual", "both"].includes(item.checkMethod)) {
+        item.checkMethod = "photo";
+      }
+      // If manual/both but no questions, downgrade to photo
+      if ((item.checkMethod === "manual" || item.checkMethod === "both") &&
+          (!Array.isArray(item.inspectionQuestions) || item.inspectionQuestions.length === 0)) {
+        item.checkMethod = "photo";
+      }
       if (Array.isArray(item.inspectionQuestions) && item.inspectionQuestions.length > 0) {
         item.inspectionQuestions = item.inspectionQuestions
           .filter((q) => q.question && (q.failureAnswer === "yes" || q.failureAnswer === "no"))

@@ -98,7 +98,9 @@ export interface AggregatedRisk {
   whyItMatters?: string;
   /** How commonly this issue occurs on this vehicle */
   likelihood?: Likelihood;
-  /** Structured yes/no questions for guided inspection */
+  /** How this risk should be checked: photo (AI vision), manual (yes/no questions), or both */
+  checkMethod?: "photo" | "manual" | "both";
+  /** Structured yes/no questions for guided inspection (manual/both checks) */
   inspectionQuestions?: InspectionQuestion[];
 }
 

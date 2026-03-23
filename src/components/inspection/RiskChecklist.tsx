@@ -194,8 +194,8 @@ export function RiskChecklist({
                 {/* Action buttons — Pass / Fail or Guided expand */}
                 {status === "NOT_CHECKED" ? (
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* Only show Pass/Fail for risks without guided questions */}
-                    {!(risk.inspectionQuestions && risk.inspectionQuestions.length > 0 && onAnswerQuestion) && (
+                    {/* Only show Pass/Fail for legacy risks without checkMethod */}
+                    {!risk.checkMethod && (
                       <>
                         <button
                           onClick={(e) => { e.stopPropagation(); handlePass(risk.id); }}
@@ -278,17 +278,20 @@ export function RiskChecklist({
                 )}
               </div>
 
-              {/* Expandable details — guided questions or legacy static details */}
+              {/* Expandable details — guided flow or legacy static details */}
               {isExpanded && (
                 <div className="px-3 pb-3 border-t border-border-default pt-2">
-                  {risk.inspectionQuestions && risk.inspectionQuestions.length > 0 && onAnswerQuestion ? (
-                    /* Guided question flow */
+                  {risk.checkMethod ? (
+                    /* Guided check flow (photo, manual, or both) */
                     <GuidedRiskCheck
                       risk={risk}
                       questionAnswers={checkStatuses[risk.id]?.questionAnswers || []}
-                      onAnswerQuestion={(questionId, answer) => onAnswerQuestion(risk.id, questionId, answer)}
+                      onAnswerQuestion={(questionId, answer) => onAnswerQuestion?.(risk.id, questionId, answer)}
                       onUploadMedia={onUploadQuestionMedia ? (questionId, file) => onUploadQuestionMedia(risk.id, questionId, file) : undefined}
+                      onCaptureRiskPhoto={onUploadEvidence ? (file) => onUploadEvidence(risk.id, 0, file) : undefined}
                       uploadingQuestionId={uploadingQuestionId}
+                      uploadingRiskPhoto={uploadingRiskCapture === risk.id}
+                      riskPhotoCount={riskMedia.length}
                       onSkip={() => handleSkip(risk.id)}
                       onManualOverride={(s) => {
                         onCheckRisk(risk.id, s);
