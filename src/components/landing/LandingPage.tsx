@@ -24,6 +24,7 @@ import {
   Users,
   Store,
   Zap,
+  Sparkles,
 } from "lucide-react";
 
 /* ─── Data ──────────────────────────────────────────────── */
@@ -35,9 +36,9 @@ const navLinks = [
 ];
 
 const trustBadges = [
+  "AI-Powered",
   "SOC 2 Compliant",
   "256-bit Encryption",
-  "99.9% Uptime SLA",
   "Enterprise Ready",
 ];
 
@@ -46,72 +47,72 @@ const problems = [
     icon: AlertTriangle,
     stat: "$3.5B+",
     statLabel: "in annual losses",
-    title: "Inconsistent Evaluations",
+    title: "You Can\u2019t Appraise What You Can\u2019t See",
     description:
-      "Every dealership does it differently. Subjective assessments lead to missed issues, pricing errors, and costly post-sale surprises.",
+      "Walk-arounds miss what\u2019s underneath. Subjective appraisals lead to buying wrong, overpaying at auction, and recon costs that eat your front gross before the unit ever hits the line.",
   },
   {
     icon: EyeOff,
     stat: "68%",
     statLabel: "of buyers distrust listings",
-    title: "Eroded Buyer Confidence",
+    title: "Buyers Don\u2019t Trust Your Word Alone",
     description:
-      "Buyers and dealers operate on incomplete information. Without a trusted standard, deals stall and margins shrink.",
+      "Today\u2019s consumer has been burned before. Without verified, third-party condition data backing your listings, deals stall, be-backs never return, and your close rate suffers.",
   },
   {
     icon: Clock,
     stat: "2.4 hrs",
-    statLabel: "avg. manual process",
-    title: "Slow, Manual Workflows",
+    statLabel: "avg. manual appraisal",
+    title: "Your Recon Process is Bleeding Gross",
     description:
-      "Paper forms, disconnected tools, and phone-camera photos waste hours per vehicle while still missing what matters most.",
+      "Every day a unit sits in recon is carrying cost you\u2019ll never get back. Paper forms, disconnected tools, and slow approvals push your time-to-line into double digits.",
   },
   {
     icon: TrendingDown,
     stat: "41%",
-    statLabel: "of issues are preventable",
-    title: "Avoidable Losses",
+    statLabel: "of post-sale issues preventable",
+    title: "Aged Units Are Killing Your Turn",
     description:
-      "Without the right intelligence upfront, dealerships acquire vehicles with hidden problems that eat into profit after the fact.",
+      "Without the right intelligence at the point of acquisition, you\u2019re stocking units with hidden problems that sit, depreciate, and eventually wholesale out at a loss.",
   },
 ];
 
 const capabilities = [
   {
     icon: Scan,
-    title: "Vehicle Intelligence",
+    title: "VIN-Level Intelligence",
     description:
-      "Instantly unlock a comprehensive picture of any vehicle — from factory specs to history signals — all from a single identifier.",
+      "Drop a VIN and our AI instantly builds a complete vehicle profile \u2014 history, specs, risk signals, and condition indicators \u2014 before your appraiser even walks the lot.",
   },
   {
     icon: Camera,
-    title: "Structured Capture",
+    title: "AI-Guided Capture",
     description:
-      "Replace inconsistent processes with guided workflows that ensure nothing gets missed, every time, at every location.",
+      "Replace inconsistent walk-arounds with an intelligent, guided process. Our AI directs every step so nothing gets missed \u2014 same standard, every unit, every rooftop.",
   },
   {
     icon: Brain,
-    title: "AI-Powered Analysis",
+    title: "AI Condition Scoring",
     description:
-      "Proprietary models turn raw data into actionable intelligence, giving your team objective insights that remove the guesswork.",
+      "Our proprietary AI models analyze every data point captured to produce an objective condition score \u2014 removing the subjectivity that costs dealers thousands per unit.",
   },
   {
     icon: FileCheck,
-    title: "Trusted Reports",
+    title: "Verified Condition Reports",
     description:
-      "Generate verified, shareable condition reports that build confidence with buyers and create transparency across your operation.",
+      "Generate verified, branded reports that give your buyers the transparency they need to say yes. Show your work and close with confidence.",
   },
   {
     icon: ShieldCheck,
-    title: "Risk Detection",
+    title: "Pre-Acquisition Risk Signals",
     description:
-      "Surface critical signals before they become costly problems — so you can make acquisition decisions with full clarity.",
+      "Know what you\u2019re buying before you buy it. Our AI surfaces the red flags that turn a good deal into a costly mistake \u2014 before you take the unit over the curb.",
   },
   {
     icon: BarChart3,
-    title: "Operational Insights",
+    title: "Dealership Analytics",
     description:
-      "Track trends across your inventory, measure team performance, and identify opportunities to improve margins and efficiency.",
+      "Track your inventory health, monitor recon velocity, and understand your true cost-to-market across every unit on your lot.",
   },
 ];
 
@@ -119,26 +120,26 @@ const steps = [
   {
     number: "01",
     icon: Search,
-    title: "Identify",
-    subtitle: "Instant Intelligence",
+    title: "Decode",
+    subtitle: "AI Vehicle Intelligence",
     description:
-      "Start with a VIN and instantly surface everything you need to know about a vehicle before going any further.",
+      "Enter any VIN and let our AI build a complete picture \u2014 specs, history, risk signals \u2014 in seconds, not hours.",
   },
   {
     number: "02",
     icon: Camera,
     title: "Capture",
-    subtitle: "Guided Workflow",
+    subtitle: "AI-Guided Inspection",
     description:
-      "Walk through a standardized process that ensures consistent, comprehensive documentation every single time.",
+      "Our AI walks your team through a structured capture process. Consistent results, every unit, every time.",
   },
   {
     number: "03",
-    icon: BarChart3,
-    title: "Analyze",
-    subtitle: "AI-Driven Scoring",
+    icon: Brain,
+    title: "Score",
+    subtitle: "AI Condition Analysis",
     description:
-      "Our engine processes everything captured to produce an objective, quantified assessment you can trust and act on.",
+      "Proprietary AI models analyze everything captured to generate an objective condition score you can trust and act on.",
   },
   {
     number: "04",
@@ -146,53 +147,53 @@ const steps = [
     title: "Verify",
     subtitle: "Transparent Results",
     description:
-      "Share verified results with your team, your buyers, or anyone in the transaction — building trust at every step.",
+      "Share verified condition data with your team, your buyers, or across your group. Build trust that closes deals.",
   },
 ];
 
 const dealerBenefits = [
   {
     icon: Building2,
-    title: "Multi-Rooftop Operations",
+    title: "Built for Dealer Groups",
     description:
-      "Manage every location from a single platform. Ensure consistency, visibility, and control across your entire dealer group.",
+      "One platform across every rooftop. Standardize your appraisal process, get centralized visibility into inventory condition, and ensure your team follows the same playbook \u2014 whether you have 2 stores or 200.",
     features: [
-      "Centralized management",
-      "Consistent standards",
-      "Cross-location visibility",
+      "Multi-rooftop management",
+      "Standardized processes",
+      "Group-wide visibility",
     ],
   },
   {
     icon: Zap,
-    title: "Faster Acquisition Decisions",
+    title: "Buy Right, Every Time",
     description:
-      "Get the intelligence you need in minutes, not hours. Make confident buy decisions at auction, trade-in, or wholesale — before the opportunity passes.",
+      "Our AI gives you the true condition picture before you commit \u2014 at auction, on trade-ins, or wholesale. Know your recon exposure upfront so you can pencil the deal with confidence and protect your front gross.",
     features: [
-      "Minutes, not hours",
-      "Auction-ready speed",
-      "Confident pricing",
+      "Pre-acquisition intelligence",
+      "Recon cost clarity",
+      "Confident appraisals",
     ],
   },
   {
     icon: Users,
-    title: "Buyer Trust & Transparency",
+    title: "Build Buyer Confidence",
     description:
-      "Give your customers the verified information they need to buy with confidence. Differentiate your dealership with a level of transparency that drives loyalty.",
+      "Today\u2019s buyers want transparency. VeriBuy gives you verified, AI-backed condition data you can share on your listings and at the desk \u2014 turning skeptical shoppers into confident buyers.",
     features: [
       "Verified condition data",
-      "Branded reports",
+      "Branded buyer reports",
       "Higher close rates",
     ],
   },
   {
     icon: Store,
-    title: "Inventory Intelligence",
+    title: "Turn Faster, Earn More",
     description:
-      "Know exactly what you have on your lot. Understand condition trends, identify reconditioning priorities, and optimize your turn time.",
+      "Cut your time-to-line by getting condition intelligence on day one. Prioritize recon, price to market faster, and get frontline-ready units in front of buyers before carrying costs eat your margin.",
     features: [
-      "Lot-wide visibility",
+      "Faster time-to-line",
       "Recon prioritization",
-      "Margin optimization",
+      "Margin protection",
     ],
   },
 ];
@@ -346,8 +347,8 @@ export default function LandingPage() {
             {/* Badge */}
             <motion.div initial="hidden" animate="visible" custom={0} variants={fadeUp}>
               <div className="inline-flex items-center gap-2 rounded-full border border-brand-200/60 bg-brand-50/80 px-5 py-2.5 text-sm text-brand-600 mb-8">
-                <Shield size={15} className="text-accent-pink" />
-                Automotive Condition Intelligence Platform
+                <Sparkles size={15} className="text-accent-pink" />
+                The First AI-Powered Automotive Condition Intelligence Platform
               </div>
             </motion.div>
 
@@ -359,8 +360,8 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] mb-8 text-gray-900"
             >
-              The Truth Layer for{" "}
-              <span className="text-brand-gradient">Automotive Acquisition</span>
+              Know the True Condition{" "}
+              <span className="text-brand-gradient">Before You Buy</span>
             </motion.h1>
 
             {/* Subheadline */}
@@ -371,9 +372,9 @@ export default function LandingPage() {
               variants={fadeUp}
               className="max-w-2xl text-lg md:text-xl text-gray-500 leading-relaxed mb-10 mx-auto"
             >
-              VeriBuy gives dealerships the intelligence to acquire, evaluate,
-              and sell vehicles with complete confidence — replacing guesswork
-              with verified data at every step.
+              VeriBuy uses AI to give dealers a clear, verified picture of every
+              vehicle&apos;s true condition \u2014 at the point of acquisition, before
+              recon, and on the frontline. Stop guessing. Start knowing.
             </motion.p>
 
             {/* CTAs */}
@@ -448,9 +449,9 @@ export default function LandingPage() {
                 <div className="p-6 md:p-8 bg-gradient-to-br from-brand-50/40 via-white to-brand-50/20">
                   <div className="grid md:grid-cols-3 gap-4 mb-6">
                     {[
-                      { label: "Active Inspections", value: "247", change: "+12% this week" },
-                      { label: "Avg. Condition Score", value: "87.4", change: "Across 1,240 vehicles" },
-                      { label: "Alerts", value: "3", change: "Requires attention" },
+                      { label: "Units in Pipeline", value: "247", change: "+12 this week" },
+                      { label: "Avg. Condition Score", value: "87.4", change: "Across 1,240 units" },
+                      { label: "Recon Alerts", value: "3", change: "Needs attention" },
                     ].map((stat) => (
                       <div key={stat.label} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
                         <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">{stat.label}</p>
@@ -462,13 +463,13 @@ export default function LandingPage() {
 
                   <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                      <p className="text-xs font-medium text-gray-700">Recent Inspections</p>
+                      <p className="text-xs font-medium text-gray-700">Recent Appraisals</p>
                       <p className="text-[10px] text-gray-400">View All</p>
                     </div>
                     {[
-                      { vehicle: "2024 BMW X5 xDrive40i", vin: "WBA53EJ09R...7842", score: 92, status: "Verified" },
-                      { vehicle: "2023 Mercedes-Benz GLE 350", vin: "4JGFB4FB2P...1205", score: 85, status: "Verified" },
-                      { vehicle: "2024 Ford F-150 Lariat", vin: "1FTFW1E87N...4019", score: 71, status: "Review" },
+                      { vehicle: "2024 BMW X5 xDrive40i", vin: "WBA53EJ09R...7842", score: 92, status: "Frontline Ready" },
+                      { vehicle: "2023 Mercedes-Benz GLE 350", vin: "4JGFB4FB2P...1205", score: 85, status: "In Recon" },
+                      { vehicle: "2024 Ford F-150 Lariat", vin: "1FTFW1E87N...4019", score: 71, status: "Needs Review" },
                     ].map((row, i) => (
                       <div key={i} className="px-4 py-3 flex items-center justify-between border-b border-gray-50 last:border-0">
                         <div className="flex-1 min-w-0">
@@ -482,8 +483,10 @@ export default function LandingPage() {
                           </div>
                           <span
                             className={`px-2.5 py-1 rounded-full text-[10px] font-medium ${
-                              row.status === "Verified"
+                              row.status === "Frontline Ready"
                                 ? "bg-emerald-50 text-emerald-600"
+                                : row.status === "In Recon"
+                                ? "bg-blue-50 text-blue-600"
                                 : "bg-yellow-50 text-yellow-600"
                             }`}
                           >
@@ -513,14 +516,15 @@ export default function LandingPage() {
             className="text-center mb-16"
           >
             <p className="text-sm font-medium text-accent-magenta uppercase tracking-[0.15em] mb-4">
-              The Industry Problem
+              The Problem
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
-              The way dealerships evaluate vehicles is broken
+              Dealers are still making million-dollar decisions on gut feel
             </h2>
             <p className="mt-6 text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
-              Over $1.2 trillion in used vehicle transactions happen every year,
-              yet the tools most dealers rely on haven&apos;t evolved in decades.
+              The used car business moves fast. But the tools most dealers rely on
+              for condition assessment haven&apos;t kept up. That gap is costing you
+              gross, time, and trust.
             </p>
           </motion.div>
 
@@ -563,7 +567,7 @@ export default function LandingPage() {
         <div className="h-px bg-gradient-to-r from-transparent via-brand-200/60 to-transparent" />
       </div>
 
-      {/* ─── Platform / Solution Section ────────────────── */}
+      {/* ─── AI-First Platform Section ──────────────────── */}
       <section id="platform" className="relative py-24 lg:py-32 bg-gradient-to-br from-brand-50/40 via-white to-brand-50/20">
         <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
           <motion.div
@@ -574,15 +578,16 @@ export default function LandingPage() {
             className="text-center mb-16"
           >
             <p className="text-sm font-medium text-accent-magenta uppercase tracking-[0.15em] mb-4">
-              The Platform
+              AI-First Platform
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
-              Everything you need.{" "}
-              <span className="text-brand-gradient">One platform.</span>
+              AI that actually understands{" "}
+              <span className="text-brand-gradient">vehicle condition</span>
             </h2>
             <p className="mt-6 text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
-              VeriBuy brings together the intelligence, workflows, and insights
-              your dealership needs to operate with confidence at every stage.
+              VeriBuy is the first AI-based condition intelligence platform built
+              specifically for the automotive industry. Our AI does the heavy
+              lifting so your team can focus on what they do best \u2014 selling cars.
             </p>
           </motion.div>
 
@@ -631,8 +636,9 @@ export default function LandingPage() {
               <span className="text-brand-gradient">minutes</span>
             </h2>
             <p className="mt-6 text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
-              A streamlined process that replaces hours of manual work with
-              intelligent, automated verification.
+              Our AI handles what used to take hours. Four steps, one platform,
+              and your team has everything they need to buy right and sell with
+              confidence.
             </p>
           </motion.div>
 
@@ -687,13 +693,13 @@ export default function LandingPage() {
               Built For Dealers
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
-              Your dealership,{" "}
-              <span className="text-brand-gradient">elevated</span>
+              Your lot. Your team.{" "}
+              <span className="text-brand-gradient">Smarter.</span>
             </h2>
             <p className="mt-6 text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
-              Whether you operate a single rooftop or a national group, VeriBuy
-              is purpose-built to help you acquire smarter, sell faster, and
-              build lasting buyer trust.
+              Whether you&apos;re running a single rooftop or a national group,
+              VeriBuy is purpose-built to help you buy right, recon faster, and
+              close with the kind of transparency that builds repeat business.
             </p>
           </motion.div>
 
@@ -734,6 +740,38 @@ export default function LandingPage() {
         <div className="h-px bg-gradient-to-r from-transparent via-brand-200/60 to-transparent" />
       </div>
 
+      {/* ─── New Standard Banner ─────────────────────────── */}
+      <section className="relative py-16 lg:py-20 bg-white">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center max-w-3xl mx-auto"
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border border-brand-200/60 bg-brand-50/80 px-5 py-2.5 text-sm text-brand-600 mb-6">
+              <Shield size={15} className="text-accent-pink" />
+              Setting the New Standard
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-6">
+              The industry&apos;s first AI-based condition intelligence platform.{" "}
+              <span className="text-brand-gradient">Setting the new standard for truth.</span>
+            </h2>
+            <p className="text-lg text-gray-500 leading-relaxed">
+              Every dealer deserves to know exactly what they&apos;re buying and
+              every buyer deserves to know exactly what they&apos;re getting.
+              VeriBuy is building that standard \u2014 powered by AI, built for
+              the realities of the dealership floor.
+            </p>
+          </motion.div>
+        </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="h-px bg-gradient-to-r from-transparent via-brand-200/60 to-transparent" />
+      </div>
+
       {/* ─── CTA Section ────────────────────────────────── */}
       <section className="relative py-24 lg:py-32 bg-white">
         <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -746,20 +784,20 @@ export default function LandingPage() {
                 transition={{ duration: 0.6 }}
               >
                 <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6 text-white">
-                  Ready to transform your{" "}
-                  <span className="text-brand-gradient">dealership?</span>
+                  Ready to buy smarter and{" "}
+                  <span className="text-brand-gradient">sell with confidence?</span>
                 </h2>
                 <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed mb-10">
-                  Join the growing network of dealers using VeriBuy to make
-                  smarter decisions, move faster, and build buyer trust that
-                  drives loyalty.
+                  Join the dealers who are already using AI-powered condition
+                  intelligence to protect their gross, turn faster, and build
+                  the kind of buyer trust that drives repeat business.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
                   <Link
                     href="/register"
                     className="group bg-brand-gradient rounded-full px-8 py-4 text-base font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg transition-all duration-300 flex items-center gap-2"
                   >
-                    Set Up Your Account
+                    Set Up Your Dealership
                     <ArrowRight
                       size={18}
                       className="group-hover:translate-x-1 transition-transform"
@@ -773,7 +811,7 @@ export default function LandingPage() {
                   </Link>
                 </div>
                 <p className="text-sm text-gray-600">
-                  No credit card required. Get started in under 2 minutes.
+                  No credit card required. Get your team up and running in minutes.
                 </p>
               </motion.div>
             </div>
@@ -793,13 +831,14 @@ export default function LandingPage() {
                 <span className="text-lg font-bold text-gray-900">VeriBuy</span>
               </a>
               <p className="text-gray-500 text-xs leading-relaxed max-w-xs mb-6">
-                The truth layer for automotive acquisition. Helping dealerships
-                make confident decisions backed by verified intelligence.
+                The first AI-based automotive condition intelligence platform.
+                Helping dealers know the truth about every vehicle \u2014 before
+                they buy, before they recon, and before they sell.
               </p>
               <div className="flex items-center gap-4 text-[10px] text-gray-400 uppercase tracking-wider">
-                <span>SOC 2</span>
+                <span>AI-Powered</span>
                 <span className="w-px h-3 bg-gray-200" />
-                <span>256-bit SSL</span>
+                <span>SOC 2</span>
                 <span className="w-px h-3 bg-gray-200" />
                 <span>Enterprise Ready</span>
               </div>
