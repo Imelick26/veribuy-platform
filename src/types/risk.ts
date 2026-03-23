@@ -47,6 +47,23 @@ export type RiskSource =
 
 export type Likelihood = "VERY_COMMON" | "COMMON" | "OCCASIONAL" | "RARE";
 
+// Guided inspection question types
+
+export interface InspectionQuestion {
+  id: string;              // "q0", "q1", etc.
+  question: string;        // "Does the steering column have excessive play?"
+  failureAnswer: "yes" | "no";  // which answer indicates a problem
+  mediaPrompt?: string;    // "Photograph the steering column play"
+  order: number;
+}
+
+export interface QuestionAnswer {
+  questionId: string;
+  answer: "yes" | "no" | null;
+  answeredAt: string;
+  mediaIds?: string[];     // photos taken for this specific question
+}
+
 export interface AggregatedRisk {
   id: string;
   severity: Severity;
@@ -81,6 +98,8 @@ export interface AggregatedRisk {
   whyItMatters?: string;
   /** How commonly this issue occurs on this vehicle */
   likelihood?: Likelihood;
+  /** Structured yes/no questions for guided inspection */
+  inspectionQuestions?: InspectionQuestion[];
 }
 
 export interface AIAnalysisResult {
@@ -140,4 +159,6 @@ export interface RiskCheckStatus {
   mediaIds?: string[];
   hasPhotoEvidence?: boolean;
   checkedAt?: string;
+  /** Answers to guided inspection questions */
+  questionAnswers?: QuestionAnswer[];
 }

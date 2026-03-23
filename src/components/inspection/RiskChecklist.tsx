@@ -5,7 +5,8 @@ import { CheckCircle, XCircle, HelpCircle, Camera, ChevronDown, AlertTriangle, L
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
-import type { AggregatedRisk, RiskCheckStatus, AIAnalysisResult } from "@/types/risk";
+import type { AggregatedRisk, RiskCheckStatus, AIAnalysisResult, QuestionAnswer } from "@/types/risk";
+import { GuidedRiskCheck } from "./GuidedRiskCheck";
 
 interface RiskChecklistProps {
   risks: AggregatedRisk[];
@@ -19,6 +20,10 @@ interface RiskChecklistProps {
   uploadingRiskCapture?: string | null;
   riskMediaMap?: Record<string, Array<{ mediaId: string; url: string; captureType: string }>>;
   aiResults?: AIAnalysisResult[];
+  /** Guided question flow */
+  onAnswerQuestion?: (riskId: string, questionId: string, answer: "yes" | "no") => void;
+  onUploadQuestionMedia?: (riskId: string, questionId: string, file: File) => Promise<string | null>;
+  uploadingQuestionId?: string | null;
 }
 
 export function RiskChecklist({
@@ -31,6 +36,9 @@ export function RiskChecklist({
   onUploadEvidence,
   uploadingRiskCapture,
   riskMediaMap = {},
+  onAnswerQuestion,
+  onUploadQuestionMedia,
+  uploadingQuestionId,
 }: RiskChecklistProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -183,30 +191,35 @@ export function RiskChecklist({
                   {risk.severity}
                 </Badge>
 
-                {/* Action buttons — Pass / Fail */}
+                {/* Action buttons — Pass / Fail or Guided expand */}
                 {status === "NOT_CHECKED" ? (
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handlePass(risk.id); }}
-                      className="h-8 w-8 rounded-lg flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-700 transition-colors"
-                      title="Pass"
-                    >
-                      <CheckCircle className="h-4.5 w-4.5" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleFail(risk); }}
-                      className="h-8 w-8 rounded-lg flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
-                      title="Fail"
-                    >
-                      <XCircle className="h-4.5 w-4.5" />
-                    </button>
+                    {/* Only show Pass/Fail for risks without guided questions */}
+                    {!(risk.inspectionQuestions && risk.inspectionQuestions.length > 0 && onAnswerQuestion) && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handlePass(risk.id); }}
+                          className="h-8 w-8 rounded-lg flex items-center justify-center bg-green-100 hover:bg-green-200 text-green-700 transition-colors"
+                          title="Pass"
+                        >
+                          <CheckCircle className="h-4.5 w-4.5" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleFail(risk); }}
+                          className="h-8 w-8 rounded-lg flex items-center justify-center bg-red-100 hover:bg-red-200 text-red-700 transition-colors"
+                          title="Fail"
+                        >
+                          <XCircle className="h-4.5 w-4.5" />
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleDetails(risk.id); }}
                       className={cn(
                         "h-8 w-8 rounded-lg flex items-center justify-center transition-colors",
                         isExpanded ? "bg-brand-100 text-brand-700" : "bg-surface-overlay hover:bg-surface-sunken text-text-tertiary"
                       )}
-                      title="Details"
+                      title={risk.inspectionQuestions?.length ? "Inspect" : "Details"}
                     >
                       <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
                     </button>
@@ -265,63 +278,72 @@ export function RiskChecklist({
                 )}
               </div>
 
-              {/* Expandable details — only shows when user wants guidance */}
+              {/* Expandable details — guided questions or legacy static details */}
               {isExpanded && (
-                <div className="px-3 pb-3 space-y-2 border-t border-border-default pt-2">
-                  {/* What to check */}
-                  {risk.whatToCheck && (
-                    <div className="text-xs text-text-secondary">
-                      <span className="font-semibold text-text-primary">Check: </span>
-                      {risk.whatToCheck}
+                <div className="px-3 pb-3 border-t border-border-default pt-2">
+                  {risk.inspectionQuestions && risk.inspectionQuestions.length > 0 && onAnswerQuestion ? (
+                    /* Guided question flow */
+                    <GuidedRiskCheck
+                      risk={risk}
+                      questionAnswers={checkStatuses[risk.id]?.questionAnswers || []}
+                      onAnswerQuestion={(questionId, answer) => onAnswerQuestion(risk.id, questionId, answer)}
+                      onUploadMedia={onUploadQuestionMedia ? (questionId, file) => onUploadQuestionMedia(risk.id, questionId, file) : undefined}
+                      uploadingQuestionId={uploadingQuestionId}
+                      onSkip={() => handleSkip(risk.id)}
+                      onManualOverride={(s) => {
+                        onCheckRisk(risk.id, s);
+                        if (s === "CONFIRMED") onCreateFinding(risk);
+                      }}
+                      status={status}
+                    />
+                  ) : (
+                    /* Legacy static details */
+                    <div className="space-y-2">
+                      {risk.whatToCheck && (
+                        <div className="text-xs text-text-secondary">
+                          <span className="font-semibold text-text-primary">Check: </span>
+                          {risk.whatToCheck}
+                        </div>
+                      )}
+                      {risk.whereToLook && (
+                        <div className="text-xs text-text-secondary">
+                          <span className="font-semibold text-text-primary">Where: </span>
+                          {risk.whereToLook}
+                        </div>
+                      )}
+                      {((risk.signsOfFailure && risk.signsOfFailure.length > 0) || risk.symptoms.length > 0) && (
+                        <div>
+                          <span className="text-xs font-semibold text-red-700">Signs of failure:</span>
+                          <ul className="text-xs text-red-600 list-disc list-inside mt-0.5">
+                            {(risk.signsOfFailure || risk.symptoms).slice(0, 3).map((s, i) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {risk.cost.low > 0 && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <DollarSign className="h-3 w-3 text-text-tertiary" />
+                          <span className="text-text-secondary">
+                            Est. repair: <span className="font-medium text-text-primary">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
+                          </span>
+                        </div>
+                      )}
+                      {risk.hasActiveRecall && risk.relatedRecalls && risk.relatedRecalls.length > 0 && (
+                        <div className="p-2 rounded bg-red-50 border border-red-200 text-xs text-red-700">
+                          <span className="font-bold">Recall: </span>
+                          {risk.relatedRecalls[0].remedy}
+                        </div>
+                      )}
+                      {status === "NOT_CHECKED" && (
+                        <button
+                          onClick={() => handleSkip(risk.id)}
+                          className="text-[11px] text-text-tertiary hover:text-text-secondary underline"
+                        >
+                          Unable to inspect
+                        </button>
+                      )}
                     </div>
-                  )}
-
-                  {/* Where to look */}
-                  {risk.whereToLook && (
-                    <div className="text-xs text-text-secondary">
-                      <span className="font-semibold text-text-primary">Where: </span>
-                      {risk.whereToLook}
-                    </div>
-                  )}
-
-                  {/* Signs of failure */}
-                  {((risk.signsOfFailure && risk.signsOfFailure.length > 0) || risk.symptoms.length > 0) && (
-                    <div>
-                      <span className="text-xs font-semibold text-red-700">Signs of failure:</span>
-                      <ul className="text-xs text-red-600 list-disc list-inside mt-0.5">
-                        {(risk.signsOfFailure || risk.symptoms).slice(0, 3).map((s, i) => (
-                          <li key={i}>{s}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Repair cost */}
-                  {risk.cost.low > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <DollarSign className="h-3 w-3 text-text-tertiary" />
-                      <span className="text-text-secondary">
-                        Est. repair: <span className="font-medium text-text-primary">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Recall info */}
-                  {risk.hasActiveRecall && risk.relatedRecalls && risk.relatedRecalls.length > 0 && (
-                    <div className="p-2 rounded bg-red-50 border border-red-200 text-xs text-red-700">
-                      <span className="font-bold">Recall: </span>
-                      {risk.relatedRecalls[0].remedy}
-                    </div>
-                  )}
-
-                  {/* Skip button in details */}
-                  {status === "NOT_CHECKED" && (
-                    <button
-                      onClick={() => handleSkip(risk.id)}
-                      className="text-[11px] text-text-tertiary hover:text-text-secondary underline"
-                    >
-                      Unable to inspect
-                    </button>
                   )}
                 </div>
               )}

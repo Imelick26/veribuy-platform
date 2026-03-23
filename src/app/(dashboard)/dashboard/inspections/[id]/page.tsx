@@ -125,6 +125,12 @@ export default function InspectionDetailPage({
     },
   });
 
+  const recordQuestionAnswer = trpc.inspection.recordQuestionAnswer.useMutation({
+    onSuccess: () => {
+      utils.inspection.getRiskChecklist.invalidate({ inspectionId: id });
+    },
+  });
+
   const generateReport = trpc.report.generate.useMutation({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
@@ -272,6 +278,32 @@ export default function InspectionDetailPage({
     const existing = checkStatuses?.[riskId] as { mediaIds?: string[] } | undefined;
     const existingMediaIds = existing?.mediaIds || [];
     recordRiskCheck.mutate({ inspectionId: id, riskId, status, notes, mediaIds: existingMediaIds });
+  }
+
+  function handleAnswerQuestion(riskId: string, questionId: string, answer: "yes" | "no") {
+    recordQuestionAnswer.mutate({ inspectionId: id, riskId, questionId, answer });
+  }
+
+  async function handleUploadQuestionMedia(riskId: string, questionId: string, file: File): Promise<string | null> {
+    try {
+      const result = await mediaUpload.upload(file, `RISK_Q_${riskId}_${questionId}`);
+      // After upload, record the answer again with the new mediaId
+      const existing = normalizedCheckStatuses[riskId];
+      const qa = existing?.questionAnswers?.find((a: { questionId: string }) => a.questionId === questionId);
+      if (qa && result?.mediaItemId) {
+        const existingMedia = (qa.mediaIds as string[]) || [];
+        recordQuestionAnswer.mutate({
+          inspectionId: id,
+          riskId,
+          questionId,
+          answer: qa.answer as "yes" | "no",
+          mediaIds: [...existingMedia, result.mediaItemId],
+        });
+      }
+      return result?.mediaItemId || null;
+    } catch {
+      return null;
+    }
   }
 
   function handleCreateFindingFromRisk(risk: AggregatedRisk) {
@@ -460,6 +492,9 @@ export default function InspectionDetailPage({
               uploadingRiskCapture={uploadingRiskCapture}
               riskMediaMap={riskMediaMap}
               aiResults={aiAnalysisResults || []}
+              onAnswerQuestion={handleAnswerQuestion}
+              onUploadQuestionMedia={handleUploadQuestionMedia}
+              uploadingQuestionId={mediaUpload.currentCaptureType?.startsWith("RISK_Q_") ? mediaUpload.currentCaptureType : null}
             />
           </Card>
         </div>

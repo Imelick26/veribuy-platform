@@ -1,6 +1,12 @@
 import { getOpenAI } from "@/lib/openai";
 import type { NHTSAComplaint, NHTSARecall, NHTSAInvestigation, Likelihood } from "@/types/risk";
 
+interface InspectionQuestionOutput {
+  question: string;
+  failureAnswer: "yes" | "no";
+  mediaPrompt?: string;
+}
+
 interface KnownIssueOutput {
   title: string;
   category: string;
@@ -14,6 +20,7 @@ interface KnownIssueOutput {
   estimatedCostLow: number;
   estimatedCostHigh: number;
   capturePrompts: string[];
+  inspectionQuestions?: InspectionQuestionOutput[];
 }
 
 interface CuratedRisk {
@@ -86,6 +93,12 @@ DO NOT INCLUDE generic items that any dealer can spot in seconds. The following 
 - Brake pad thickness (unless this platform has a SPECIFIC known brake issue)
 Focus ONLY on platform-specific known failure points that require expert knowledge of this vehicle.
 
+INSPECTION QUESTIONS:
+For each issue, also generate 2-5 specific YES/NO inspection questions in the "inspectionQuestions" array. These must be precise, hands-on checks the inspector performs sequentially at the vehicle. Each question must be answerable with "yes" or "no". Specify which answer ("yes" or "no") indicates a FAILURE via "failureAnswer". Optionally include a "mediaPrompt" telling the inspector what to photograph if the answer indicates a problem.
+Example: For steering column play on a Ford F-250, a good question would be:
+  {"question": "Turn the steering wheel left and right with the engine off. Is there more than 1/4 inch of free play before the wheels start to turn?", "failureAnswer": "yes", "mediaPrompt": "Record the steering wheel play showing how far it moves before the wheels respond"}
+Questions should test things that CANNOT be determined from photos alone — sounds, feel, movement, temperature, smell, function tests, etc.
+
 CATEGORIES (use exactly these values):
 ENGINE, TRANSMISSION, DRIVETRAIN, STRUCTURAL, SUSPENSION, BRAKES, TIRES_WHEELS, ELECTRICAL, ELECTRONICS, SAFETY, COSMETIC_EXTERIOR, COSMETIC_INTERIOR, HVAC, OTHER`;
 
@@ -108,7 +121,10 @@ Generate the known-issues inspection checklist for this vehicle. For each known 
   "whyItMatters": "What happens if this is bad — consequence and context",
   "estimatedCostLow": cost_in_dollars_low,
   "estimatedCostHigh": cost_in_dollars_high,
-  "capturePrompts": ["Photograph [specific area] showing [specific detail]", ...]
+  "capturePrompts": ["Photograph [specific area] showing [specific detail]", ...],
+  "inspectionQuestions": [
+    {"question": "specific yes/no question the inspector performs at the vehicle", "failureAnswer": "yes or no", "mediaPrompt": "optional: what to photograph if failure detected"}
+  ]
 }
 
 Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanation.`;
@@ -121,7 +137,7 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
         { role: "user", content: userPrompt },
       ],
       temperature: 0.3,
-      max_tokens: 6000,
+      max_tokens: 8000,
       response_format: { type: "json_object" },
     });
 
@@ -135,7 +151,7 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
     const items: KnownIssueOutput[] = parsed.knownIssues || parsed.issues || parsed.items || [];
 
     // Validate structure
-    return items.filter(
+    const validated = items.filter(
       (item) =>
         item.title &&
         item.category &&
@@ -146,6 +162,21 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
         Array.isArray(item.signsOfFailure) &&
         item.whyItMatters
     );
+
+    // Post-process: assign sequential IDs and order to inspection questions
+    for (const item of validated) {
+      if (Array.isArray(item.inspectionQuestions) && item.inspectionQuestions.length > 0) {
+        item.inspectionQuestions = item.inspectionQuestions
+          .filter((q) => q.question && (q.failureAnswer === "yes" || q.failureAnswer === "no"))
+          .map((q, idx) => ({
+            ...q,
+            id: `q${idx}`,
+            order: idx,
+          })) as unknown as InspectionQuestionOutput[];
+      }
+    }
+
+    return validated;
   } catch (err) {
     console.error("[generateKnownIssues] AI generation failed:", err);
     return [];

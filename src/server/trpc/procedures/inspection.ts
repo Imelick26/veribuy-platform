@@ -310,9 +310,27 @@ export const inspectionRouter = router({
         model: inspection.vehicle.model,
       };
 
+      // Read question answers from AI_ANALYSIS step to pass to the analyzer
+      const aiStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_ANALYSIS",
+          },
+        },
+      });
+      const aiStepData = (aiStep?.data as Record<string, unknown>) || {};
+      const checkStatuses = (aiStepData.checkStatuses as Record<string, Record<string, unknown>>) || {};
+      const questionAnswersByRisk: Record<string, Array<{ questionId: string; answer: string | null; answeredAt: string; mediaIds?: string[] }>> = {};
+      for (const [riskId, cs] of Object.entries(checkStatuses)) {
+        if (cs.questionAnswers && Array.isArray(cs.questionAnswers)) {
+          questionAnswersByRisk[riskId] = cs.questionAnswers as Array<{ questionId: string; answer: string | null; answeredAt: string; mediaIds?: string[] }>;
+        }
+      }
+
       // Run risk-specific + overall condition analysis in parallel
       const [riskResults, overallCondition] = await Promise.all([
-        analyzeRiskMedia(vehicleInfo, riskProfile.aggregatedRisks, mediaForAnalysis),
+        analyzeRiskMedia(vehicleInfo, riskProfile.aggregatedRisks, mediaForAnalysis, questionAnswersByRisk as Record<string, import("@/types/risk").QuestionAnswer[]>),
         analyzeOverallCondition(vehicleInfo, mediaForAnalysis),
       ]);
 
@@ -707,6 +725,117 @@ export const inspectionRouter = router({
       });
 
       return { success: true };
+    }),
+
+  // Record an answer to a guided inspection question
+  recordQuestionAnswer: protectedProcedure
+    .input(
+      z.object({
+        inspectionId: z.string(),
+        riskId: z.string(),
+        questionId: z.string(),
+        answer: z.enum(["yes", "no"]),
+        mediaIds: z.array(z.string()).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get the AI_ANALYSIS step (where check statuses live)
+      const aiStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_ANALYSIS",
+          },
+        },
+      });
+
+      // Get the RISK_REVIEW step (where inspectionQuestions live)
+      const rrStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "RISK_REVIEW",
+          },
+        },
+      });
+
+      const existingData = (aiStep?.data as Record<string, unknown>) || {};
+      const checkStatuses = (existingData.checkStatuses as Record<string, Record<string, unknown>>) || {};
+
+      // Get or initialize this risk's check status
+      const riskStatus = checkStatuses[input.riskId] || {
+        riskId: input.riskId,
+        status: "NOT_CHECKED",
+        mediaIds: [],
+        hasPhotoEvidence: false,
+      };
+
+      // Get existing question answers or initialize
+      const questionAnswers = (riskStatus.questionAnswers as Array<Record<string, unknown>>) || [];
+
+      // Upsert the answer
+      const existingIdx = questionAnswers.findIndex((qa) => qa.questionId === input.questionId);
+      const answerEntry = {
+        questionId: input.questionId,
+        answer: input.answer,
+        answeredAt: new Date().toISOString(),
+        mediaIds: input.mediaIds || [],
+      };
+      if (existingIdx >= 0) {
+        questionAnswers[existingIdx] = answerEntry;
+      } else {
+        questionAnswers.push(answerEntry);
+      }
+      riskStatus.questionAnswers = questionAnswers;
+
+      // Collect all media from question answers
+      const allMediaIds = questionAnswers.flatMap((qa) => (qa.mediaIds as string[]) || []);
+      if (allMediaIds.length > 0) {
+        riskStatus.mediaIds = allMediaIds;
+        riskStatus.hasPhotoEvidence = true;
+      }
+
+      // Auto-derive status from question answers
+      // Look up the risk's inspectionQuestions from the RISK_REVIEW step
+      const rrData = (rrStep?.data as Record<string, unknown>) || {};
+      const aggregatedRisks = (rrData.aggregatedRisks as Array<Record<string, unknown>>) || [];
+      const riskDef = aggregatedRisks.find((r) => r.id === input.riskId);
+      const questions = (riskDef?.inspectionQuestions as Array<Record<string, unknown>>) || [];
+
+      if (questions.length > 0) {
+        const answeredQuestions = questionAnswers.filter((qa) => qa.answer === "yes" || qa.answer === "no");
+        const hasFailure = answeredQuestions.some((qa) => {
+          const qDef = questions.find((q) => q.id === qa.questionId);
+          return qDef && qa.answer === qDef.failureAnswer;
+        });
+
+        if (hasFailure) {
+          riskStatus.status = "CONFIRMED";
+        } else if (answeredQuestions.length >= questions.length) {
+          riskStatus.status = "NOT_FOUND";
+        }
+        // If partially answered, keep current status
+      }
+
+      riskStatus.checkedAt = new Date().toISOString();
+      checkStatuses[input.riskId] = riskStatus;
+
+      // Save back
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_ANALYSIS",
+          },
+        },
+        data: {
+          status: "IN_PROGRESS",
+          enteredAt: aiStep?.enteredAt || new Date(),
+          data: JSON.parse(JSON.stringify({ ...existingData, checkStatuses })),
+        },
+      });
+
+      return { success: true, derivedStatus: riskStatus.status as string };
     }),
 
   // Get risk checklist statuses for an inspection

@@ -22,6 +22,13 @@ interface KnownIssueInput {
   estimatedCostLow: number;
   estimatedCostHigh: number;
   capturePrompts: string[];
+  inspectionQuestions?: Array<{
+    question: string;
+    failureAnswer: "yes" | "no";
+    mediaPrompt?: string;
+    id?: string;
+    order?: number;
+  }>;
 }
 
 interface BuildProfileInput {
@@ -81,6 +88,13 @@ export function buildRiskProfile(input: BuildProfileInput): AggregatedRiskProfil
       signsOfFailure: issue.signsOfFailure,
       whyItMatters: issue.whyItMatters,
       likelihood: issue.likelihood,
+      inspectionQuestions: issue.inspectionQuestions?.map((q, idx) => ({
+        id: q.id || `q${idx}`,
+        question: q.question,
+        failureAnswer: q.failureAnswer,
+        mediaPrompt: q.mediaPrompt,
+        order: q.order ?? idx,
+      })),
     });
   }
 

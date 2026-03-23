@@ -1,5 +1,5 @@
 import { getOpenAI } from "@/lib/openai";
-import type { AggregatedRisk, AIAnalysisResult, OverallConditionResult } from "@/types/risk";
+import type { AggregatedRisk, AIAnalysisResult, OverallConditionResult, QuestionAnswer } from "@/types/risk";
 
 interface MediaForAnalysis {
   id: string;
@@ -47,7 +47,8 @@ async function processWithConcurrency<T, R>(
 export async function analyzeRiskMedia(
   vehicle: { year: number; make: string; model: string },
   risks: AggregatedRisk[],
-  media: MediaForAnalysis[]
+  media: MediaForAnalysis[],
+  questionAnswers?: Record<string, QuestionAnswer[]>
 ): Promise<AIAnalysisResult[]> {
   if (risks.length === 0 || media.length === 0) return [];
 
@@ -57,7 +58,7 @@ export async function analyzeRiskMedia(
     risks,
     async (risk) => {
       try {
-        return await analyzeOneRisk(openai, vehicle, risk, media);
+        return await analyzeOneRisk(openai, vehicle, risk, media, questionAnswers?.[risk.id]);
       } catch (err) {
         console.error(`[media-analyzer] Failed to analyze risk ${risk.id}:`, err);
         return {
@@ -77,7 +78,8 @@ async function analyzeOneRisk(
   openai: ReturnType<typeof getOpenAI>,
   vehicle: { year: number; make: string; model: string },
   risk: AggregatedRisk,
-  media: MediaForAnalysis[]
+  media: MediaForAnalysis[],
+  riskAnswers?: QuestionAnswer[]
 ): Promise<AIAnalysisResult> {
   const relevantMedia = selectRelevantMedia(risk, media);
 
@@ -160,7 +162,7 @@ WHY IT MATTERS: ${risk.whyItMatters || "Potential safety or reliability concern"
 PHOTOS PROVIDED (${imageBlocks.length} images):
 ${photoDescriptions}
 
-Analyze these photos for visual evidence of this specific risk. Pay special attention to the exact location described in WHERE TO LOOK and the observable indicators listed in SIGNS OF FAILURE.`;
+Analyze these photos for visual evidence of this specific risk. Pay special attention to the exact location described in WHERE TO LOOK and the observable indicators listed in SIGNS OF FAILURE.${buildInspectorObservationsContext(risk, riskAnswers)}`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -389,9 +391,10 @@ Scan all photos systematically. Note any body damage, paint issues, rust, leaks,
  * Selects the most relevant photos for a given risk based on capture type matching.
  */
 function selectRelevantMedia(risk: AggregatedRisk, media: MediaForAnalysis[]): MediaForAnalysis[] {
-  // First, add any photos specifically captured for this risk
+  // First, add any photos specifically captured for this risk (evidence + question media)
   const riskEvidence = media.filter((m) =>
-    m.captureType.startsWith(`FINDING_EVIDENCE_${risk.id}`)
+    m.captureType.startsWith(`FINDING_EVIDENCE_${risk.id}`) ||
+    m.captureType.startsWith(`RISK_Q_${risk.id}_`)
   );
 
   // Then add area-relevant standard photos based on risk category
@@ -420,4 +423,39 @@ function selectRelevantMedia(risk: AggregatedRisk, media: MediaForAnalysis[]): M
 
   // Risk-specific evidence first, then area photos
   return [...riskEvidence, ...areaPhotos];
+}
+
+/**
+ * Builds a context string describing inspector's hands-on observations
+ * from guided inspection question answers.
+ */
+function buildInspectorObservationsContext(
+  risk: AggregatedRisk,
+  riskAnswers?: QuestionAnswer[]
+): string {
+  if (!riskAnswers || riskAnswers.length === 0 || !risk.inspectionQuestions?.length) {
+    return "";
+  }
+
+  const lines: string[] = [];
+  lines.push("\n\nINSPECTOR HANDS-ON OBSERVATIONS:");
+  lines.push("The inspector performed physical checks and reported the following:");
+
+  for (const qa of riskAnswers) {
+    if (qa.answer == null) continue;
+    const qDef = risk.inspectionQuestions.find((q) => q.id === qa.questionId);
+    if (!qDef) continue;
+
+    const isFailure = qa.answer === qDef.failureAnswer;
+    const indicator = isFailure ? "(⚠ indicates failure)" : "(✓ no issue)";
+    lines.push(`- Q: "${qDef.question}" → ${qa.answer.toUpperCase()} ${indicator}`);
+    if (qa.mediaIds && qa.mediaIds.length > 0) {
+      lines.push(`  [Inspector attached ${qa.mediaIds.length} photo(s) as evidence]`);
+    }
+  }
+
+  lines.push("");
+  lines.push("Weight these firsthand observations heavily — inspectors can feel, hear, and smell things that photos cannot capture. If the inspector confirmed a failure through hands-on testing, treat that as strong evidence even if photos are inconclusive.");
+
+  return lines.join("\n");
 }
