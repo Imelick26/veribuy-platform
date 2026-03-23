@@ -89,7 +89,7 @@ export default function SharedReportPage({
               </div>
               <div className="text-center p-4 rounded-xl bg-[#fce8f3]">
                 <p className="text-4xl font-bold text-brand-700">{findings.length}</p>
-                <p className="text-xs text-text-secondary mt-1">Total Findings</p>
+                <p className="text-xs text-text-secondary mt-1">Additional Findings</p>
               </div>
               <div className="text-center p-4 rounded-xl bg-[#dcfce7]">
                 <p className="text-4xl font-bold text-green-700">{media?.length || 0}</p>
@@ -145,7 +145,7 @@ export default function SharedReportPage({
           <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
             <h3 className="text-lg font-bold text-text-primary mb-4">
               <Wrench className="inline h-5 w-5 mr-1" />
-              Findings ({findings.length})
+              Additional Findings ({findings.length})
             </h3>
             {findings.length === 0 ? (
               <div className="text-center py-8 text-text-tertiary">

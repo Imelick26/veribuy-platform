@@ -538,7 +538,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
       {data.findings.length > 0 && (
         <Page size="LETTER" style={styles.page}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Findings ({data.findings.length})</Text>
+            <Text style={styles.sectionTitle}>Additional Findings ({data.findings.length})</Text>
             {data.findings.map((f, i) => {
               const sev = severityLabel(f.severity);
               return (

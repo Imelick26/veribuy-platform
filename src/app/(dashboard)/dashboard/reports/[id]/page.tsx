@@ -240,7 +240,7 @@ export default function ReportDetailPage({
         <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
           <h3 className="text-lg font-bold text-text-primary mb-4">
             <Wrench className="inline h-5 w-5 mr-1" />
-            Findings ({findings.length})
+            Additional Findings ({findings.length})
           </h3>
           {findings.length === 0 ? (
             <div className="text-center py-8 text-text-tertiary">
