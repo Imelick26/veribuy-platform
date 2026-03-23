@@ -348,7 +348,7 @@ export default function LandingPage() {
             <motion.div initial="hidden" animate="visible" custom={0} variants={fadeUp}>
               <div className="inline-flex items-center gap-2 rounded-full border border-brand-200/60 bg-brand-50/80 px-5 py-2.5 text-sm text-brand-600 mb-8">
                 <Sparkles size={15} className="text-accent-pink" />
-                The First AI-Powered Automotive Condition Intelligence Platform
+                The First AI-Based Condition Intelligence Platform
               </div>
             </motion.div>
 
@@ -360,8 +360,8 @@ export default function LandingPage() {
               variants={fadeUp}
               className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] mb-8 text-gray-900"
             >
-              Know the True Condition{" "}
-              <span className="text-brand-gradient">Before You Buy</span>
+              The Industry&apos;s First AI-Based Condition Intelligence Platform.{" "}
+              <span className="text-brand-gradient">Setting the New Standard for Truth.</span>
             </motion.h1>
 
             {/* Subheadline */}
@@ -372,9 +372,9 @@ export default function LandingPage() {
               variants={fadeUp}
               className="max-w-2xl text-lg md:text-xl text-gray-500 leading-relaxed mb-10 mx-auto"
             >
-              VeriBuy uses AI to give dealers a clear, verified picture of every
-              vehicle&apos;s true condition \u2014 at the point of acquisition, before
-              recon, and on the frontline. Stop guessing. Start knowing.
+              VeriBuy is an AI-powered verification platform that analyzes vehicle
+              condition and surfaces risk intelligence before acquisition, bringing
+              consistency and confidence to every purchase.
             </motion.p>
 
             {/* CTAs */}
@@ -420,86 +420,6 @@ export default function LandingPage() {
             </motion.div>
           </div>
 
-          {/* Dashboard Preview */}
-          <motion.div
-            initial={{ opacity: 0, y: 60 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.5 }}
-            className="mt-20 max-w-5xl mx-auto"
-          >
-            <div className="relative rounded-2xl border border-gray-200 bg-white p-1.5 shadow-xl shadow-brand-600/5">
-              <div className="rounded-xl bg-gray-50 border border-gray-100 overflow-hidden">
-                {/* Browser chrome */}
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-white">
-                  <div className="flex gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-300" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-300" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-300" />
-                  </div>
-                  <div className="flex-1 mx-4">
-                    <div className="max-w-md mx-auto h-5 rounded-md bg-gray-100 flex items-center justify-center">
-                      <span className="text-[10px] text-gray-400">
-                        app.getveribuy.com/dashboard
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dashboard content */}
-                <div className="p-6 md:p-8 bg-gradient-to-br from-brand-50/40 via-white to-brand-50/20">
-                  <div className="grid md:grid-cols-3 gap-4 mb-6">
-                    {[
-                      { label: "Units in Pipeline", value: "247", change: "+12 this week" },
-                      { label: "Avg. Condition Score", value: "87.4", change: "Across 1,240 units" },
-                      { label: "Recon Alerts", value: "3", change: "Needs attention" },
-                    ].map((stat) => (
-                      <div key={stat.label} className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
-                        <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">{stat.label}</p>
-                        <p className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</p>
-                        <p className="text-[11px] text-gray-400">{stat.change}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                      <p className="text-xs font-medium text-gray-700">Recent Appraisals</p>
-                      <p className="text-[10px] text-gray-400">View All</p>
-                    </div>
-                    {[
-                      { vehicle: "2024 BMW X5 xDrive40i", vin: "WBA53EJ09R...7842", score: 92, status: "Frontline Ready" },
-                      { vehicle: "2023 Mercedes-Benz GLE 350", vin: "4JGFB4FB2P...1205", score: 85, status: "In Recon" },
-                      { vehicle: "2024 Ford F-150 Lariat", vin: "1FTFW1E87N...4019", score: 71, status: "Needs Review" },
-                    ].map((row, i) => (
-                      <div key={i} className="px-4 py-3 flex items-center justify-between border-b border-gray-50 last:border-0">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-800 truncate">{row.vehicle}</p>
-                          <p className="text-[10px] text-gray-400">{row.vin}</p>
-                        </div>
-                        <div className="hidden sm:flex items-center gap-6">
-                          <div className="text-center">
-                            <p className="text-sm font-semibold text-brand-gradient">{row.score}</p>
-                            <p className="text-[9px] text-gray-400">Score</p>
-                          </div>
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-medium ${
-                              row.status === "Frontline Ready"
-                                ? "bg-emerald-50 text-emerald-600"
-                                : row.status === "In Recon"
-                                ? "bg-blue-50 text-blue-600"
-                                : "bg-yellow-50 text-yellow-600"
-                            }`}
-                          >
-                            {row.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent" />
@@ -519,7 +439,7 @@ export default function LandingPage() {
               The Problem
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900">
-              Dealers are still making million-dollar decisions on gut feel
+              Million-dollar inventory decisions shouldn&apos;t rely on a quick walk-around
             </h2>
             <p className="mt-6 text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
               The used car business moves fast. But the tools most dealers rely on
@@ -787,10 +707,13 @@ export default function LandingPage() {
                   Ready to buy smarter and{" "}
                   <span className="text-brand-gradient">sell with confidence?</span>
                 </h2>
-                <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed mb-10">
+                <p className="text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed mb-4">
                   Join the dealers who are already using AI-powered condition
                   intelligence to protect their gross, turn faster, and build
                   the kind of buyer trust that drives repeat business.
+                </p>
+                <p className="text-base text-gray-500 max-w-xl mx-auto leading-relaxed mb-10">
+                  Catch one bad unit before it hits your lot and the platform has already paid for itself.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8">
                   <Link
