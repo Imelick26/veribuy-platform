@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -50,6 +50,22 @@ export default function ReportDetailPage({
     );
   }
 
+  const utils = trpc.useUtils();
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleDownloadPDF() {
+    setPdfLoading(true);
+    try {
+      const { url } = await utils.report.downloadPDF.fetch({ id });
+      window.open(url, "_blank");
+    } catch {
+      // fallback to direct URL
+      if (report?.pdfUrl) window.open(report.pdfUrl, "_blank");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   const { inspection } = report;
   const { vehicle, findings, media, inspector } = inspection;
 
@@ -64,22 +80,28 @@ export default function ReportDetailPage({
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <Link href="/dashboard/reports">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary">Inspection Report</h1>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-text-primary truncate">Inspection Report</h1>
             <p className="text-text-secondary font-mono text-sm">{report.number}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-shrink-0 self-start sm:self-auto pl-10 sm:pl-0">
           {report.pdfUrl && (
-            <Button variant="secondary" size="sm" onClick={() => window.open(report.pdfUrl!, "_blank")}>
-              <Download className="h-4 w-4" /> Download PDF
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pdfLoading}
+              onClick={handleDownloadPDF}
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">{pdfLoading ? "Preparing…" : "Download PDF"}</span>
             </Button>
           )}
           <Button
@@ -90,7 +112,7 @@ export default function ReportDetailPage({
               navigator.clipboard.writeText(url);
             }}
           >
-            <Share2 className="h-4 w-4" /> Copy Share Link
+            <Share2 className="h-4 w-4" /> <span className="hidden sm:inline">Copy Share Link</span>
           </Button>
         </div>
       </div>
@@ -99,16 +121,16 @@ export default function ReportDetailPage({
       <div className="bg-surface-raised rounded-xl border border-border-default shadow-sm overflow-hidden print:shadow-none print:border-none">
 
         {/* Report Header */}
-        <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-8 py-6 text-white">
-          <div className="flex items-center justify-between">
+        <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-4 sm:px-8 py-5 sm:py-6 text-white">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <p className="text-brand-200 text-sm font-medium">VeriBuy Inspection Report</p>
-              <h2 className="text-2xl font-bold mt-1">
+              <h2 className="text-xl sm:text-2xl font-bold mt-1">
                 {vehicle.year} {vehicle.make} {vehicle.model}
               </h2>
-              <p className="text-brand-200 font-mono text-sm mt-1">VIN: {vehicle.vin}</p>
+              <p className="text-brand-200 font-mono text-xs sm:text-sm mt-1">VIN: {vehicle.vin}</p>
             </div>
-            <div className="text-right">
+            <div className="sm:text-right">
               <p className="text-brand-200 text-sm">Report #{report.number}</p>
               <p className="text-brand-200 text-sm">{formatDate(report.generatedAt)}</p>
               {inspector && <p className="text-brand-200 text-sm mt-1">Inspector: {inspector.name}</p>}
@@ -117,7 +139,7 @@ export default function ReportDetailPage({
         </div>
 
         {/* Executive Summary */}
-        <div className="px-8 py-6 border-b border-border-default">
+        <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
           <h3 className="text-lg font-bold text-text-primary mb-4">Executive Summary</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center p-4 rounded-xl bg-surface-sunken">
@@ -177,7 +199,7 @@ export default function ReportDetailPage({
         </div>
 
         {/* Vehicle Details */}
-        <div className="px-8 py-6 border-b border-border-default">
+        <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
           <h3 className="text-lg font-bold text-text-primary mb-4">Vehicle Information</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6">
             {[
@@ -204,7 +226,7 @@ export default function ReportDetailPage({
 
         {/* Market Analysis */}
         {report.inspection.marketAnalysis && (
-          <div className="px-8 py-6 border-b border-border-default">
+          <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
             <h3 className="text-lg font-bold text-text-primary mb-4">
               <BarChart3 className="inline h-5 w-5 mr-1" />
               Market Analysis
@@ -216,7 +238,7 @@ export default function ReportDetailPage({
         )}
 
         {/* Findings */}
-        <div className="px-8 py-6 border-b border-border-default">
+        <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
           <h3 className="text-lg font-bold text-text-primary mb-4">
             <Wrench className="inline h-5 w-5 mr-1" />
             Findings ({findings.length})
@@ -277,7 +299,7 @@ export default function ReportDetailPage({
         <PhotoGallery media={media ?? []} findings={findings} />
 
         {/* Footer */}
-        <div className="px-8 py-4 bg-surface-sunken text-center">
+        <div className="px-4 sm:px-8 py-4 bg-surface-sunken text-center">
           <p className="text-xs text-text-tertiary">
             Report generated by VeriBuy on {formatDate(report.generatedAt)}
           </p>

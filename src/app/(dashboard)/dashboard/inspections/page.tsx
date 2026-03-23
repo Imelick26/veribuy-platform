@@ -13,12 +13,12 @@ export default function InspectionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-text-primary tracking-tight">Inspections</h1>
           <p className="text-text-secondary mt-1">Manage and track vehicle inspections</p>
         </div>
-        <Link href="/dashboard/inspections/new">
+        <Link href="/dashboard/inspections/new" className="self-start sm:self-auto flex-shrink-0">
           <Button>
             <Plus className="h-4 w-4" />
             New Inspection

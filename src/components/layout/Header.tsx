@@ -19,14 +19,14 @@ export function Header() {
         <Menu className="h-5 w-5" />
       </button>
       <div className="hidden md:block" />
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {user && (
           <>
-            <Badge variant="default">
+            <Badge variant="default" className="hidden sm:inline-flex">
               {(user as Record<string, unknown>).orgName as string}
             </Badge>
             <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-full bg-surface-overlay border border-border-strong flex items-center justify-center">
+              <div className="h-7 w-7 rounded-full bg-surface-overlay border border-border-strong flex items-center justify-center flex-shrink-0">
                 <span className="text-xs font-medium text-text-secondary">
                   {user.name?.charAt(0).toUpperCase()}
                 </span>

@@ -13,6 +13,17 @@ export default function ReportsPage() {
   const { data, isLoading } = trpc.report.list.useQuery({ limit: 50 });
   const reports = data?.reports || [];
 
+  const utils = trpc.useUtils();
+
+  async function handleDownloadPDF(reportId: string, fallbackUrl?: string | null) {
+    try {
+      const { url } = await utils.report.downloadPDF.fetch({ id: reportId });
+      window.open(url, "_blank");
+    } catch {
+      if (fallbackUrl) window.open(fallbackUrl, "_blank");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -82,7 +93,11 @@ export default function ReportsPage() {
                   <td className="px-5 py-3">
                     <div className="flex gap-2">
                       {r.pdfUrl && (
-                        <Button variant="ghost" size="sm">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); handleDownloadPDF(r.id, r.pdfUrl); }}
+                        >
                           <Download className="h-3.5 w-3.5" />
                         </Button>
                       )}
