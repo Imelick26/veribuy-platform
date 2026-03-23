@@ -5,9 +5,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Progress } from "@/components/ui/Progress";
-import { Input } from "@/components/ui/Input";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, severityColor } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -21,7 +20,6 @@ import {
   BarChart3,
   ChevronRight,
   Plus,
-  X,
   Wrench,
   ShieldAlert,
 } from "lucide-react";
@@ -46,8 +44,6 @@ const VehicleViewer = dynamic(
 );
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { computeInspectionConfidence } from "@/lib/confidence";
-import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
-import { PhotoGallery } from "@/components/report/PhotoGallery";
 import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
 
@@ -110,12 +106,7 @@ export default function InspectionDetailPage({
   const addFinding = trpc.inspection.addFinding.useMutation({
     onSuccess: () => {
       utils.inspection.get.invalidate({ id });
-      setShowFindingForm(false);
       setFindingFromRisk(null);
-      setFindingForm({
-        title: "", description: "", severity: "MODERATE", category: "OTHER",
-        repairCostLow: "", repairCostHigh: "", evidence: "",
-      });
     },
   });
 
@@ -165,7 +156,6 @@ export default function InspectionDetailPage({
 
   // UI state
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
-  const [showFindingForm, setShowFindingForm] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [findingFromRisk, setFindingFromRisk] = useState<AggregatedRisk | null>(null);
   const [uploadingRiskCapture, setUploadingRiskCapture] = useState<string | null>(null);
@@ -214,15 +204,6 @@ export default function InspectionDetailPage({
       setUploadingRiskCapture(null);
     }
   }, [mediaUpload, checkStatuses, id, recordRiskCheck]);
-  const [findingForm, setFindingForm] = useState({
-    title: "",
-    description: "",
-    severity: "MODERATE" as (typeof SEVERITY_OPTIONS)[number],
-    category: "OTHER" as (typeof CATEGORY_OPTIONS)[number],
-    repairCostLow: "",
-    repairCostHigh: "",
-    evidence: "",
-  });
 
   if (isLoading) {
     return (
@@ -257,20 +238,6 @@ export default function InspectionDetailPage({
 
   function handleAdvanceStep(step: string) {
     advanceStep.mutate({ inspectionId: id, step: step as never });
-  }
-
-  function handleAddFinding(e: React.FormEvent) {
-    e.preventDefault();
-    addFinding.mutate({
-      inspectionId: id,
-      title: findingForm.title,
-      description: findingForm.description,
-      severity: findingForm.severity,
-      category: findingForm.category,
-      repairCostLow: findingForm.repairCostLow ? Math.round(parseFloat(findingForm.repairCostLow) * 100) : undefined,
-      repairCostHigh: findingForm.repairCostHigh ? Math.round(parseFloat(findingForm.repairCostHigh) * 100) : undefined,
-      evidence: findingForm.evidence || undefined,
-    });
   }
 
   function handleCheckRisk(riskId: string, status: RiskCheckStatus["status"], notes?: string) {
@@ -402,15 +369,6 @@ export default function InspectionDetailPage({
           </div>
         </div>
         <div className="flex gap-2 pl-10 sm:pl-0">
-          {!isCompleted && !isCancelled && currentStepIndex > 0 && (
-            <Button
-              onClick={() => setShowFindingForm(true)}
-              variant="secondary"
-              size="sm"
-            >
-              <Plus className="h-4 w-4" /> Add Finding
-            </Button>
-          )}
           {inspection.report && (
             <Badge variant="success">Report Generated</Badge>
           )}
@@ -545,284 +503,15 @@ export default function InspectionDetailPage({
         />
       )}
 
-      {/* Market Analysis (shown for completed/cancelled inspections that have market data) */}
-      {(isCompleted || isCancelled) && inspection.marketAnalysis && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-brand-600" />
-              <CardTitle>Market Analysis</CardTitle>
-            </div>
-          </CardHeader>
-          <div className="px-6 pb-6">
-            <MarketAnalysisSection
-              data={inspection.marketAnalysis as unknown as MarketAnalysisData}
-            />
-          </div>
-        </Card>
-      )}
-
-      {/* Photo Gallery — always visible */}
-      <Card id="photos" className="overflow-hidden p-0">
-        <PhotoGallery media={inspection.media ?? []} findings={inspection.findings} />
-      </Card>
-
-      {/* Vehicle Details + Score + Findings */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Vehicle Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Vehicle Details</CardTitle>
-          </CardHeader>
-          <div className="space-y-3">
-            {[
-              ["VIN", inspection.vehicle.vin],
-              ["Year", inspection.vehicle.year],
-              ["Make", inspection.vehicle.make],
-              ["Model", inspection.vehicle.model],
-              ["Trim", inspection.vehicle.trim || "—"],
-              ["Body", inspection.vehicle.bodyStyle || "—"],
-              ["Drivetrain", inspection.vehicle.drivetrain || "—"],
-              ["Odometer", inspection.odometer ? `${inspection.odometer.toLocaleString()} mi` : "—"],
-              ["Location", inspection.location || "—"],
-            ].map(([label, value]) => (
-              <div key={label as string} className="flex justify-between text-sm">
-                <span className="text-text-secondary">{label}</span>
-                <span className="font-medium text-text-primary">{value}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* Condition Score */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Condition Score</CardTitle>
-          </CardHeader>
-          {inspection.overallScore != null ? (
-            <div className="space-y-4">
-              <div className="text-center">
-                <p className={`text-5xl font-bold ${
-                  inspection.overallScore >= 70 ? "text-green-700" :
-                  inspection.overallScore >= 50 ? "text-text-secondary" : "text-red-700"
-                }`}>
-                  {inspection.overallScore}
-                </p>
-                <p className="text-sm text-text-secondary mt-1">out of 100</p>
-              </div>
-              <div className="space-y-2">
-                {[
-                  { label: "Structural / Drivetrain", score: inspection.structuralScore },
-                  { label: "Cosmetic / Interior", score: inspection.cosmeticScore },
-                  { label: "Electronics / Software", score: inspection.electronicsScore },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-text-secondary">{item.label}</span>
-                      <span className="font-medium">{item.score}/100</span>
-                    </div>
-                    <Progress value={item.score || 0} size="sm" color={
-                      (item.score || 0) >= 70 ? "green" :
-                      (item.score || 0) >= 50 ? "yellow" : "red"
-                    } />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-text-tertiary">
-              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Add findings to calculate score</p>
-            </div>
-          )}
-        </Card>
-
-        {/* Findings */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Findings</CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge>{inspection.findings.length}</Badge>
-                {!isCompleted && !isCancelled && (
-                  <button
-                    onClick={() => setShowFindingForm(true)}
-                    className="rounded-md h-6 w-6 flex items-center justify-center bg-surface-overlay text-text-secondary hover:bg-surface-hover transition-colors"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          {inspection.findings.length === 0 ? (
-            <div className="text-center py-8 text-text-tertiary">
-              <Wrench className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No findings yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {inspection.findings.map((f) => (
-                <div
-                  key={f.id}
-                  className={`p-3 rounded-lg border text-sm ${severityColor(f.severity)}`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold">{f.title}</span>
-                    <Badge
-                      variant={
-                        f.severity === "CRITICAL" ? "danger" :
-                        f.severity === "MAJOR" ? "warning" : "default"
-                      }
-                    >
-                      {f.severity}
-                    </Badge>
-                  </div>
-                  <p className="text-xs opacity-80">{f.description}</p>
-                  {(f.repairCostLow || f.repairCostHigh) && (
-                    <p className="text-xs mt-1 font-medium">
-                      Est. repair: ${((f.repairCostLow || 0) / 100).toLocaleString()} – ${((f.repairCostHigh || 0) / 100).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Finding from Risk slide-out */}
+      {/* Finding from Risk slide-out (kept for auto-creation from risk checks) */}
       {findingFromRisk && (
         <FindingFromRisk
           risk={findingFromRisk}
           onSubmit={handleSubmitFindingFromRisk}
           onClose={() => setFindingFromRisk(null)}
-          onCaptureEvidence={() => {
-            // Could trigger camera here
-          }}
+          onCaptureEvidence={() => {}}
           isSubmitting={addFinding.isPending}
         />
-      )}
-
-      {/* Manual Add Finding Slide-out Panel */}
-      {showFindingForm && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/30 z-40"
-            onClick={() => setShowFindingForm(false)}
-          />
-          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-surface-overlay shadow-2xl z-50 overflow-y-auto">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-text-primary">Add Finding</h3>
-                <button
-                  onClick={() => setShowFindingForm(false)}
-                  className="rounded-lg p-1.5 hover:bg-surface-hover"
-                >
-                  <X className="h-5 w-5 text-text-tertiary" />
-                </button>
-              </div>
-
-              <form onSubmit={handleAddFinding} className="space-y-4">
-                <Input
-                  id="finding-title"
-                  label="Title"
-                  placeholder="e.g., Head Gasket Compromised"
-                  value={findingForm.title}
-                  onChange={(e) => setFindingForm((p) => ({ ...p, title: e.target.value }))}
-                  required
-                />
-
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-text-secondary">Description</label>
-                  <textarea
-                    placeholder="Describe the finding in detail..."
-                    value={findingForm.description}
-                    onChange={(e) => setFindingForm((p) => ({ ...p, description: e.target.value }))}
-                    required
-                    rows={3}
-                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-text-secondary">Severity</label>
-                    <select
-                      value={findingForm.severity}
-                      onChange={(e) => setFindingForm((p) => ({ ...p, severity: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
-                    >
-                      {SEVERITY_OPTIONS.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-medium text-text-secondary">Category</label>
-                    <select
-                      value={findingForm.category}
-                      onChange={(e) => setFindingForm((p) => ({ ...p, category: e.target.value as never }))}
-                      className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
-                    >
-                      {CATEGORY_OPTIONS.map((c) => (
-                        <option key={c} value={c}>{c.replace(/_/g, " ")}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    id="cost-low"
-                    label="Repair Cost Low ($)"
-                    type="number"
-                    placeholder="e.g., 2800"
-                    value={findingForm.repairCostLow}
-                    onChange={(e) => setFindingForm((p) => ({ ...p, repairCostLow: e.target.value }))}
-                  />
-                  <Input
-                    id="cost-high"
-                    label="Repair Cost High ($)"
-                    type="number"
-                    placeholder="e.g., 4200"
-                    value={findingForm.repairCostHigh}
-                    onChange={(e) => setFindingForm((p) => ({ ...p, repairCostHigh: e.target.value }))}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-sm font-medium text-text-secondary">Evidence Notes (optional)</label>
-                  <textarea
-                    placeholder="What was observed during inspection..."
-                    value={findingForm.evidence}
-                    onChange={(e) => setFindingForm((p) => ({ ...p, evidence: e.target.value }))}
-                    rows={2}
-                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary shadow-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay"
-                  />
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setShowFindingForm(false)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    loading={addFinding.isPending}
-                    className="flex-1"
-                  >
-                    Add Finding
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </>
       )}
 
       {/* Report Modal */}

@@ -1,9 +1,8 @@
 "use client";
 
 import { useRef } from "react";
-import { Camera, Video, Mic, CheckCircle, Upload, ImageIcon, AlertTriangle } from "lucide-react";
+import { Camera, CheckCircle, Upload, ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AggregatedRisk } from "@/types/risk";
 
 interface CaptureItem {
   captureType: string;
@@ -16,7 +15,6 @@ interface CaptureGridProps {
   captures: CaptureItem[];
   onCapture: (captureType: string, file: File) => void;
   isUploading?: string;
-  risks?: AggregatedRisk[];
 }
 
 const REQUIRED_CAPTURES = [
@@ -34,10 +32,6 @@ const REQUIRED_CAPTURES = [
   { type: "UNDER_HOOD_LABEL", label: "VIN / Hood Label", hint: "Close-up, readable", icon: Camera },
 ];
 
-const OPTIONAL_CAPTURES = [
-  { type: "WALKAROUND_VIDEO", label: "Walkaround Video", hint: "60-90 second walk-around", icon: Video },
-  { type: "ENGINE_AUDIO", label: "Engine Audio", hint: "15-30 seconds, cold start", icon: Mic },
-];
 
 function CaptureCard({
   type,
@@ -47,8 +41,6 @@ function CaptureCard({
   captured,
   isUploading,
   onCapture,
-  required,
-  riskSeverity,
 }: {
   type: string;
   label: string;
@@ -57,8 +49,6 @@ function CaptureCard({
   captured?: CaptureItem;
   isUploading: boolean;
   onCapture: (file: File) => void;
-  required: boolean;
-  riskSeverity?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const isCaptured = !!captured?.url;
@@ -75,47 +65,27 @@ function CaptureCard({
         "relative rounded-lg border p-3 transition-colors",
         isCaptured
           ? "border-green-300 bg-[#dcfce7]"
-          : riskSeverity === "CRITICAL"
-            ? "border-red-300 bg-[#fde8e8]/30 hover:border-red-700"
-            : riskSeverity === "MAJOR"
-              ? "border-red-300 bg-[#fde8e8]/30 hover:border-red-700"
-              : "border-dashed border-border-strong bg-surface-raised hover:border-brand-400 hover:bg-surface-hover"
+          : "border-dashed border-border-strong bg-surface-raised hover:border-brand-400 hover:bg-surface-hover"
       )}
     >
-      {/* Status indicator */}
       {isCaptured && (
         <div className="absolute top-2 right-2">
           <CheckCircle className="h-5 w-5 text-green-700" />
         </div>
       )}
-      {riskSeverity && !isCaptured && (
-        <div className="absolute top-2 right-2">
-          <AlertTriangle className={cn("h-4 w-4",
-            riskSeverity === "CRITICAL" ? "text-red-700" : "text-red-700"
-          )} />
-        </div>
-      )}
 
-      {/* Content */}
       <div className="flex flex-col items-center text-center gap-2">
         {isCaptured && captured?.url ? (
           <div className="h-20 w-full rounded-lg bg-surface-sunken overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={captured.url}
-              alt={label}
-              className="h-full w-full object-cover"
-            />
+            <img src={captured.url} alt={label} className="h-full w-full object-cover" />
           </div>
         ) : (
-          <div className={cn(
-            "h-20 w-full rounded-lg flex items-center justify-center",
-            isCaptured ? "bg-[#dcfce7]" : riskSeverity ? "bg-surface-sunken" : "bg-[#fce8f3]"
-          )}>
+          <div className="h-20 w-full rounded-lg flex items-center justify-center bg-[#fce8f3]">
             {isUploading ? (
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
             ) : (
-              <Icon className={cn("h-8 w-8", isCaptured ? "text-green-700" : "text-brand-400")} />
+              <Icon className="h-8 w-8 text-brand-400" />
             )}
           </div>
         )}
@@ -125,23 +95,11 @@ function CaptureCard({
           <p className="text-xs text-text-tertiary mt-0.5">{hint}</p>
         </div>
 
-        {!required && !riskSeverity && (
-          <span className="text-[10px] uppercase tracking-wider text-text-tertiary font-medium">Optional</span>
-        )}
-        {riskSeverity && (
-          <span className={cn(
-            "text-[10px] uppercase tracking-wider font-medium",
-            riskSeverity === "CRITICAL" ? "text-red-700" : "text-red-700"
-          )}>
-            {riskSeverity} Risk Area
-          </span>
-        )}
-
         <input
           ref={inputRef}
           type="file"
-          accept={type.includes("VIDEO") ? "video/*" : type.includes("AUDIO") ? "audio/*" : "image/*"}
-          capture={type.includes("VIDEO") || type.includes("AUDIO") ? undefined : "environment"}
+          accept="image/*"
+          capture="environment"
           onChange={handleFileChange}
           className="hidden"
         />
@@ -174,35 +132,9 @@ function CaptureCard({
   );
 }
 
-export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, risks }: CaptureGridProps) {
+export function CaptureGrid({ inspectionId, captures, onCapture, isUploading }: CaptureGridProps) {
   const getCaptured = (type: string) => captures.find((c) => c.captureType === type);
   const capturedCount = REQUIRED_CAPTURES.filter((c) => getCaptured(c.type)).length;
-
-  // Build risk-specific capture prompts — prefer AI-generated prompts, fall back to defaults
-  const riskCaptures = (risks || []).flatMap((risk) => {
-    const prompts = risk.aiCapturePrompts && risk.aiCapturePrompts.length > 0
-      ? risk.aiCapturePrompts
-      : risk.capturePrompts;
-
-    return prompts.map((prompt, idx) => ({
-      type: `FINDING_EVIDENCE_${risk.id}_${idx}`,
-      label: prompt.length > 40 ? prompt.slice(0, 38) + "…" : prompt,
-      hint: risk.aiSummary
-        ? risk.aiSummary.slice(0, 80) + (risk.aiSummary.length > 80 ? "…" : "")
-        : prompt.split(" — ")[1] || risk.inspectionGuidance?.slice(0, 60) + "..." || "",
-      icon: Camera,
-      severity: risk.severity,
-      riskTitle: risk.title,
-    }));
-  });
-
-  // Deduplicate risk captures by label
-  const seenLabels = new Set<string>();
-  const uniqueRiskCaptures = riskCaptures.filter((cap) => {
-    if (seenLabels.has(cap.label)) return false;
-    seenLabels.add(cap.label);
-    return true;
-  });
 
   return (
     <div className="space-y-6">
@@ -243,61 +175,13 @@ export function CaptureGrid({ inspectionId, captures, onCapture, isUploading, ri
               captured={getCaptured(cap.type)}
               isUploading={isUploading === cap.type}
               onCapture={(file) => onCapture(cap.type, file)}
-              required
             />
           ))}
         </div>
       </div>
 
-      {/* Risk-specific captures */}
-      {uniqueRiskCaptures.length > 0 && (
-        <div>
-          <h4 className="text-xs uppercase tracking-wider text-text-tertiary font-medium mb-3 flex items-center gap-1.5">
-            <AlertTriangle className="h-3.5 w-3.5" /> Risk-Specific Evidence Photos
-          </h4>
-          <p className="text-xs text-text-tertiary mb-3">
-            Based on identified risks, capture these additional photos to document potential problem areas.
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {uniqueRiskCaptures.map((cap) => (
-              <CaptureCard
-                key={cap.type}
-                type={cap.type}
-                label={cap.label}
-                hint={cap.hint}
-                icon={cap.icon}
-                captured={getCaptured(cap.type)}
-                isUploading={isUploading === cap.type}
-                onCapture={(file) => onCapture(cap.type, file)}
-                required={false}
-                riskSeverity={cap.severity}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Optional captures */}
-      <div>
-        <h4 className="text-xs uppercase tracking-wider text-text-tertiary font-medium mb-3 flex items-center gap-1.5">
-          <Video className="h-3.5 w-3.5" /> Optional Media
-        </h4>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {OPTIONAL_CAPTURES.map((cap) => (
-            <CaptureCard
-              key={cap.type}
-              type={cap.type}
-              label={cap.label}
-              hint={cap.hint}
-              icon={cap.icon}
-              captured={getCaptured(cap.type)}
-              isUploading={isUploading === cap.type}
-              onCapture={(file) => onCapture(cap.type, file)}
-              required={false}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Risk-specific evidence is now captured inline during the risk checklist */}
+      {/* Optional media (walkaround, engine audio) removed to keep focus on required captures */}
     </div>
   );
 }
