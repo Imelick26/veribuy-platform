@@ -234,12 +234,40 @@ const fadeUp = {
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [meetingForm, setMeetingForm] = useState({
+    name: "",
+    email: "",
+    company: "",
+    role: "",
+  });
+  const [meetingSubmitted, setMeetingSubmitted] = useState(false);
+  const [meetingLoading, setMeetingLoading] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  async function handleMeetingSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMeetingLoading(true);
+    try {
+      await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...meetingForm,
+          message: `Meeting request from ${meetingForm.name} (${meetingForm.role}) at ${meetingForm.company}`,
+        }),
+      });
+      setMeetingSubmitted(true);
+    } catch {
+      setMeetingSubmitted(true);
+    } finally {
+      setMeetingLoading(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white text-gray-900" style={{ fontFamily: "var(--font-inter), Inter, system-ui, sans-serif" }}>
@@ -685,6 +713,180 @@ export default function LandingPage() {
               the realities of the dealership floor.
             </p>
           </motion.div>
+        </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="h-px bg-gradient-to-r from-transparent via-brand-200/60 to-transparent" />
+      </div>
+
+      {/* ─── Schedule a Meeting ────────────────────────── */}
+      <section id="meeting" className="relative py-24 lg:py-32 bg-gradient-to-br from-brand-50/40 via-white to-brand-50/20">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            {/* Left — Copy */}
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <p className="text-sm font-medium text-accent-magenta uppercase tracking-[0.15em] mb-4">
+                Talk to Our Team
+              </p>
+              <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-6">
+                See how VeriBuy fits{" "}
+                <span className="text-brand-gradient">your operation</span>
+              </h2>
+              <p className="text-lg text-gray-500 leading-relaxed mb-8">
+                Every dealership is different. Let us walk you through the
+                platform, discuss your specific workflow, and show you how
+                AI-powered condition intelligence can impact your bottom line.
+              </p>
+              <ul className="space-y-4">
+                {[
+                  "Personalized platform walkthrough",
+                  "Discuss your acquisition and recon workflow",
+                  "See real AI condition scoring in action",
+                  "No commitment required",
+                ].map((item) => (
+                  <li
+                    key={item}
+                    className="flex items-center gap-3 text-gray-600 text-sm"
+                  >
+                    <CheckCircle
+                      size={18}
+                      className="text-emerald-500 shrink-0"
+                    />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+
+            {/* Right — Form */}
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              <div className="rounded-2xl bg-white border border-gray-200 shadow-xl shadow-brand-600/5 p-8 md:p-10">
+                {meetingSubmitted ? (
+                  <div className="text-center py-8">
+                    <div className="mx-auto mb-6 w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center">
+                      <CheckCircle size={32} className="text-emerald-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                      We&apos;ll be in touch
+                    </h3>
+                    <p className="text-gray-500">
+                      Our team will reach out within one business day to
+                      schedule your walkthrough.
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleMeetingSubmit} className="space-y-5">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-1">
+                        Schedule a Meeting
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-6">
+                        Fill out the form below and our team will reach out to
+                        find a time that works.
+                      </p>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Full Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={meetingForm.name}
+                          onChange={(e) =>
+                            setMeetingForm({ ...meetingForm, name: e.target.value })
+                          }
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition-colors"
+                          placeholder="John Smith"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Work Email *
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={meetingForm.email}
+                          onChange={(e) =>
+                            setMeetingForm({ ...meetingForm, email: e.target.value })
+                          }
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition-colors"
+                          placeholder="john@dealership.com"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Dealership / Company *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={meetingForm.company}
+                          onChange={(e) =>
+                            setMeetingForm({ ...meetingForm, company: e.target.value })
+                          }
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition-colors"
+                          placeholder="Premier Auto Group"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Your Role
+                        </label>
+                        <select
+                          value={meetingForm.role}
+                          onChange={(e) =>
+                            setMeetingForm({ ...meetingForm, role: e.target.value })
+                          }
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition-colors appearance-none"
+                        >
+                          <option value="">Select your role</option>
+                          <option value="dealer-principal">Dealer Principal / Owner</option>
+                          <option value="general-manager">General Manager</option>
+                          <option value="used-car-manager">Used Car Manager</option>
+                          <option value="operations">Operations / Fixed Ops</option>
+                          <option value="technology">Technology / IT</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={meetingLoading}
+                      className="w-full bg-brand-gradient rounded-xl py-3.5 text-sm font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg hover:opacity-95 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {meetingLoading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          Request a Meeting
+                          <ArrowRight size={16} />
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[11px] text-gray-400 text-center">
+                      We&apos;ll respond within one business day. No spam, ever.
+                    </p>
+                  </form>
+                )}
+              </div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
