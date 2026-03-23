@@ -704,7 +704,7 @@ export default function LandingPage() {
             </div>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 mb-6">
               The industry&apos;s first AI-based condition intelligence platform.{" "}
-              <span className="text-brand-gradient">Setting the new standard for truth.</span>
+              <span className="text-brand-gradient">Setting the new standard for truth in automotive.</span>
             </h2>
             <p className="text-lg text-gray-500 leading-relaxed">
               Every dealer deserves to know exactly what they&apos;re buying and
