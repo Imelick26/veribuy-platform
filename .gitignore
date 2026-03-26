@@ -57,3 +57,5 @@ scripts/verify-bounds.mjs
 scripts/upload-to-supabase.mjs
 scripts/generate-calibration-xlsx.*
 scripts/test-ai-analysis.ts
+landing-site/node_modules/
+landing-site/.next/
