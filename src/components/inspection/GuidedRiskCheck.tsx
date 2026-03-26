@@ -294,9 +294,7 @@ export function GuidedRiskCheck({
             {questions.map((q, idx) => {
               const qa = answerMap.get(q.id);
               const answer = qa?.answer;
-              const isFailure = answer === q.failureAnswer;
               const isAnswered = answer === "yes" || answer === "no";
-              const showMediaPrompt = isFailure && q.mediaPrompt;
               const questionMedia = qa?.mediaIds || [];
 
               return (
@@ -304,19 +302,17 @@ export function GuidedRiskCheck({
                   key={q.id}
                   className={cn(
                     "rounded-lg border p-2.5 transition-all",
-                    isAnswered && isFailure ? "border-red-300 bg-red-50" :
-                    isAnswered ? "border-green-200 bg-green-50/50" :
+                    isAnswered ? "border-brand-200 bg-brand-50/30" :
                     "border-border-default bg-surface-raised"
                   )}
                 >
                   <div className="flex items-start gap-2 mb-2">
                     <span className={cn(
                       "shrink-0 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold",
-                      isAnswered && isFailure ? "bg-red-200 text-red-800" :
-                      isAnswered ? "bg-green-200 text-green-800" :
+                      isAnswered ? "bg-brand-100 text-brand-700" :
                       "bg-surface-overlay text-text-tertiary"
                     )}>
-                      {isAnswered ? (isFailure ? "✗" : "✓") : idx + 1}
+                      {isAnswered ? "✓" : idx + 1}
                     </span>
                     <p className="text-sm text-text-primary leading-snug flex-1">
                       {q.question}
@@ -329,7 +325,7 @@ export function GuidedRiskCheck({
                       className={cn(
                         "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                         answer === "yes"
-                          ? (q.failureAnswer === "yes" ? "bg-red-600 text-white" : "bg-green-600 text-white")
+                          ? "bg-brand-600 text-white"
                           : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
                       )}
                     >
@@ -340,14 +336,15 @@ export function GuidedRiskCheck({
                       className={cn(
                         "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                         answer === "no"
-                          ? (q.failureAnswer === "no" ? "bg-red-600 text-white" : "bg-green-600 text-white")
+                          ? "bg-brand-600 text-white"
                           : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
                       )}
                     >
                       No
                     </button>
 
-                    {showMediaPrompt && onUploadMedia && (
+                    {/* Optional photo capture for any answered question */}
+                    {isAnswered && onUploadMedia && q.mediaPrompt && (
                       <>
                         <button
                           onClick={() => fileInputRefs.current[q.id]?.click()}
@@ -355,7 +352,7 @@ export function GuidedRiskCheck({
                             "ml-auto flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors",
                             questionMedia.length > 0
                               ? "bg-brand-100 text-brand-700"
-                              : "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                              : "bg-surface-overlay text-text-tertiary hover:bg-surface-sunken"
                           )}
                         >
                           {uploadingQuestionId === q.id ? (
@@ -363,7 +360,7 @@ export function GuidedRiskCheck({
                           ) : (
                             <Camera className="h-3.5 w-3.5" />
                           )}
-                          {questionMedia.length > 0 ? `${questionMedia.length}` : "Photo"}
+                          {questionMedia.length > 0 ? `${questionMedia.length} photo${questionMedia.length > 1 ? "s" : ""}` : "Add Photo"}
                         </button>
                         <input
                           type="file"
@@ -377,9 +374,9 @@ export function GuidedRiskCheck({
                     )}
                   </div>
 
-                  {showMediaPrompt && questionMedia.length === 0 && (
-                    <p className="text-[11px] text-amber-600 ml-7 mt-1.5 italic">
-                      📸 {q.mediaPrompt}
+                  {isAnswered && q.mediaPrompt && questionMedia.length === 0 && (
+                    <p className="text-[11px] text-text-tertiary ml-7 mt-1.5">
+                      Optional: {q.mediaPrompt}
                     </p>
                   )}
                 </div>
@@ -389,46 +386,30 @@ export function GuidedRiskCheck({
         </>
       )}
 
-      {/* ─── VERDICT SUMMARY ─── */}
-      {isComplete && (
-        <div className={cn(
-          "rounded-lg p-3 border",
-          hasFailures ? "bg-red-50 border-red-300" : "bg-green-50 border-green-200"
-        )}>
+      {/* ─── COMPLETION SUMMARY ─── */}
+      {isComplete && status === "NOT_CHECKED" && (
+        <div className="rounded-lg p-3 border border-brand-200 bg-brand-50/30">
           <div className="flex items-center gap-2 mb-2">
-            {hasFailures ? (
-              <>
-                <AlertTriangle className="h-4 w-4 text-red-600" />
-                <span className="text-sm font-semibold text-red-700">
-                  {failedQuestions.length} issue{failedQuestions.length > 1 ? "s" : ""} detected
-                </span>
-              </>
-            ) : (
-              <>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-semibold text-green-700">
-                  {hasQuestions ? "All checks passed" : "Photo captured for AI analysis"}
-                </span>
-              </>
-            )}
+            <CheckCircle className="h-4 w-4 text-brand-600" />
+            <span className="text-sm font-semibold text-brand-700">
+              {hasQuestions
+                ? `All ${questions.length} check${questions.length > 1 ? "s" : ""} answered`
+                : "Photo captured for AI analysis"}
+            </span>
           </div>
 
-          {status === "NOT_CHECKED" && hasQuestions && (
-            <button
-              onClick={() => onManualOverride(hasFailures ? "CONFIRMED" : "NOT_FOUND")}
-              className={cn(
-                "w-full py-2 rounded-lg text-sm font-medium transition-colors",
-                hasFailures
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-green-600 text-white hover:bg-green-700"
-              )}
-            >
-              {hasFailures ? "Mark as Issue Found" : "Mark as Clear"}
-            </button>
+          {hasQuestions && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onManualOverride(hasFailures ? "CONFIRMED" : "NOT_FOUND")}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors bg-brand-600 text-white hover:bg-brand-700"
+              >
+                Submit Answers
+              </button>
+            </div>
           )}
 
-          {/* For photo-only checks, the verdict comes from AI analysis later */}
-          {!hasQuestions && status === "NOT_CHECKED" && (
+          {!hasQuestions && (
             <p className="text-xs text-text-secondary">
               AI will analyze this photo during the analysis step.
             </p>
