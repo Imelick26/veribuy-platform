@@ -435,6 +435,7 @@ export default function InspectionDetailPage({
         checkedAt: val.checkedAt,
         mediaIds: (v.mediaIds as string[]) || [],
         hasPhotoEvidence: !!v.hasPhotoEvidence,
+        questionAnswers: (v.questionAnswers as RiskCheckStatus["questionAnswers"]) || [],
       };
     }
   }
