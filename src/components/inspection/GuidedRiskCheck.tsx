@@ -1,9 +1,15 @@
 "use client";
 
 import { useRef } from "react";
-import { Camera, CheckCircle, Loader2, AlertTriangle, MapPin, Wrench, DollarSign, ImageIcon } from "lucide-react";
+import { Camera, CheckCircle, Loader2, AlertTriangle, MapPin, Wrench, DollarSign, ImageIcon, RefreshCw, X } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { AggregatedRisk, QuestionAnswer } from "@/types/risk";
+
+export interface RiskMediaItem {
+  mediaId: string;
+  url: string;
+  captureType: string;
+}
 
 interface GuidedRiskCheckProps {
   risk: AggregatedRisk;
@@ -12,11 +18,15 @@ interface GuidedRiskCheckProps {
   onUploadMedia?: (questionId: string, file: File) => Promise<string | null>;
   /** For photo-check: capture the primary evidence photo for this risk */
   onCaptureRiskPhoto?: (file: File) => Promise<string | null>;
+  /** Replace a specific evidence photo (retake) */
+  onRetakeRiskPhoto?: (captureIndex: number, file: File) => Promise<string | null>;
   uploadingQuestionId?: string | null;
   /** Is the primary risk photo currently uploading? */
   uploadingRiskPhoto?: boolean;
   /** Number of photos already captured for this risk */
   riskPhotoCount?: number;
+  /** Actual media items with URLs for preview */
+  riskPhotos?: RiskMediaItem[];
   onSkip: () => void;
   onManualOverride: (status: "CONFIRMED" | "NOT_FOUND") => void;
   status: string;
@@ -28,9 +38,11 @@ export function GuidedRiskCheck({
   onAnswerQuestion,
   onUploadMedia,
   onCaptureRiskPhoto,
+  onRetakeRiskPhoto,
   uploadingQuestionId,
   uploadingRiskPhoto,
   riskPhotoCount = 0,
+  riskPhotos = [],
   onSkip,
   onManualOverride,
   status,
@@ -82,6 +94,18 @@ export function GuidedRiskCheck({
     const file = e.target.files?.[0];
     if (!file || !onCaptureRiskPhoto) return;
     await onCaptureRiskPhoto(file);
+    e.target.value = "";
+  };
+
+  const handleRetakePhoto = async (captureIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (onRetakeRiskPhoto) {
+      await onRetakeRiskPhoto(captureIndex, file);
+    } else if (onCaptureRiskPhoto) {
+      // Fallback: just add another photo
+      await onCaptureRiskPhoto(file);
+    }
     e.target.value = "";
   };
 
@@ -155,29 +179,63 @@ export function GuidedRiskCheck({
             </div>
           </div>
 
-          {/* Capture prompt checklist */}
-          <div className="ml-6 space-y-1.5 mb-2">
+          {/* Capture prompts with photo previews */}
+          <div className="ml-6 space-y-2 mb-2">
             {capturePrompts.map((prompt, i) => {
               const isCaptured = i < riskPhotoCount;
+              const photo = riskPhotos[i];
               return (
-                <div key={i} className="flex items-start gap-1.5">
-                  <span className={cn(
-                    "shrink-0 mt-0.5 h-3.5 w-3.5 rounded-full flex items-center justify-center text-[8px] font-bold",
-                    isCaptured ? "bg-green-200 text-green-800" : "bg-surface-overlay text-text-tertiary"
-                  )}>
-                    {isCaptured ? "✓" : i + 1}
-                  </span>
-                  <p className={cn(
-                    "text-xs leading-snug",
-                    isCaptured ? "text-text-tertiary line-through" : "text-text-secondary"
-                  )}>
-                    {prompt}
-                  </p>
+                <div key={i} className="space-y-1.5">
+                  <div className="flex items-start gap-1.5">
+                    <span className={cn(
+                      "shrink-0 mt-0.5 h-3.5 w-3.5 rounded-full flex items-center justify-center text-[8px] font-bold",
+                      isCaptured ? "bg-green-200 text-green-800" : "bg-surface-overlay text-text-tertiary"
+                    )}>
+                      {isCaptured ? "✓" : i + 1}
+                    </span>
+                    <p className={cn(
+                      "text-xs leading-snug flex-1",
+                      isCaptured ? "text-text-tertiary" : "text-text-secondary"
+                    )}>
+                      {prompt}
+                    </p>
+                  </div>
+
+                  {/* Photo thumbnail with retake */}
+                  {isCaptured && photo && (
+                    <div className="ml-5 relative group inline-block">
+                      <div className="relative rounded-lg overflow-hidden border border-green-200 w-28 h-20">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photo.url}
+                          alt={`Evidence photo ${i + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Retake overlay on hover */}
+                        <button
+                          onClick={() => fileInputRefs.current[`retake-${i}`]?.click()}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 text-white" />
+                          <span className="text-xs font-medium text-white">Retake</span>
+                        </button>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        capture="environment"
+                        className="hidden"
+                        ref={(el) => { fileInputRefs.current[`retake-${i}`] = el; }}
+                        onChange={(e) => handleRetakePhoto(i, e)}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
+          {/* Add / next photo button */}
           <div className="flex items-center gap-2 ml-6">
             <button
               onClick={() => riskPhotoRef.current?.click()}
@@ -195,7 +253,7 @@ export function GuidedRiskCheck({
                 <Camera className="h-3.5 w-3.5" />
               )}
               {riskPhotoCount >= recommendedPhotos
-                ? `${riskPhotoCount} photo${riskPhotoCount > 1 ? "s" : ""} · Add more`
+                ? "Add Another Photo"
                 : hasPhotos
                   ? `Take Photo ${riskPhotoCount + 1} of ${recommendedPhotos}`
                   : "Take Photo"}

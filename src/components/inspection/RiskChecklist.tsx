@@ -370,9 +370,11 @@ export function RiskChecklist({
                       onAnswerQuestion={(questionId, answer) => onAnswerQuestion?.(risk.id, questionId, answer)}
                       onUploadMedia={onUploadQuestionMedia ? (questionId, file) => onUploadQuestionMedia(risk.id, questionId, file) : undefined}
                       onCaptureRiskPhoto={onUploadEvidence ? (file) => onUploadEvidence(risk.id, riskMedia.length, file) : undefined}
+                      onRetakeRiskPhoto={onUploadEvidence ? (captureIndex, file) => onUploadEvidence(risk.id, captureIndex, file) : undefined}
                       uploadingQuestionId={uploadingQuestionId}
-                      uploadingRiskPhoto={uploadingRiskCapture === risk.id}
+                      uploadingRiskPhoto={!!uploadingRiskCapture?.startsWith(risk.id)}
                       riskPhotoCount={riskMedia.length}
+                      riskPhotos={riskMedia}
                       onSkip={() => handleSkip(risk.id)}
                       onManualOverride={(s) => {
                         onCheckRisk(risk.id, s);
