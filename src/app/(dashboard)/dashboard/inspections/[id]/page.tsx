@@ -26,6 +26,7 @@ import { RiskChecklist } from "@/components/inspection/RiskChecklist";
 import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
 import { ReportModal } from "@/components/inspection/ReportModal";
 import { GuidedCapture } from "@/components/inspection/GuidedCapture";
+import { detectVinFromImage } from "@/lib/vin-ocr";
 
 // Dynamic import to avoid SSR issues with Three.js
 const VehicleViewer = dynamic(
@@ -192,35 +193,48 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
-  // VIN Detection (new workflow)
-  const detectVin = trpc.inspection.detectVin.useMutation();
+  // VIN Detection (client-side Tesseract.js OCR)
   const [detectedVin, setDetectedVin] = useState<string | null>(null);
+  const [isDetectingVin, setIsDetectingVin] = useState(false);
 
-  // Auto-trigger VIN OCR when entering VIN_CONFIRM step
+  // Auto-trigger client-side VIN OCR when entering VIN_CONFIRM step
   const vinDetectTriggeredRef = useRef(false);
   useEffect(() => {
     if (!inspection || vinDetectTriggeredRef.current) return;
     const vinStep = inspection.steps.find((s) => s.step === "VIN_CONFIRM");
     if (!vinStep || vinStep.status === "COMPLETED") return;
-    // Only trigger if MEDIA_CAPTURE is completed (photos exist)
     const mediaStep = inspection.steps.find((s) => s.step === "MEDIA_CAPTURE");
     if (!mediaStep || mediaStep.status !== "COMPLETED") return;
-    // Only if no vehicle linked yet (VIN not already confirmed)
     if (inspection.vehicle) return;
 
-    vinDetectTriggeredRef.current = true;
-    detectVin.mutate(
-      { inspectionId: id },
-      {
-        onSuccess: (result) => {
-          // Show any detected VIN — let the user verify correctness
-          if (result.vin) {
-            setDetectedVin(result.vin);
-          }
-        },
-      }
+    // Find door jamb or VIN plate photo
+    const vinPhotos = (inspection.media || []).filter(
+      (m) => m.captureType && ["DOOR_JAMB_DRIVER", "VIN_PLATE", "UNDER_HOOD_LABEL"].includes(m.captureType) && m.url
     );
-  }, [inspection, detectVin, id]);
+    if (vinPhotos.length === 0) return;
+
+    vinDetectTriggeredRef.current = true;
+    setIsDetectingVin(true);
+
+    // Try each VIN photo in priority order
+    const tryPhotos = async () => {
+      for (const photo of vinPhotos) {
+        if (!photo.url) continue;
+        console.log(`[VIN-OCR] Trying ${photo.captureType}...`);
+        const result = await detectVinFromImage(photo.url);
+        if (result.vin) {
+          console.log(`[VIN-OCR] Found VIN: ${result.vin} (confidence: ${result.confidence})`);
+          setDetectedVin(result.vin);
+          setIsDetectingVin(false);
+          return;
+        }
+      }
+      console.log("[VIN-OCR] No VIN detected in any photo");
+      setIsDetectingVin(false);
+    };
+
+    tryPhotos();
+  }, [inspection]);
 
   // Auto-trigger condition scan when entering AI_CONDITION_SCAN step
   const conditionScanTriggeredRef = useRef(false);
@@ -605,7 +619,7 @@ export default function InspectionDetailPage({
           onConfirmVin={(vin) => confirmVin.mutate({ inspectionId: id, vin })}
           isConfirmingVin={confirmVin.isPending}
           detectedVin={detectedVin}
-          isDetectingVin={detectVin.isPending}
+          isDetectingVin={isDetectingVin}
           onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
           isFetchingHistory={fetchHistory.isPending}
           onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}

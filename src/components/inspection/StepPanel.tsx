@@ -791,27 +791,53 @@ function VinConfirmPanel({
     prevDetectedRef[1](detectedVin);
   }
 
+  // While OCR is running, show a prominent scanning state
+  if (isDetectingVin) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-8">
+          <div className="relative mx-auto w-16 h-16 mb-4">
+            <div className="absolute inset-0 rounded-full border-4 border-brand-200" />
+            <div className="absolute inset-0 rounded-full border-4 border-brand-600 border-t-transparent animate-spin" />
+            <Search className="absolute inset-0 m-auto h-6 w-6 text-brand-600" />
+          </div>
+          <h4 className="font-semibold text-text-primary mb-1">Reading VIN from Photo</h4>
+          <p className="text-sm text-text-secondary max-w-md mx-auto">
+            Running OCR on your door jamb sticker photo to extract the VIN...
+          </p>
+        </div>
+        <p className="text-xs text-center text-text-tertiary">
+          This runs locally in your browser — no data sent to external servers.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-center py-4">
         <Car className="h-6 w-6 mx-auto text-brand-600 mb-3" />
-        <h4 className="font-semibold text-text-primary mb-1">Enter Vehicle VIN</h4>
+        <h4 className="font-semibold text-text-primary mb-1">
+          {detectedVin ? "Verify Detected VIN" : "Enter Vehicle VIN"}
+        </h4>
         <p className="text-sm text-text-secondary max-w-md mx-auto">
-          Type the 17-character VIN from the door jamb sticker or dashboard plate.
+          {detectedVin
+            ? "We read this VIN from your door jamb photo. Please verify it's correct before confirming."
+            : "OCR couldn't read the VIN. Please type the 17-character VIN from the door jamb sticker."}
         </p>
       </div>
 
-      {/* OCR status indicator */}
-      {isDetectingVin && (
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-surface-sunken text-xs text-text-secondary">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-600" />
-          <span>Scanning door jamb photo for VIN...</span>
+      {/* OCR result indicator */}
+      {detectedVin && (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#dcfce7] border border-green-200 text-sm text-green-700">
+          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+          <span className="font-medium">VIN detected from photo — verify and confirm below</span>
         </div>
       )}
-      {!isDetectingVin && detectedVin && (
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-[#dcfce7] text-xs text-green-700">
-          <CheckCircle className="h-3.5 w-3.5" />
-          <span>VIN detected from photo — please verify it&apos;s correct</span>
+      {!detectedVin && (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span>Couldn&apos;t read VIN from photo — please enter it manually</span>
         </div>
       )}
 
@@ -826,7 +852,12 @@ function VinConfirmPanel({
           }}
           maxLength={17}
           placeholder="e.g. 1FTHX26F7TEA10490"
-          className="w-full px-3 py-2.5 rounded-lg border border-border-strong bg-surface-raised text-text-primary font-mono tracking-wider text-center text-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+          className={cn(
+            "w-full px-3 py-2.5 rounded-lg border bg-surface-raised text-text-primary font-mono tracking-wider text-center text-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500",
+            detectedVin && !hasUserEdited
+              ? "border-green-400 bg-green-50"
+              : "border-border-strong"
+          )}
         />
         {vin.length > 0 && vin.length < 17 && (
           <p className="text-xs text-text-tertiary mt-1">{vin.length}/17 characters</p>
