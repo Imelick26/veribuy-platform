@@ -243,10 +243,9 @@ export const inspectionRouter = router({
 
       // Photos most likely to contain a VIN, in priority order
       const VIN_PHOTO_TYPES = [
-        "UNDER_HOOD_LABEL",       // Hood sticker / VIN label
-        "VIN_PLATE",              // Dashboard VIN plate
+        "VIN_PLATE",              // Dashboard VIN plate (most common)
+        "DOOR_JAMB_DRIVER",       // Door jamb sticker (always has VIN)
         "DASHBOARD_DRIVER",       // Dashboard area (may show VIN plate)
-        "DOOR_JAMB_DRIVER",       // Door jamb sticker often has VIN
         "EXTERIOR_FRONT",         // Windshield may show VIN plate
       ];
 

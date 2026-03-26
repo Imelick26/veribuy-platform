@@ -54,7 +54,7 @@ export const GUIDED_SHOTS: CaptureShot[] = [
 
   // ── Mechanical (hood open, get low) ──
   { type: "ENGINE_BAY",              label: "Engine Bay",              hint: "Hood open, overhead angle",                           section: "MECHANICAL" },
-  { type: "UNDER_HOOD_LABEL",        label: "Hood Label / Sticker",    hint: "Emissions sticker or label under hood, close-up",     section: "MECHANICAL" },
+  { type: "DOOR_JAMB_DRIVER",         label: "Door Jamb Sticker",       hint: "Open driver door — sticker on jamb with VIN, tire pressure, build info", section: "MECHANICAL" },
   { type: "UNDERCARRIAGE",           label: "Undercarriage",           hint: "From ground level, showing underside",                section: "MECHANICAL" },
   { type: "TIRE_FRONT_DRIVER",       label: "Front Tire (Driver)",     hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
   { type: "TIRE_REAR_DRIVER",        label: "Rear Tire (Driver)",      hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
