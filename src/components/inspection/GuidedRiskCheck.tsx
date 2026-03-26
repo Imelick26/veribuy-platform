@@ -394,24 +394,22 @@ export function GuidedRiskCheck({
             <span className="text-sm font-semibold text-brand-700">
               {hasQuestions
                 ? `All ${questions.length} check${questions.length > 1 ? "s" : ""} answered`
-                : "Photo captured for AI analysis"}
+                : `${riskPhotoCount} photo${riskPhotoCount > 1 ? "s" : ""} captured`}
             </span>
           </div>
 
-          {hasQuestions && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onManualOverride(hasFailures ? "CONFIRMED" : "NOT_FOUND")}
-                className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors bg-brand-600 text-white hover:bg-brand-700"
-              >
-                Submit Answers
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onManualOverride(hasFailures ? "CONFIRMED" : "NOT_FOUND")}
+              className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors bg-brand-600 text-white hover:bg-brand-700"
+            >
+              {hasQuestions ? "Submit Answers" : "Mark as Captured"}
+            </button>
+          </div>
 
           {!hasQuestions && (
-            <p className="text-xs text-text-secondary">
-              AI will analyze this photo during the analysis step.
+            <p className="text-xs text-text-tertiary text-center mt-1.5">
+              AI will analyze these photos to assess condition and severity.
             </p>
           )}
         </div>

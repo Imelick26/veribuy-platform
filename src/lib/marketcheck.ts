@@ -163,9 +163,12 @@ export async function fetchMarketValue(
   zip: string = "97201",
   mileage?: number,
 ): Promise<MarketValueResult> {
-  // Fire both requests in parallel
+  // Fire both requests in parallel — catch both so we can fallback gracefully
   const [searchResult, stats] = await Promise.all([
-    searchActiveListings(year, make, model, zip, 100, 10),
+    searchActiveListings(year, make, model, zip, 100, 10).catch((err) => {
+      console.warn(`[MarketCheck] Search failed: ${err.message}`);
+      return { num_found: 0, listings: [] } as MarketCheckSearchResponse;
+    }),
     getMarketStats(year, make, model).catch(() => null), // stats endpoint may fail on rare vehicles
   ]);
 
@@ -198,10 +201,15 @@ export async function fetchMarketValue(
     valueLow = prices[0];
     valueHigh = prices[prices.length - 1];
   } else {
-    throw new Error(
-      `No market data found for ${year} ${make} ${model}. ` +
-      `MarketCheck returned 0 listings and no stats.`
-    );
+    // No data from MarketCheck — use a rough estimate based on vehicle age
+    // This handles old/rare vehicles that aren't in dealer inventory
+    console.warn(`[MarketCheck] No data for ${year} ${make} ${model} — using age-based estimate`);
+    const vehicleAge = new Date().getFullYear() - year;
+    // Rough depreciation curve for trucks/vehicles
+    const baseValue = vehicleAge > 25 ? 5000 : vehicleAge > 15 ? 8000 : vehicleAge > 10 ? 12000 : 18000;
+    estimatedValue = baseValue;
+    valueLow = Math.round(baseValue * 0.6);
+    valueHigh = Math.round(baseValue * 1.5);
   }
 
   // Rough mileage adjustment: if we have avg miles from stats and actual mileage,
