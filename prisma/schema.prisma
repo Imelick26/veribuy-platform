@@ -401,8 +401,10 @@ enum CaptureType {
   TIRE_REAR_DRIVER
   TIRE_FRONT_PASSENGER
   TIRE_REAR_PASSENGER
-  // Identification (2)
+  // Identification (4)
   UNDER_HOOD_LABEL
+  VIN_PLATE
+  DOOR_JAMB_DRIVER
   ODOMETER
   // Legacy / other
   WALKAROUND_VIDEO
