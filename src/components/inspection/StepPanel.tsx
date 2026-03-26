@@ -193,21 +193,13 @@ export function StepPanel({
               <CardTitle>VIN Confirmation</CardTitle>
             </div>
           </CardHeader>
-          {isDetectingVin ? (
-            <div className="text-center py-8">
-              <Loader2 className="h-8 w-8 text-brand-600 animate-spin mx-auto mb-3" />
-              <h4 className="font-semibold text-text-primary mb-1">Reading VIN from Photo...</h4>
-              <p className="text-sm text-text-secondary">
-                AI is extracting the VIN from your hood label photo.
-              </p>
-            </div>
-          ) : (
-            <VinConfirmPanel
-              detectedVin={detectedVin || ""}
-              onConfirm={onConfirmVin || (() => {})}
-              isConfirming={isConfirmingVin || false}
-            />
-          )}
+          {/* Always show the VIN input — OCR pre-fills if successful */}
+          <VinConfirmPanel
+            detectedVin={detectedVin || ""}
+            onConfirm={onConfirmVin || (() => {})}
+            isConfirming={isConfirmingVin || false}
+            isDetectingVin={isDetectingVin || false}
+          />
         </Card>
       );
 
@@ -782,33 +774,58 @@ function VinConfirmPanel({
   detectedVin,
   onConfirm,
   isConfirming,
+  isDetectingVin,
 }: {
   detectedVin: string;
   onConfirm: (vin: string) => void;
   isConfirming: boolean;
+  isDetectingVin: boolean;
 }) {
   const [vin, setVin] = useStateLocal(detectedVin);
+  const [hasUserEdited, setHasUserEdited] = useStateLocal(false);
+
+  // Update VIN when OCR detection completes (only if user hasn't started typing)
+  const prevDetectedRef = useStateLocal(detectedVin);
+  if (detectedVin && detectedVin !== prevDetectedRef[0] && !hasUserEdited) {
+    setVin(detectedVin);
+    prevDetectedRef[1](detectedVin);
+  }
 
   return (
     <div className="space-y-4">
       <div className="text-center py-4">
         <Car className="h-6 w-6 mx-auto text-brand-600 mb-3" />
-        <h4 className="font-semibold text-text-primary mb-1">Confirm Vehicle VIN</h4>
+        <h4 className="font-semibold text-text-primary mb-1">Enter Vehicle VIN</h4>
         <p className="text-sm text-text-secondary max-w-md mx-auto">
-          {detectedVin
-            ? "We detected this VIN from your hood label photo. Please verify it's correct."
-            : "Enter the 17-character VIN from the vehicle."}
+          Type the 17-character VIN from the door jamb sticker or dashboard plate.
         </p>
       </div>
+
+      {/* OCR status indicator */}
+      {isDetectingVin && (
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-surface-sunken text-xs text-text-secondary">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-600" />
+          <span>Scanning door jamb photo for VIN...</span>
+        </div>
+      )}
+      {!isDetectingVin && detectedVin && (
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-[#dcfce7] text-xs text-green-700">
+          <CheckCircle className="h-3.5 w-3.5" />
+          <span>VIN detected from photo — please verify it&apos;s correct</span>
+        </div>
+      )}
 
       <div>
         <label className="block text-xs font-medium text-text-secondary mb-1">VIN Number</label>
         <input
           type="text"
           value={vin}
-          onChange={(e) => setVin(e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, ""))}
+          onChange={(e) => {
+            setVin(e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, ""));
+            setHasUserEdited(true);
+          }}
           maxLength={17}
-          placeholder="Enter 17-character VIN"
+          placeholder="e.g. 1FTHX26F7TEA10490"
           className="w-full px-3 py-2.5 rounded-lg border border-border-strong bg-surface-raised text-text-primary font-mono tracking-wider text-center text-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
         />
         {vin.length > 0 && vin.length < 17 && (
