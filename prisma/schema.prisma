@@ -343,7 +343,7 @@ enum FindingCategory {
 model MediaItem {
   id          String       @id @default(cuid())
   type        MediaType
-  captureType CaptureType?
+  captureType String?       // Free-form: standard shots + dynamic like FINDING_EVIDENCE_riskId_0
 
   s3Key        String
   s3Bucket     String @default("veribuy-media")

@@ -50,34 +50,14 @@ export const mediaRouter = router({
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const publicUrl = `${supabaseUrl}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
 
-      // Map dynamic captureTypes (e.g. FINDING_EVIDENCE_abc123_0) to valid enum values.
-      // The full captureType string is preserved in the storage path for traceability.
-      const VALID_CAPTURE_TYPES = new Set([
-        "FRONT_CENTER", "FRONT_34_DRIVER", "FRONT_34_PASSENGER", "DRIVER_SIDE",
-        "REAR_34_DRIVER", "REAR_34_PASSENGER", "REAR_CENTER", "PASSENGER_SIDE",
-        "ROOF", "DASHBOARD_DRIVER", "FRONT_SEATS", "REAR_SEATS", "CARGO_AREA",
-        "ENGINE_BAY", "UNDERCARRIAGE", "TIRE_FRONT_DRIVER", "TIRE_REAR_DRIVER",
-        "TIRE_FRONT_PASSENGER", "TIRE_REAR_PASSENGER", "UNDER_HOOD_LABEL",
-        "VIN_PLATE", "DOOR_JAMB_DRIVER", "ODOMETER", "WALKAROUND_VIDEO",
-        "ENGINE_AUDIO", "INTERIOR_WALKTHROUGH", "FINDING_EVIDENCE", "OTHER",
-      ]);
-
-      let dbCaptureType = input.captureType;
-      if (!VALID_CAPTURE_TYPES.has(dbCaptureType)) {
-        // Dynamic type like FINDING_EVIDENCE_riskId_0 or RISK_Q_riskId_qId
-        if (dbCaptureType.startsWith("FINDING_EVIDENCE")) {
-          dbCaptureType = "FINDING_EVIDENCE";
-        } else {
-          dbCaptureType = "OTHER";
-        }
-      }
-
       // Create pending MediaItem record
+      // captureType is a free-form string — supports standard shots (FRONT_CENTER)
+      // and dynamic types (FINDING_EVIDENCE_riskId_0, RISK_Q_riskId_qId)
       const mediaItem = await ctx.db.mediaItem.create({
         data: {
           type: mediaType,
-          captureType: dbCaptureType as never,
-          s3Key: storagePath,  // Full original captureType preserved in path
+          captureType: input.captureType,
+          s3Key: storagePath,
           s3Bucket: MEDIA_BUCKET,
           url: publicUrl,
           mimeType: input.mimeType,
