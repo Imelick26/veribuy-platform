@@ -3,6 +3,7 @@
 import { X, FileText, Download, ExternalLink, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useState } from "react";
+import { trpc } from "@/lib/trpc";
 
 interface ReportModalProps {
   reportId: string;
@@ -14,6 +15,8 @@ interface ReportModalProps {
 
 export function ReportModal({ reportId, reportNumber, pdfUrl, shareToken, onClose }: ReportModalProps) {
   const [copied, setCopied] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const utils = trpc.useUtils();
 
   const reportPageUrl = `/dashboard/reports/${reportId}`;
   const shareUrl = shareToken ? `${window.location.origin}/reports/shared/${shareToken}` : null;
@@ -23,6 +26,18 @@ export function ReportModal({ reportId, reportNumber, pdfUrl, shareToken, onClos
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleDownloadPDF() {
+    setPdfLoading(true);
+    try {
+      const { url } = await utils.report.downloadPDF.fetch({ id: reportId });
+      window.open(url, "_blank");
+    } catch {
+      if (pdfUrl) window.open(pdfUrl, "_blank");
+    } finally {
+      setPdfLoading(false);
+    }
   }
 
   return (
@@ -55,9 +70,10 @@ export function ReportModal({ reportId, reportNumber, pdfUrl, shareToken, onClos
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => window.open(pdfUrl, "_blank")}
+                disabled={pdfLoading}
+                onClick={handleDownloadPDF}
               >
-                <Download className="h-4 w-4" /> PDF
+                <Download className="h-4 w-4" /> {pdfLoading ? "Loading…" : "PDF"}
               </Button>
             )}
             <Button

@@ -1,5 +1,12 @@
 import { getOpenAI } from "@/lib/openai";
-import type { AggregatedRisk, AIAnalysisResult, OverallConditionResult, QuestionAnswer } from "@/types/risk";
+import type {
+  AggregatedRisk,
+  AIAnalysisResult,
+  OverallConditionResult,
+  QuestionAnswer,
+  ConditionAssessment,
+  AreaConditionDetail,
+} from "@/types/risk";
 
 interface MediaForAnalysis {
   id: string;
@@ -112,17 +119,26 @@ async function analyzeOneRisk(
     .map((m, i) => `Photo ${i}: ${m.captureType.replace(/_/g, " ")}`)
     .join("\n");
 
-  const systemPrompt = `You are an expert automotive inspector analyzing photos of a ${vehicle.year} ${vehicle.make} ${vehicle.model}.
+  const systemPrompt = `You are analyzing inspection photos of a ${vehicle.year} ${vehicle.make} ${vehicle.model} to assess the condition of a KNOWN issue that was identified through NHTSA complaint data, recall records, and platform-specific failure databases.
 
-You are evaluating ONE specific risk item. You will receive detailed inspection guidance including the EXACT component to check, its LOCATION on the vehicle, HOW to inspect it, and specific SIGNS OF FAILURE. Use these to guide your analysis.
+The issue has already been identified by real data — your job is to ASSESS ITS CURRENT CONDITION on this specific vehicle based on the photos and any hands-on observations the inspector reported.
 
-Only assess what is actually visible in the photos — do not speculate about what you cannot see.
+You are a ${vehicle.make} ${vehicle.model} specialist. You know exactly what healthy vs. failing components look like on this platform because you've seen hundreds of these vehicles.
+
+YOUR DIAGNOSTIC APPROACH:
+1. Examine ALL provided photos — multiple angles of the same area give you a complete picture. Close-ups reveal depth/severity, wide shots reveal extent/spread.
+2. Look for the specific signs of failure listed below — you know exactly what they look like on this platform.
+3. Make a CONFIDENT call. If you can see the component clearly, commit to a definitive assessment. The inspector took specific photos at your direction — use them.
+4. If the inspector also performed hands-on checks (questions answered), weight their firsthand observations heavily — they can feel, hear, and smell things photos cannot show.
+5. Match what you see to the COST TIER DESCRIPTIONS provided — each tier describes exactly what this issue looks like at MINOR, MODERATE, and SEVERE stages.
+
+Only mark INCONCLUSIVE if the relevant area is genuinely not visible or obstructed. If you can see the component, commit to a verdict.
 
 RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown, no explanation outside JSON):
 {
   "verdict": "CONFIRMED" | "CLEARED" | "INCONCLUSIVE",
   "confidence": 0.0 to 1.0,
-  "explanation": "2-3 sentence explanation of what you see or don't see",
+  "explanation": "2-3 sentence expert diagnosis. Reference specific components by their ${vehicle.make} ${vehicle.model} platform names. State what you see and what it means for this known issue.",
   "relevantPhotoIndices": [0, 1, ...],
   "observedCondition": "GOOD" | "FAIR" | "WORN" | "DAMAGED" | "FAILED",
   "visualObservations": ["specific observation 1", "specific observation 2"],
@@ -130,18 +146,19 @@ RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown, no explanation outside JSON)
 }
 
 Verdict guidelines:
-- CONFIRMED: Clear visual evidence of the issue (damage, wear, leaks, misalignment, discoloration, etc.)
-- CLEARED: Photos clearly show the area in good condition with no signs of the reported issue
-- INCONCLUSIVE: Photos don't show the relevant area clearly, or evidence is ambiguous
-- Be conservative — only CONFIRM if evidence is clear, only CLEAR if the area is clearly visible and in good condition
-- Confidence 0.8+ means you're quite sure, 0.5-0.8 means probable, below 0.5 means uncertain
+- CONFIRMED: Photos and/or inspector observations show evidence of this known issue on this vehicle.
+- CLEARED: The component/area is clearly visible and shows no signs of this known failure.
+- INCONCLUSIVE: Photos don't show the relevant area clearly enough — not enough evidence to make a call.
+- Confidence 0.8+ = definitive assessment, 0.5-0.8 = probable but limited view, below 0.5 = poor visibility
 
-observedCondition guidelines:
-- GOOD: Component/area looks clean and well-maintained
-- FAIR: Minor wear consistent with age/mileage, no immediate concern
-- WORN: Noticeable wear that may need attention soon
-- DAMAGED: Visible damage requiring repair
-- FAILED: Component has clearly failed or is non-functional`;
+observedCondition — THIS DIRECTLY DETERMINES THE REPAIR COST ESTIMATE:
+- GOOD: No signs of this known failure, component looks well-maintained → MINOR repair tier
+- FAIR: Minor age-appropriate wear, no active failure indicators → MINOR repair tier
+- WORN: Early/mid stages of this known failure developing → MODERATE repair tier
+- DAMAGED: Active failure in progress, component needs repair → SEVERE repair tier
+- FAILED: Component has clearly failed or is unsafe → SEVERE repair tier
+
+When cost tier descriptions are provided below, match what you see to the specific tier description that fits. The tier labels describe exactly what each stage looks like for THIS specific issue on THIS platform.`;
 
   const riskContext = `RISK TO EVALUATE:
 Title: ${risk.title}
@@ -158,11 +175,11 @@ ${signsOfFailureList}
 
 BACKGROUND: ${risk.aiSummary || risk.description}
 WHY IT MATTERS: ${risk.whyItMatters || "Potential safety or reliability concern"}
-
+${buildCostTierContext(risk)}
 PHOTOS PROVIDED (${imageBlocks.length} images):
 ${photoDescriptions}
 
-Analyze these photos for visual evidence of this specific risk. Pay special attention to the exact location described in WHERE TO LOOK and the observable indicators listed in SIGNS OF FAILURE.${buildInspectorObservationsContext(risk, riskAnswers)}`;
+Analyze these photos for visual evidence of this specific risk. Pay special attention to the exact location described in WHERE TO LOOK and the observable indicators listed in SIGNS OF FAILURE.${risk.costTiers?.length ? " Use the COST TIER DESCRIPTIONS above to calibrate your observedCondition — match what you see to the tier that best fits." : ""}${buildInspectorObservationsContext(risk, riskAnswers)}`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -199,6 +216,9 @@ Analyze these photos for visual evidence of this specific risk. Pay special atte
     .filter((i: number) => i >= 0 && i < selectedMedia.length)
     .map((i: number) => selectedMedia[i].id);
 
+  // Map observedCondition → cost tier for refined cost estimate
+  const refinedCost = selectCostTier(risk, parsed.observedCondition);
+
   return {
     riskId: risk.id,
     verdict: parsed.verdict || "INCONCLUSIVE",
@@ -208,52 +228,44 @@ Analyze these photos for visual evidence of this specific risk. Pay special atte
     observedCondition: parsed.observedCondition || undefined,
     visualObservations: Array.isArray(parsed.visualObservations) ? parsed.visualObservations : undefined,
     suggestedAction: parsed.suggestedAction || undefined,
+    refinedCost,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Overall vehicle condition scan
+// Scan for unexpected issues (renamed from analyzeOverallCondition)
 // ---------------------------------------------------------------------------
 
-/** Standard exterior + engine photos used for the overall condition sweep. */
-const OVERALL_SCAN_TYPES = [
-  "FRONT_CENTER",
-  "FRONT_34_DRIVER",
-  "FRONT_34_PASSENGER",
-  "DRIVER_SIDE",
-  "PASSENGER_SIDE",
-  "REAR_34_DRIVER",
-  "REAR_34_PASSENGER",
-  "REAR_CENTER",
-  "ENGINE_BAY",
-  "ROOF",
+/** All standard photos used for the unexpected-issues sweep. */
+const UNEXPECTED_SCAN_TYPES = [
+  "FRONT_CENTER", "FRONT_34_DRIVER", "FRONT_34_PASSENGER",
+  "DRIVER_SIDE", "PASSENGER_SIDE", "REAR_34_DRIVER",
+  "REAR_34_PASSENGER", "REAR_CENTER", "ENGINE_BAY", "ROOF",
+  "UNDERCARRIAGE", "DASHBOARD_DRIVER", "FRONT_SEATS", "REAR_SEATS",
+  "CARGO_AREA",
 ];
 
 /**
- * Performs a general vehicle condition assessment across all standard photos.
- * Catches unexpected damage, cosmetic issues, and general wear not covered
- * by the known-risk checklist.
+ * Scans all standard photos for UNEXPECTED damage/issues not covered by
+ * the known-risk checklist. Grade fields removed — condition scoring is
+ * now handled by `analyzeVehicleCondition()`.
  *
- * Cost: ~$0.15-0.25 per call (10 high-detail images).
+ * Cost: ~$0.15-0.25 per call.
  */
-export async function analyzeOverallCondition(
+export async function scanForUnexpectedIssues(
   vehicle: { year: number; make: string; model: string },
   media: MediaForAnalysis[]
 ): Promise<OverallConditionResult> {
   const openai = getOpenAI();
 
-  // Select standard overview photos (up to 10)
-  const scanMedia = OVERALL_SCAN_TYPES
+  const scanMedia = UNEXPECTED_SCAN_TYPES
     .map((type) => media.find((m) => m.captureType === type))
     .filter((m): m is MediaForAnalysis => !!m);
 
   if (scanMedia.length === 0) {
     return {
-      overallGrade: "FAIR",
-      exteriorCondition: "FAIR",
-      interiorVisible: false,
       unexpectedFindings: [],
-      summary: "No standard photos available for overall condition assessment.",
+      summary: "No standard photos available for unexpected-issue scan.",
     };
   }
 
@@ -266,22 +278,23 @@ export async function analyzeOverallCondition(
     .map((m, i) => `Photo ${i}: ${m.captureType.replace(/_/g, " ")}`)
     .join("\n");
 
-  const systemPrompt = `You are an expert automotive inspector performing a general condition assessment of a ${vehicle.year} ${vehicle.make} ${vehicle.model}.
+  const systemPrompt = `You are an expert automotive inspector scanning photos of a ${vehicle.year} ${vehicle.make} ${vehicle.model} for UNEXPECTED issues.
 
-You are NOT checking for specific known mechanical issues — those are handled separately. Instead, scan ALL provided photos for:
-1. Overall exterior body condition (dents, scratches, rust, paint chips, panel gaps, mismatched paint)
-2. Overall cleanliness and presentation
-3. Engine bay condition (leaks, corrosion, aftermarket modifications, missing covers)
-4. Any UNEXPECTED damage, wear, or concerns not typically on a risk checklist
+You are NOT scoring condition (that's done separately) and NOT checking known mechanical risks (also separate). Your sole job: find issues a standard risk checklist would MISS.
 
-Be thorough but conservative. Only flag issues you can clearly see.
+Scan ALL photos for:
+- Body damage (dents, scratches, rust, paint chips, panel gaps, mismatched paint, respray evidence)
+- Glass damage (chips, cracks)
+- Aftermarket modifications (good or bad)
+- Interior damage (tears, stains, burns, missing trim, water damage signs)
+- Engine bay anomalies (aftermarket parts, missing components, wrong fluid colors)
+- Undercarriage concerns (frame damage, major leaks, exhaust damage)
+- Anything else unusual
+
+Be thorough but conservative. Only flag issues you can CLEARLY see with confidence > 0.5.
 
 RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown):
 {
-  "overallGrade": "EXCELLENT" | "GOOD" | "FAIR" | "POOR",
-  "exteriorCondition": "EXCELLENT" | "GOOD" | "FAIR" | "POOR",
-  "interiorVisible": true | false,
-  "engineBayCondition": "CLEAN" | "NORMAL" | "DIRTY" | "CONCERNING",
   "unexpectedFindings": [
     {
       "title": "Short descriptive title",
@@ -292,23 +305,17 @@ RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown):
       "confidence": 0.0 to 1.0
     }
   ],
-  "summary": "2-3 sentence overall condition assessment"
+  "summary": "1-2 sentence summary of unexpected issues found (or 'No unexpected issues found')"
 }
 
-Grading guidelines:
-- EXCELLENT: Looks nearly new, no visible issues
-- GOOD: Normal wear for age/mileage, minor cosmetic only
-- FAIR: Multiple cosmetic issues or signs of wear beyond normal
-- POOR: Significant damage, heavy wear, or neglect visible
+Do NOT flag normal age-appropriate wear as findings.`;
 
-Only include unexpectedFindings for issues clearly visible in the photos with confidence > 0.5. Do NOT flag normal age-appropriate wear as findings.`;
+  const userContent = `Scan these ${imageBlocks.length} photos for unexpected issues.
 
-  const userContent = `Perform a general condition assessment of this vehicle.
-
-PHOTOS PROVIDED (${imageBlocks.length} images):
+PHOTOS PROVIDED:
 ${photoDescriptions}
 
-Scan all photos systematically. Note any body damage, paint issues, rust, leaks, or anything unexpected for a ${vehicle.year} ${vehicle.make} ${vehicle.model}.`;
+Flag anything unusual for a ${vehicle.year} ${vehicle.make} ${vehicle.model}.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -331,25 +338,19 @@ Scan all photos systematically. Note any body damage, paint issues, rust, leaks,
     const content = response.choices[0]?.message?.content;
     if (!content) {
       return {
-        overallGrade: "FAIR",
-        exteriorCondition: "FAIR",
-        interiorVisible: false,
         unexpectedFindings: [],
-        summary: "AI returned empty response for overall condition scan.",
+        summary: "AI returned empty response for unexpected-issue scan.",
       };
     }
 
     const parsed = JSON.parse(content);
 
-    // Validate and sanitize unexpected findings
     const unexpectedFindings = Array.isArray(parsed.unexpectedFindings)
       ? parsed.unexpectedFindings
           .filter(
             (f: Record<string, unknown>) =>
-              f.title &&
-              f.description &&
-              typeof f.confidence === "number" &&
-              f.confidence > 0.5
+              f.title && f.description &&
+              typeof f.confidence === "number" && f.confidence > 0.5
           )
           .map((f: Record<string, unknown>) => ({
             title: String(f.title),
@@ -364,23 +365,412 @@ Scan all photos systematically. Note any body damage, paint issues, rust, leaks,
       : [];
 
     return {
-      overallGrade: parsed.overallGrade || "FAIR",
-      exteriorCondition: parsed.exteriorCondition || "FAIR",
-      interiorVisible: !!parsed.interiorVisible,
-      engineBayCondition: parsed.engineBayCondition || undefined,
       unexpectedFindings,
-      summary: parsed.summary || "Overall condition assessment completed.",
+      summary: parsed.summary || "Unexpected-issue scan completed.",
     };
   } catch (err) {
-    console.error("[media-analyzer] Overall condition scan failed:", err);
+    console.error("[media-analyzer] Unexpected-issue scan failed:", err);
     return {
-      overallGrade: "FAIR",
-      exteriorCondition: "FAIR",
-      interiorVisible: false,
       unexpectedFindings: [],
-      summary: "Overall condition scan failed. Manual assessment recommended.",
+      summary: "Unexpected-issue scan failed. Manual inspection recommended.",
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// AI-Driven Vehicle Condition Assessment (4-area photo scoring)
+// ---------------------------------------------------------------------------
+
+/** Photo-to-area mapping for the 4 condition assessment areas */
+const AREA_PHOTO_MAP = {
+  exteriorBody: [
+    "FRONT_CENTER", "FRONT_34_DRIVER", "FRONT_34_PASSENGER",
+    "DRIVER_SIDE", "PASSENGER_SIDE", "REAR_34_DRIVER",
+    "REAR_34_PASSENGER", "REAR_CENTER", "ROOF",
+  ],
+  interior: [
+    "DASHBOARD_DRIVER", "FRONT_SEATS", "REAR_SEATS",
+    "CARGO_AREA", "ODOMETER",
+  ],
+  mechanicalVisual: [
+    "ENGINE_BAY", "TIRE_FRONT_DRIVER", "TIRE_REAR_DRIVER",
+    "TIRE_FRONT_PASSENGER", "TIRE_REAR_PASSENGER",
+  ],
+  underbodyFrame: ["UNDERCARRIAGE"],
+} as const;
+
+/** Weighted contribution of each area to the 0-100 overall score */
+const AREA_WEIGHTS = {
+  exteriorBody: 0.30,
+  interior: 0.15,
+  mechanicalVisual: 0.35,
+  underbodyFrame: 0.20,
+};
+
+interface VehicleInfo {
+  year: number;
+  make: string;
+  model: string;
+  mileage?: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// VIN OCR from hood label photo
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts VIN from a hood label / VIN plate photo using GPT-4o Vision.
+ * Returns the detected VIN and confidence. Cost: ~$0.05 per call.
+ */
+export async function extractVinFromPhoto(
+  photoUrl: string
+): Promise<{ vin: string | null; confidence: number }> {
+  const openai = getOpenAI();
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a vehicle identification expert. Extract the 17-character VIN (Vehicle Identification Number) from the provided photo of a vehicle identification label, door jamb sticker, or hood label.
+
+VIN format rules:
+- Exactly 17 characters
+- Only uses characters: A-H, J-N, P, R-Z, 0-9 (never I, O, or Q)
+- First character is country of origin
+- Characters 4-8 describe vehicle attributes
+- Character 9 is a check digit
+- Character 10 is model year
+- Characters 12-17 are sequential production number
+
+Return JSON: { "vin": "<17 char VIN or null if not readable>", "confidence": <0.0 to 1.0> }
+- confidence 0.9+: clearly readable, high certainty
+- confidence 0.6-0.9: partially readable, some characters uncertain
+- confidence below 0.6: too blurry/obscured, return vin: null`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extract the VIN from this vehicle identification label photo." },
+            { type: "image_url", image_url: { url: photoUrl, detail: "high" } },
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 200,
+      response_format: { type: "json_object" },
+    });
+
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) return { vin: null, confidence: 0 };
+
+    const parsed = JSON.parse(raw);
+    const vin = typeof parsed.vin === "string" && parsed.vin.length === 17
+      ? parsed.vin.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, "")
+      : null;
+    const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+
+    // Final length check after cleaning
+    if (vin && vin.length !== 17) return { vin: null, confidence: 0 };
+
+    return { vin, confidence };
+  } catch (err) {
+    console.error("[extractVinFromPhoto] Failed:", err);
+    return { vin: null, confidence: 0 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4-area AI condition assessment
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs 4 parallel GPT-4o Vision calls to produce an independent,
+ * photo-based condition assessment. Each area gets a 1-10 score.
+ *
+ * Cost: ~$0.40-0.60 per inspection (4 parallel GPT-4o Vision calls).
+ */
+export async function analyzeVehicleCondition(
+  vehicle: VehicleInfo,
+  media: MediaForAnalysis[]
+): Promise<ConditionAssessment> {
+  const openai = getOpenAI();
+  const mileageStr = vehicle.mileage
+    ? `${vehicle.mileage.toLocaleString()} miles`
+    : "unknown mileage";
+
+  // Collect photos per area
+  const areaMedia: Record<string, MediaForAnalysis[]> = {};
+  const photoCoverage: Record<string, number> = {};
+  for (const [area, types] of Object.entries(AREA_PHOTO_MAP)) {
+    const photos = types
+      .map((t) => media.find((m) => m.captureType === t))
+      .filter((m): m is MediaForAnalysis => !!m);
+    areaMedia[area] = photos;
+    photoCoverage[area] = photos.length;
+  }
+
+  // Run 4 area assessments in parallel
+  const [exteriorBody, interior, mechanicalVisual, underbodyFrame] =
+    await Promise.all([
+      assessArea(openai, vehicle, mileageStr, "Exterior Body", areaMedia.exteriorBody, EXTERIOR_CHECKLIST),
+      assessArea(openai, vehicle, mileageStr, "Interior", areaMedia.interior, INTERIOR_CHECKLIST),
+      assessArea(openai, vehicle, mileageStr, "Mechanical / Visual", areaMedia.mechanicalVisual, MECHANICAL_CHECKLIST),
+      assessArea(openai, vehicle, mileageStr, "Underbody / Frame", areaMedia.underbodyFrame, UNDERBODY_CHECKLIST),
+    ]);
+
+  // Calculate weighted overall score (0-100)
+  const overallScore = Math.round(
+    (exteriorBody.score / 10) * AREA_WEIGHTS.exteriorBody * 100 +
+    (interior.score / 10) * AREA_WEIGHTS.interior * 100 +
+    (mechanicalVisual.score / 10) * AREA_WEIGHTS.mechanicalVisual * 100 +
+    (underbodyFrame.score / 10) * AREA_WEIGHTS.underbodyFrame * 100
+  );
+
+  const summary = [
+    `Overall condition score: ${overallScore}/100.`,
+    exteriorBody.summary,
+    interior.summary,
+    mechanicalVisual.summary,
+    underbodyFrame.summary,
+  ].join(" ");
+
+  return {
+    overallScore,
+    exteriorBodyScore: exteriorBody.score,
+    interiorScore: interior.score,
+    mechanicalVisualScore: mechanicalVisual.score,
+    underbodyFrameScore: underbodyFrame.score,
+    exteriorBody,
+    interior,
+    mechanicalVisual,
+    underbodyFrame,
+    summary,
+    photoCoverage: {
+      exteriorBody: photoCoverage.exteriorBody,
+      interior: photoCoverage.interior,
+      mechanicalVisual: photoCoverage.mechanicalVisual,
+      underbodyFrame: photoCoverage.underbodyFrame,
+    },
+  };
+}
+
+// ── Area-specific checklists for the AI ──
+
+const EXTERIOR_CHECKLIST = `EVALUATE:
+- Paint condition (swirls, oxidation, clear coat failure, respray evidence, color mismatch between panels)
+- Body panel alignment and gaps (even/uneven, signs of prior collision repair)
+- Dents, dings, scratches, and their severity
+- Rust or corrosion (surface, bubbling, perforation)
+- Trim, moldings, badges (missing, faded, damaged)
+- Glass condition (windshield chips/cracks, window tint condition)
+- Headlight/taillight lens condition (hazing, yellowing, cracks, moisture)
+- Wheel condition (curb rash, corrosion, finish peeling)`;
+
+const INTERIOR_CHECKLIST = `EVALUATE:
+- Seat condition (leather cracks/peeling, fabric tears/stains, bolster wear, cushion support)
+- Dashboard (cracks, warping, fading, sticky surfaces)
+- Steering wheel wear (leather/wrap condition, controls)
+- Carpet and floor mats (stains, wear patterns, dampness)
+- Headliner (sagging, stains, tears)
+- Door panels and trim (scuffs, loose pieces, broken clips)
+- Controls and buttons (missing, broken, discolored)
+- Odor indicators from visual clues (smoke staining on headliner, water marks, mold evidence)
+- CRITICAL: Does the interior wear level MATCH the claimed mileage shown on the odometer? A 120k-mile vehicle should show proportionate wear. Pristine interior at high mileage may indicate replacement; heavy wear at low mileage is a concern.`;
+
+const MECHANICAL_CHECKLIST = `EVALUATE:
+- Engine bay cleanliness and presentation
+- Visible fluid leaks or staining (oil, coolant, power steering, transmission)
+- Belt and hose condition (cracking, glazing, swelling)
+- Battery condition (corrosion on terminals, age)
+- Aftermarket modifications (quality of install)
+- Tire tread depth across all 4 tires — CROSS-COMPARE: uneven wear between tires signals alignment or suspension issues
+- Tire sidewall condition (cracking, bulges, damage, age/DOT date if visible)
+- Tire brand/model consistency (mismatched tires = concern)
+- Visible brake rotor condition through wheels (grooves, rust, thickness)`;
+
+const UNDERBODY_CHECKLIST = `EVALUATE:
+- Frame/unibody condition (rust severity, bends, kinks, repair evidence, welding)
+- Underside fluid leaks (active drips, wet spots, dried staining)
+- Exhaust system condition (rust, holes, hangers, aftermarket modifications)
+- CV boots and axle condition (torn boots, grease spray)
+- Suspension components visible condition (bushings, links, mounts)
+- Protective coatings (undercoating presence, spray patterns)`;
+
+/**
+ * Assesses a single area using GPT-4o Vision. Returns a 1-10 score with
+ * detailed observations.
+ */
+async function assessArea(
+  openai: ReturnType<typeof getOpenAI>,
+  vehicle: VehicleInfo,
+  mileageStr: string,
+  areaName: string,
+  photos: MediaForAnalysis[],
+  checklist: string
+): Promise<AreaConditionDetail> {
+  if (photos.length === 0) {
+    return {
+      score: 5,
+      confidence: 0.1,
+      keyObservations: ["No photos available for this area"],
+      concerns: [],
+      summary: `No ${areaName.toLowerCase()} photos provided — defaulting to neutral score.`,
+    };
+  }
+
+  const imageBlocks = photos.map((m) => ({
+    type: "image_url" as const,
+    image_url: { url: m.url, detail: "high" as const },
+  }));
+
+  const photoLabels = photos
+    .map((m, i) => `Photo ${i}: ${m.captureType.replace(/_/g, " ")}`)
+    .join("\n");
+
+  const systemPrompt = `You are an expert automotive condition assessor specializing in ${vehicle.make} ${vehicle.model} vehicles. You are evaluating the ${areaName.toUpperCase()} of a ${vehicle.year} ${vehicle.make} ${vehicle.model} with ${mileageStr}.
+
+MILEAGE CALIBRATION: This vehicle has ${mileageStr}. Score what is NORMAL wear for this mileage. A 120k-mile truck with moderate tire wear is normal (score 6-7); the same wear at 20k miles is a red flag (score 3-4). A nearly-new vehicle with zero wear scores 9-10; a well-maintained high-mileage vehicle with appropriate wear scores 6-8.
+
+SCORING RUBRIC (1-10):
+- 10: Showroom / like-new condition
+- 8-9: Excellent to very good, minimal or light normal wear
+- 6-7: Good to above average, typical wear for age/mileage
+- 4-5: Average to below average, moderate wear or minor damage
+- 2-3: Fair to poor, significant wear or multiple issues
+- 1: Very poor, severe damage or extreme neglect
+
+${checklist}
+
+RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown):
+{
+  "score": <number 1-10>,
+  "confidence": <number 0.0-1.0>,
+  "keyObservations": ["observation 1", "observation 2", ...],
+  "concerns": ["concern 1", ...],
+  "summary": "1-2 sentence ${areaName.toLowerCase()} condition summary"
+}
+
+- keyObservations: 3-6 factual observations about what you see (neutral or positive)
+- concerns: 0-4 specific issues or concerns (only things that negatively impact condition)
+- confidence: how confident you are in your score (1.0 = clear photos, full coverage; 0.5 = partial visibility; <0.3 = mostly guessing)
+- Be precise and specific. Reference actual components by name.`;
+
+  const userContent = `Assess the ${areaName} condition of this ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
+
+PHOTOS PROVIDED (${imageBlocks.length}):
+${photoLabels}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userContent },
+            ...imageBlocks,
+          ],
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: 800,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return {
+        score: 5,
+        confidence: 0,
+        keyObservations: ["AI returned empty response"],
+        concerns: [],
+        summary: `${areaName} assessment failed — no AI response.`,
+      };
+    }
+
+    const parsed = JSON.parse(content);
+
+    return {
+      score: Math.max(1, Math.min(10, Math.round(Number(parsed.score) || 5))),
+      confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.5)),
+      keyObservations: Array.isArray(parsed.keyObservations)
+        ? parsed.keyObservations.map(String)
+        : [],
+      concerns: Array.isArray(parsed.concerns)
+        ? parsed.concerns.map(String)
+        : [],
+      summary: String(parsed.summary || `${areaName} assessment completed.`),
+    };
+  } catch (err) {
+    console.error(`[media-analyzer] ${areaName} condition assessment failed:`, err);
+    return {
+      score: 5,
+      confidence: 0,
+      keyObservations: ["Assessment failed due to an error"],
+      concerns: [],
+      summary: `${areaName} assessment failed. Manual inspection recommended.`,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cost tier selection
+// ---------------------------------------------------------------------------
+
+const CONDITION_TO_TIER: Record<string, "MINOR" | "MODERATE" | "SEVERE"> = {
+  GOOD: "MINOR",
+  FAIR: "MINOR",
+  WORN: "MODERATE",
+  DAMAGED: "SEVERE",
+  FAILED: "SEVERE",
+};
+
+/**
+ * Maps an observed condition (from AI vision) to the matching cost tier.
+ * Returns the refined cost range in cents, or undefined if no tiers available.
+ */
+function selectCostTier(
+  risk: AggregatedRisk,
+  observedCondition?: string
+): AIAnalysisResult["refinedCost"] {
+  if (!risk.costTiers?.length || !observedCondition) return undefined;
+
+  const tierCondition = CONDITION_TO_TIER[observedCondition] || "MODERATE";
+  const tier = risk.costTiers.find((t) => t.condition === tierCondition);
+  if (!tier) return undefined;
+
+  return {
+    low: tier.costLow,
+    high: tier.costHigh,
+    tierCondition: tier.condition,
+    tierLabel: tier.label,
+  };
+}
+
+/**
+ * Maps manual inspection question failure count to a cost tier.
+ * Exported for use in inspection procedures for manual-only checks.
+ */
+export function selectCostTierFromFailures(
+  risk: AggregatedRisk,
+  failureCount: number
+): AIAnalysisResult["refinedCost"] {
+  if (!risk.costTiers?.length) return undefined;
+
+  const tierCondition: "MINOR" | "MODERATE" | "SEVERE" =
+    failureCount === 0 ? "MINOR" : failureCount === 1 ? "MODERATE" : "SEVERE";
+  const tier = risk.costTiers.find((t) => t.condition === tierCondition);
+  if (!tier) return undefined;
+
+  return {
+    low: tier.costLow,
+    high: tier.costHigh,
+    tierCondition: tier.condition,
+    tierLabel: tier.label,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -423,6 +813,29 @@ function selectRelevantMedia(risk: AggregatedRisk, media: MediaForAnalysis[]): M
 
   // Risk-specific evidence first, then area photos
   return [...riskEvidence, ...areaPhotos];
+}
+
+/**
+ * Builds a context string describing the cost tiers for a risk,
+ * so the vision AI can calibrate observedCondition to match tier descriptions.
+ */
+function buildCostTierContext(risk: AggregatedRisk): string {
+  if (!risk.costTiers?.length) return "";
+
+  const lines: string[] = [];
+  lines.push("\nCOST TIER DESCRIPTIONS (use these to calibrate your observedCondition):");
+  for (const tier of risk.costTiers) {
+    const low = (tier.costLow / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    const high = (tier.costHigh / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+    const conditionMap: Record<string, string> = {
+      MINOR: "GOOD/FAIR",
+      MODERATE: "WORN",
+      SEVERE: "DAMAGED/FAILED",
+    };
+    lines.push(`- ${tier.condition} (${low}–${high}): "${tier.label}" → observedCondition = ${conditionMap[tier.condition] || tier.condition}`);
+  }
+  lines.push("");
+  return lines.join("\n");
 }
 
 /**

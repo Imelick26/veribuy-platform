@@ -66,7 +66,21 @@ export default function ReportDetailPage({
   }
 
   const { inspection } = report;
-  const { vehicle, findings, media, inspector } = inspection;
+  const vehicle = inspection.vehicle;
+  const { findings, media, inspector } = inspection;
+
+  if (!vehicle) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-text-secondary">No vehicle linked to this inspection yet.</p>
+        <Link href="/dashboard/reports">
+          <Button variant="secondary" className="mt-4">
+            <ArrowLeft className="h-4 w-4" /> Back to Reports
+          </Button>
+        </Link>
+      </div>
+    );
+  }
 
   const criticalCount = findings.filter((f) => f.severity === "CRITICAL").length;
   const majorCount = findings.filter((f) => f.severity === "MAJOR").length;
@@ -164,22 +178,23 @@ export default function ReportDetailPage({
             </div>
           </div>
 
-          {/* Score breakdown */}
+          {/* Score breakdown — 4-area AI condition assessment */}
           {inspection.overallScore != null && (
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {[
-                { label: "Structural / Drivetrain", score: inspection.structuralScore, weight: "45%" },
-                { label: "Cosmetic / Interior", score: inspection.cosmeticScore, weight: "30%" },
-                { label: "Electronics / Software", score: inspection.electronicsScore, weight: "25%" },
+                { label: "Exterior Body", score: inspection.exteriorBodyScore, weight: "30%" },
+                { label: "Interior", score: inspection.interiorScore, weight: "15%" },
+                { label: "Mechanical / Visual", score: inspection.mechanicalVisualScore, weight: "35%" },
+                { label: "Underbody / Frame", score: inspection.underbodyFrameScore, weight: "20%" },
               ].map((item) => (
                 <div key={item.label}>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-text-secondary">{item.label}</span>
-                    <span className="font-medium">{item.score}/100</span>
+                    <span className="text-text-secondary">{item.label} ({item.weight})</span>
+                    <span className="font-medium">{item.score ?? "—"}/10</span>
                   </div>
-                  <Progress value={item.score || 0} size="sm" color={
-                    (item.score || 0) >= 70 ? "green" :
-                    (item.score || 0) >= 50 ? "yellow" : "red"
+                  <Progress value={((item.score || 0) / 10) * 100} size="sm" color={
+                    (item.score || 0) >= 7 ? "green" :
+                    (item.score || 0) >= 5 ? "yellow" : "red"
                   } />
                 </div>
               ))}

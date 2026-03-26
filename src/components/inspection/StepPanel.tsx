@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { CaptureGrid } from "./CaptureGrid";
+import { GUIDED_SHOTS } from "./GuidedCapture";
 import {
   ShieldAlert,
   Camera,
@@ -15,6 +16,8 @@ import {
   AlertTriangle,
   Loader2,
   Download,
+  Car,
+  Search,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
@@ -64,11 +67,22 @@ interface StepPanelProps {
   onGenerateReport: () => void;
   isGeneratingReport: boolean;
   isAdvancingStep: boolean;
+  // Guided Capture
+  onStartGuidedCapture?: () => void;
   // AI Analysis
   onRunAIAnalysis?: () => void;
   isRunningAIAnalysis?: boolean;
   aiAnalysisResults?: AIAnalysisResult[];
   overallConditionResult?: OverallConditionResult;
+  // Condition Scan
+  onRunConditionScan?: () => void;
+  isRunningConditionScan?: boolean;
+  conditionScanComplete?: boolean;
+  // VIN Confirm
+  onConfirmVin?: (vin: string) => void;
+  isConfirmingVin?: boolean;
+  detectedVin?: string | null;
+  isDetectingVin?: boolean;
   // Vehicle History
   onFetchHistory?: () => void;
   isFetchingHistory?: boolean;
@@ -99,10 +113,18 @@ export function StepPanel({
   onGenerateReport,
   isGeneratingReport,
   isAdvancingStep,
+  onStartGuidedCapture,
   onRunAIAnalysis,
   isRunningAIAnalysis,
   aiAnalysisResults,
   overallConditionResult,
+  onRunConditionScan,
+  isRunningConditionScan,
+  conditionScanComplete,
+  onConfirmVin,
+  isConfirmingVin,
+  detectedVin,
+  isDetectingVin,
   onFetchHistory,
   isFetchingHistory,
   onFetchMarket,
@@ -110,35 +132,179 @@ export function StepPanel({
   onViewReport,
   inspectionConfidence,
 }: StepPanelProps) {
+  // Count captured photos for gating
+  const capturedPhotos = (inspection.media || []).filter(
+    (m) => m.url && m.captureType && GUIDED_SHOTS.some((s) => s.type === m.captureType)
+  ).length;
+  const allPhotosCaptured = capturedPhotos >= GUIDED_SHOTS.length;
+
   switch (activeStep) {
-    case "RISK_REVIEW":
+    // ─── NEW WORKFLOW: MEDIA_CAPTURE (first step) ───────────────────
+    case "MEDIA_CAPTURE":
+      return (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-brand-600" />
+              <CardTitle>Photo Capture</CardTitle>
+            </div>
+          </CardHeader>
+          <CaptureGrid
+            inspectionId={inspection.id}
+            captures={(inspection.media || []).filter((m) => m.captureType).map((m) => ({
+              captureType: m.captureType as string,
+              url: m.url || undefined,
+              thumbnailUrl: m.thumbnailUrl || m.url || undefined,
+            }))}
+            onCapture={onMediaCapture}
+            isUploading={uploadingCaptureType}
+            onStartGuidedCapture={onStartGuidedCapture || (() => {})}
+          />
+          <div className="mt-4 pt-4 border-t border-border-default">
+            {!allPhotosCaptured && (
+              <p className="text-xs text-text-tertiary text-center mb-2">
+                {capturedPhotos}/{GUIDED_SHOTS.length} photos captured — all {GUIDED_SHOTS.length} required to continue
+              </p>
+            )}
+            <Button
+              onClick={() => onAdvanceStep("MEDIA_CAPTURE")}
+              loading={isAdvancingStep}
+              disabled={!allPhotosCaptured}
+              className={cn(
+                "w-full",
+                allPhotosCaptured
+                  ? "bg-brand-gradient text-white"
+                  : "bg-surface-overlay text-text-tertiary cursor-not-allowed"
+              )}
+            >
+              Continue to VIN Confirmation
+            </Button>
+          </div>
+        </Card>
+      );
+
+    // ─── VIN_CONFIRM ────────────────────────────────────────────────
+    case "VIN_CONFIRM":
+      return (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-brand-600" />
+              <CardTitle>VIN Confirmation</CardTitle>
+            </div>
+          </CardHeader>
+          {isDetectingVin ? (
+            <div className="text-center py-8">
+              <Loader2 className="h-8 w-8 text-brand-600 animate-spin mx-auto mb-3" />
+              <h4 className="font-semibold text-text-primary mb-1">Reading VIN from Photo...</h4>
+              <p className="text-sm text-text-secondary">
+                AI is extracting the VIN from your hood label photo.
+              </p>
+            </div>
+          ) : (
+            <VinConfirmPanel
+              detectedVin={detectedVin || ""}
+              onConfirm={onConfirmVin || (() => {})}
+              isConfirming={isConfirmingVin || false}
+            />
+          )}
+        </Card>
+      );
+
+    // ─── AI_CONDITION_SCAN ──────────────────────────────────────────
+    case "AI_CONDITION_SCAN":
+      return (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-brand-600" />
+              <CardTitle>AI Condition Assessment</CardTitle>
+            </div>
+          </CardHeader>
+
+          {conditionScanComplete ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-[#dcfce7] border border-green-300">
+                <CheckCircle className="h-6 w-6 text-green-700" />
+                <div>
+                  <p className="font-semibold text-green-700">Condition Assessment Complete</p>
+                  <p className="text-sm text-green-600">4-area photo analysis finished. Scores saved.</p>
+                </div>
+              </div>
+
+              {/* Unexpected findings preview */}
+              {overallConditionResult && overallConditionResult.unexpectedFindings.length > 0 && (
+                <div className="p-3 rounded-lg bg-[#fde8e8] border border-red-300">
+                  <p className="text-xs font-bold text-red-700 mb-1">
+                    <AlertTriangle className="inline h-3 w-3 mr-1" />
+                    {overallConditionResult.unexpectedFindings.length} unexpected issue(s) found in photos
+                  </p>
+                  {overallConditionResult.unexpectedFindings.slice(0, 3).map((uf, i) => (
+                    <p key={i} className="text-xs text-red-600">• {uf.title}</p>
+                  ))}
+                </div>
+              )}
+
+              <Button
+                onClick={() => onAdvanceStep("AI_CONDITION_SCAN")}
+                loading={isAdvancingStep}
+                className="w-full bg-brand-gradient text-white"
+              >
+                Continue to Risk Inspection
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center py-6">
+                <Sparkles className="h-6 w-6 mx-auto text-brand-600 mb-3" />
+                <h4 className="font-semibold text-text-primary mb-1">AI Photo Condition Scan</h4>
+                <p className="text-sm text-text-secondary max-w-md mx-auto">
+                  GPT-4o Vision will analyze your {capturedPhotos} photos across 4 areas: exterior body,
+                  interior, mechanical, and underbody. It will also scan for unexpected issues.
+                </p>
+              </div>
+
+              {isRunningConditionScan ? (
+                <div className="text-center py-4">
+                  <Loader2 className="h-8 w-8 text-brand-600 animate-spin mx-auto mb-3" />
+                  <p className="font-semibold text-text-primary mb-1">Scanning Photos...</p>
+                  <p className="text-xs text-text-tertiary">
+                    Running 4 parallel AI assessments + unexpected issue scan...
+                  </p>
+                </div>
+              ) : (
+                <Button
+                  onClick={onRunConditionScan}
+                  className="w-full bg-brand-gradient text-white hover:opacity-90"
+                >
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" /> Run Condition Scan
+                  </span>
+                </Button>
+              )}
+            </div>
+          )}
+        </Card>
+      );
+
+    // ─── RISK_INSPECTION (new name for risk review + AI analysis) ───
+    case "RISK_INSPECTION":
       return (
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
               <ShieldAlert className="h-5 w-5 text-brand-600" />
-              <CardTitle>Risk Analysis</CardTitle>
+              <CardTitle>Risk Inspection</CardTitle>
             </div>
           </CardHeader>
 
           {!riskProfile ? (
             <div className="text-center py-8">
-              <ShieldAlert className="h-6 w-6 mx-auto text-brand-600 mb-3" />
-              <h4 className="font-semibold text-text-primary mb-1">Ready to Analyze Vehicle Risks</h4>
-              <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
-                We&apos;ll query NHTSA for complaints, recalls, and investigations, then merge with our curated risk database to build a complete risk profile.
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mx-auto mb-3" />
+              <h4 className="font-semibold text-text-primary mb-1">Building Risk Profile</h4>
+              <p className="text-sm text-text-secondary max-w-md mx-auto">
+                Querying NHTSA databases and generating inspection checklist...
               </p>
-              <Button
-                onClick={onStartVerification}
-                loading={isEnriching}
-                className="bg-brand-gradient text-white hover:opacity-90"
-              >
-                <ShieldAlert className="h-4 w-4" />
-                {isEnriching ? "Analyzing..." : "Start Verification"}
-              </Button>
-              {isEnriching && (
-                <p className="text-xs text-text-tertiary mt-2">Fetching data from NHTSA databases...</p>
-              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -208,14 +374,60 @@ export function StepPanel({
                     />
                   </div>
                   <p className="text-[11px] text-text-tertiary mt-1.5">{inspectionConfidence.summary}</p>
-                  {inspectionConfidence.evidenceCoverage < 1 && (
-                    <p className="text-[11px] text-text-tertiary mt-0.5">
-                      {Math.round(inspectionConfidence.evidenceCoverage * 100)}% of checked items have photo evidence
-                    </p>
-                  )}
                 </div>
               )}
 
+              <Button
+                onClick={() => onAdvanceStep("RISK_INSPECTION")}
+                loading={isAdvancingStep}
+                className="w-full bg-brand-gradient text-white"
+              >
+                Continue to Vehicle History
+              </Button>
+            </div>
+          )}
+        </Card>
+      );
+
+    // ─── LEGACY: RISK_REVIEW ────────────────────────────────────────
+    case "RISK_REVIEW":
+      return (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-brand-600" />
+              <CardTitle>Risk Analysis</CardTitle>
+            </div>
+          </CardHeader>
+
+          {!riskProfile ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mx-auto mb-3" />
+              <h4 className="font-semibold text-text-primary mb-1">Building Risk Profile</h4>
+              <p className="text-sm text-text-secondary max-w-md mx-auto">
+                Querying NHTSA databases and generating inspection checklist...
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="text-center p-3 rounded-lg bg-surface-sunken">
+                  <p className="text-2xl font-bold text-text-primary">{riskProfile.aggregatedRisks.length}</p>
+                  <p className="text-xs text-text-secondary">Total Risks</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
+                  <p className="text-2xl font-bold text-red-700">
+                    {riskProfile.aggregatedRisks.filter((r) => r.severity === "CRITICAL").length}
+                  </p>
+                  <p className="text-xs text-text-secondary">Critical</p>
+                </div>
+                <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
+                  <p className="text-2xl font-bold text-red-700">
+                    {riskProfile.nhtsaData.recallCount}
+                  </p>
+                  <p className="text-xs text-text-secondary">Recalls</p>
+                </div>
+              </div>
               <Button
                 onClick={() => onAdvanceStep("RISK_REVIEW")}
                 loading={isAdvancingStep}
@@ -228,37 +440,7 @@ export function StepPanel({
         </Card>
       );
 
-    case "MEDIA_CAPTURE":
-      return (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Camera className="h-5 w-5 text-brand-600" />
-              <CardTitle>Media Capture</CardTitle>
-            </div>
-          </CardHeader>
-          <CaptureGrid
-            inspectionId={inspection.id}
-            captures={(inspection.media || []).filter((m) => m.captureType).map((m) => ({
-              captureType: m.captureType as string,
-              url: m.url || undefined,
-              thumbnailUrl: m.thumbnailUrl || m.url || undefined,
-            }))}
-            onCapture={onMediaCapture}
-            isUploading={uploadingCaptureType}
-          />
-          <div className="mt-4 pt-4 border-t border-border-default">
-            <Button
-              onClick={() => onAdvanceStep("MEDIA_CAPTURE")}
-              loading={isAdvancingStep}
-              className="w-full bg-brand-gradient text-white"
-            >
-              Continue to AI Analysis
-            </Button>
-          </div>
-        </Card>
-      );
-
+    // ─── LEGACY: AI_ANALYSIS ────────────────────────────────────────
     case "AI_ANALYSIS":
       return (
         <Card>
@@ -275,15 +457,10 @@ export function StepPanel({
                 <Sparkles className="h-6 w-6 mx-auto text-brand-600 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">AI-Powered Condition Analysis</h4>
                 <p className="text-sm text-text-secondary mb-1 max-w-md mx-auto">
-                  Our AI will analyze your captured photos against each identified risk and perform a
-                  general vehicle condition scan.
-                </p>
-                <p className="text-xs text-text-tertiary max-w-sm mx-auto">
-                  Photos are sent to GPT-4o Vision for expert-level analysis.
+                  Our AI will analyze your captured photos against each identified risk and scan for unexpected issues.
                 </p>
               </div>
 
-              {/* Show captured media count */}
               {(() => {
                 const photoCount = (inspection.media || []).filter(m => m.url).length;
                 const riskCount = riskProfile?.aggregatedRisks.length || 0;
@@ -296,16 +473,11 @@ export function StepPanel({
                         {photoCount} photos captured
                       </p>
                       {photoCount === 0 ? (
-                        <p className="text-xs text-text-tertiary">
-                          Capture photos in the Media Capture step before running analysis.
-                        </p>
+                        <p className="text-xs text-text-tertiary">Capture photos first.</p>
                       ) : (
-                        <p className="text-xs text-brand-600">
-                          {riskCount} risk items + general condition scan
-                        </p>
+                        <p className="text-xs text-brand-600">{riskCount} risk items + issue scan</p>
                       )}
                     </div>
-
                     <Button
                       onClick={onRunAIAnalysis}
                       loading={isRunningAIAnalysis}
@@ -314,7 +486,7 @@ export function StepPanel({
                     >
                       {isRunningAIAnalysis ? (
                         <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" /> Analyzing Photos...
+                          <Loader2 className="h-4 w-4 animate-spin" /> Analyzing...
                         </span>
                       ) : (
                         <span className="flex items-center gap-2">
@@ -322,66 +494,28 @@ export function StepPanel({
                         </span>
                       )}
                     </Button>
-
-                    {isRunningAIAnalysis && (
-                      <p className="text-xs text-center text-text-tertiary">
-                        Analyzing photos against {riskCount} risk items + general condition scan...
-                      </p>
-                    )}
                   </>
                 );
               })()}
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Overall Condition Assessment */}
-              {overallConditionResult && (
-                <div className="p-4 rounded-lg border border-brand-300 bg-[#fce8f3]">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold uppercase text-brand-700">Overall Condition</span>
-                    <Badge variant={
-                      overallConditionResult.overallGrade === "EXCELLENT" || overallConditionResult.overallGrade === "GOOD"
-                        ? "success"
-                        : overallConditionResult.overallGrade === "FAIR"
-                          ? "warning"
-                          : "danger"
-                    }>
-                      {overallConditionResult.overallGrade}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-brand-600 mb-2">{overallConditionResult.summary}</p>
-
-                  {/* Sub-grades */}
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <div className="text-center p-2 rounded bg-surface-overlay">
-                      <p className="text-xs font-semibold text-text-primary">{overallConditionResult.exteriorCondition}</p>
-                      <p className="text-[10px] text-text-tertiary">Exterior</p>
-                    </div>
-                    {overallConditionResult.engineBayCondition && (
-                      <div className="text-center p-2 rounded bg-surface-overlay">
-                        <p className="text-xs font-semibold text-text-primary">{overallConditionResult.engineBayCondition}</p>
-                        <p className="text-[10px] text-text-tertiary">Engine Bay</p>
+              {/* Unexpected findings from scan */}
+              {overallConditionResult && overallConditionResult.unexpectedFindings.length > 0 && (
+                <div className="p-4 rounded-lg border border-red-300 bg-[#fde8e8]">
+                  <p className="text-xs font-bold text-red-700 mb-1">
+                    <AlertTriangle className="inline h-3 w-3 mr-1" />
+                    Unexpected Issues ({overallConditionResult.unexpectedFindings.length})
+                  </p>
+                  {overallConditionResult.unexpectedFindings.map((uf, i) => (
+                    <div key={i} className="p-2 mt-1 rounded bg-white/40 border border-red-200 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-red-700">{uf.title}</span>
+                        <Badge variant="danger">{uf.severity}</Badge>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Unexpected findings */}
-                  {overallConditionResult.unexpectedFindings.length > 0 && (
-                    <div className="space-y-1 mt-2">
-                      <p className="text-[10px] font-bold uppercase text-red-700">
-                        Unexpected Issues ({overallConditionResult.unexpectedFindings.length})
-                      </p>
-                      {overallConditionResult.unexpectedFindings.map((uf, i) => (
-                        <div key={i} className="p-2 rounded bg-[#fde8e8] border border-red-200 text-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-red-700">{uf.title}</span>
-                            <Badge variant="danger">{uf.severity}</Badge>
-                          </div>
-                          <p className="text-red-600 mt-0.5">{uf.description}</p>
-                        </div>
-                      ))}
+                      <p className="text-red-600 mt-0.5">{uf.description}</p>
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
 
@@ -405,88 +539,6 @@ export function StepPanel({
                   </p>
                   <p className="text-xs text-text-secondary">Inconclusive</p>
                 </div>
-              </div>
-
-              {/* Per-risk results */}
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {aiAnalysisResults.map((result) => {
-                  const risk = riskProfile?.aggregatedRisks.find(r => r.id === result.riskId);
-                  return (
-                    <div
-                      key={result.riskId}
-                      className={cn(
-                        "p-3 rounded-lg border text-sm",
-                        result.verdict === "CONFIRMED"
-                          ? "border-red-300 bg-[#fde8e8]"
-                          : result.verdict === "CLEARED"
-                            ? "border-green-300 bg-[#dcfce7]"
-                            : "border-border-strong bg-surface-overlay"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-xs text-text-primary">
-                          {risk?.title || result.riskId}
-                        </span>
-                        <Badge
-                          variant={
-                            result.verdict === "CONFIRMED" ? "danger" :
-                            result.verdict === "CLEARED" ? "success" : "warning"
-                          }
-                        >
-                          {result.verdict}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-text-secondary">{result.explanation}</p>
-
-                      {/* Visual Observations */}
-                      {result.visualObservations && result.visualObservations.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <p className="text-[10px] font-bold uppercase text-text-tertiary">Observations</p>
-                          <ul className="text-xs text-text-secondary list-disc list-inside space-y-0.5">
-                            {result.visualObservations.map((obs, i) => (
-                              <li key={i}>{obs}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* Observed Condition + Suggested Action */}
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <div className="h-1.5 flex-1 rounded-full bg-surface-sunken overflow-hidden">
-                          <div
-                            className={cn(
-                              "h-full rounded-full",
-                              result.confidence > 0.7 ? "bg-green-500" :
-                              result.confidence > 0.4 ? "bg-brand-400" : "bg-red-500"
-                            )}
-                            style={{ width: `${result.confidence * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-text-tertiary">
-                          {Math.round(result.confidence * 100)}%
-                        </span>
-                        {result.observedCondition && (
-                          <span className={cn(
-                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                            result.observedCondition === "GOOD" ? "bg-[#dcfce7] text-green-700" :
-                            result.observedCondition === "FAIR" ? "bg-surface-overlay text-text-secondary" :
-                            result.observedCondition === "WORN" ? "bg-[#fce8f3] text-brand-700" :
-                            "bg-[#fde8e8] text-red-700"
-                          )}>
-                            {result.observedCondition}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Suggested Action */}
-                      {result.suggestedAction && (
-                        <p className="text-[10px] text-text-tertiary mt-1 italic">
-                          {result.suggestedAction}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
               </div>
 
               <div className="mt-4 pt-4 border-t border-border-default">
@@ -520,7 +572,7 @@ export function StepPanel({
                 <Clock className="h-6 w-6 mx-auto text-brand-600 mb-3" />
                 <h4 className="font-semibold text-text-primary mb-1">Pull Vehicle History Report</h4>
                 <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
-                  Fetch recall status from NHTSA and initialize vehicle history for this inspection.
+                  Fetch recall status from NHTSA and initialize vehicle history.
                 </p>
               </div>
               <Button
@@ -528,7 +580,7 @@ export function StepPanel({
                 loading={isFetchingHistory}
                 className="w-full bg-brand-gradient text-white hover:opacity-90"
               >
-                {isFetchingHistory ? "Fetching History..." : "Fetch Vehicle History (~$5)"}
+                {isFetchingHistory ? "Fetching History..." : "Fetch Vehicle History"}
               </Button>
               <div className="text-center">
                 <button
@@ -541,7 +593,6 @@ export function StepPanel({
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Title status */}
               <div className={cn(
                 "p-3 rounded-lg border",
                 history.titleStatus === "CLEAN"
@@ -563,7 +614,6 @@ export function StepPanel({
                 </div>
               </div>
 
-              {/* Key facts */}
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: "Owners", value: history.ownerCount, icon: "👤" },
@@ -581,7 +631,6 @@ export function StepPanel({
                 ))}
               </div>
 
-              {/* Damage flags */}
               {(history.structuralDamage || history.floodDamage) && (
                 <div className="p-3 rounded-lg bg-[#fde8e8] border border-red-300">
                   <p className="text-xs font-semibold text-red-700 mb-1">
@@ -706,7 +755,7 @@ export function StepPanel({
               <FileText className="h-6 w-6 mx-auto text-brand-600 mb-3" />
               <h4 className="font-semibold text-text-primary mb-1">Ready to Generate Report</h4>
               <p className="text-sm text-text-secondary mb-4">
-                This will compile all findings, media, and risk data into a comprehensive inspection report.
+                Compile all findings, media, and risk data into a comprehensive inspection report.
               </p>
               <Button
                 onClick={onGenerateReport}
@@ -724,4 +773,70 @@ export function StepPanel({
     default:
       return null;
   }
+}
+
+// ─── VIN Confirmation sub-component ─────────────────────────────────
+import { useState as useStateLocal } from "react";
+
+function VinConfirmPanel({
+  detectedVin,
+  onConfirm,
+  isConfirming,
+}: {
+  detectedVin: string;
+  onConfirm: (vin: string) => void;
+  isConfirming: boolean;
+}) {
+  const [vin, setVin] = useStateLocal(detectedVin);
+
+  return (
+    <div className="space-y-4">
+      <div className="text-center py-4">
+        <Car className="h-6 w-6 mx-auto text-brand-600 mb-3" />
+        <h4 className="font-semibold text-text-primary mb-1">Confirm Vehicle VIN</h4>
+        <p className="text-sm text-text-secondary max-w-md mx-auto">
+          {detectedVin
+            ? "We detected this VIN from your hood label photo. Please verify it's correct."
+            : "Enter the 17-character VIN from the vehicle."}
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-text-secondary mb-1">VIN Number</label>
+        <input
+          type="text"
+          value={vin}
+          onChange={(e) => setVin(e.target.value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, ""))}
+          maxLength={17}
+          placeholder="Enter 17-character VIN"
+          className="w-full px-3 py-2.5 rounded-lg border border-border-strong bg-surface-raised text-text-primary font-mono tracking-wider text-center text-lg focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+        />
+        {vin.length > 0 && vin.length < 17 && (
+          <p className="text-xs text-text-tertiary mt-1">{vin.length}/17 characters</p>
+        )}
+      </div>
+
+      <Button
+        onClick={() => onConfirm(vin)}
+        loading={isConfirming}
+        disabled={vin.length !== 17}
+        className={cn(
+          "w-full",
+          vin.length === 17
+            ? "bg-brand-gradient text-white"
+            : "bg-surface-overlay text-text-tertiary cursor-not-allowed"
+        )}
+      >
+        {isConfirming ? (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Decoding VIN...
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <Search className="h-4 w-4" /> Confirm & Decode VIN
+          </span>
+        )}
+      </Button>
+    </div>
+  );
 }

@@ -133,7 +133,7 @@ export default function DashboardPage() {
                 >
                   <div>
                     <p className="font-medium text-text-primary text-sm">
-                      {insp.vehicle.year} {insp.vehicle.make} {insp.vehicle.model}
+                      {insp.vehicle ? `${insp.vehicle.year} ${insp.vehicle.make} ${insp.vehicle.model}` : "Vehicle pending"}
                     </p>
                     <p className="text-xs text-text-secondary">{insp.number}</p>
                   </div>

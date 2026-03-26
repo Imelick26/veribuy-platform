@@ -39,7 +39,19 @@ export default function SharedReportPage({
   }
 
   const { inspection, org } = report;
-  const { vehicle, findings, media, inspector } = inspection;
+  const vehicle = inspection.vehicle;
+  const { findings, media, inspector } = inspection;
+
+  if (!vehicle) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-text-primary mb-2">Incomplete Report</h1>
+          <p className="text-text-secondary">No vehicle linked to this inspection yet.</p>
+        </div>
+      </div>
+    );
+  }
 
   const criticalCount = findings.filter((f) => f.severity === "CRITICAL").length;
   const majorCount = findings.filter((f) => f.severity === "MAJOR").length;
@@ -107,20 +119,21 @@ export default function SharedReportPage({
             )}
 
             {inspection.overallScore != null && (
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {[
-                  { label: "Structural", score: inspection.structuralScore },
-                  { label: "Cosmetic", score: inspection.cosmeticScore },
-                  { label: "Electronics", score: inspection.electronicsScore },
+                  { label: "Exterior Body", score: inspection.exteriorBodyScore, weight: "30%" },
+                  { label: "Interior", score: inspection.interiorScore, weight: "15%" },
+                  { label: "Mechanical / Visual", score: inspection.mechanicalVisualScore, weight: "35%" },
+                  { label: "Underbody / Frame", score: inspection.underbodyFrameScore, weight: "20%" },
                 ].map((item) => (
                   <div key={item.label}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-text-secondary">{item.label}</span>
-                      <span className="font-medium">{item.score}/100</span>
+                      <span className="text-text-secondary">{item.label} ({item.weight})</span>
+                      <span className="font-medium">{item.score ?? "—"}/10</span>
                     </div>
-                    <Progress value={item.score || 0} size="sm" color={
-                      (item.score || 0) >= 70 ? "green" :
-                      (item.score || 0) >= 50 ? "yellow" : "red"
+                    <Progress value={((item.score || 0) / 10) * 100} size="sm" color={
+                      (item.score || 0) >= 7 ? "green" :
+                      (item.score || 0) >= 5 ? "yellow" : "red"
                     } />
                   </div>
                 ))}

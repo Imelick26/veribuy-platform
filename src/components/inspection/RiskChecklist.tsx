@@ -1,12 +1,21 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { CheckCircle, XCircle, HelpCircle, Camera, ChevronDown, AlertTriangle, Loader2, DollarSign } from "lucide-react";
+import { CheckCircle, XCircle, HelpCircle, Camera, ChevronDown, AlertTriangle, Loader2, DollarSign, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import type { AggregatedRisk, RiskCheckStatus, AIAnalysisResult, QuestionAnswer } from "@/types/risk";
 import { GuidedRiskCheck } from "./GuidedRiskCheck";
+
+/** Photo-discovered risk from AI condition scan */
+export interface PhotoDiscoveredRisk {
+  title: string;
+  description: string;
+  severity: string;
+  category: string;
+  confidence: number;
+}
 
 interface RiskChecklistProps {
   risks: AggregatedRisk[];
@@ -24,6 +33,8 @@ interface RiskChecklistProps {
   onAnswerQuestion?: (riskId: string, questionId: string, answer: "yes" | "no") => void;
   onUploadQuestionMedia?: (riskId: string, questionId: string, file: File) => Promise<string | null>;
   uploadingQuestionId?: string | null;
+  /** Photo-discovered risks from AI condition scan (separate section) */
+  photoDiscoveredRisks?: PhotoDiscoveredRisk[];
 }
 
 export function RiskChecklist({
@@ -36,9 +47,11 @@ export function RiskChecklist({
   onUploadEvidence,
   uploadingRiskCapture,
   riskMediaMap = {},
+  aiResults = [],
   onAnswerQuestion,
   onUploadQuestionMedia,
   uploadingQuestionId,
+  photoDiscoveredRisks = [],
 }: RiskChecklistProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -129,6 +142,65 @@ export function RiskChecklist({
         )}
       </div>
 
+      {/* ── Photo-Discovered Risks (from AI condition scan) ── */}
+      {photoDiscoveredRisks.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Camera className="h-4 w-4 text-amber-600" />
+            <h4 className="text-sm font-semibold text-amber-700">
+              Photo-Discovered Issues ({photoDiscoveredRisks.length})
+            </h4>
+          </div>
+          <p className="text-[11px] text-text-tertiary mb-2">
+            Issues the AI spotted in your photos that weren&apos;t on the data-driven checklist.
+          </p>
+          <div className="space-y-1 mb-4">
+            {photoDiscoveredRisks.map((pdr, i) => (
+              <div
+                key={`pdr-${i}`}
+                className="rounded-lg border border-amber-200 bg-amber-50 p-2.5"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-text-primary">
+                      {pdr.title}
+                    </span>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      {pdr.description}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      pdr.severity === "CRITICAL" ? "danger" :
+                      pdr.severity === "MAJOR" ? "warning" : "default"
+                    }
+                    className="shrink-0 text-[10px]"
+                  >
+                    {pdr.severity}
+                  </Badge>
+                </div>
+                {pdr.confidence < 0.7 && (
+                  <p className="text-[10px] text-amber-600 mt-1">
+                    Confidence: {Math.round(pdr.confidence * 100)}% — verify during physical inspection
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Data-Driven Risks (NHTSA + AI-generated checklist) ── */}
+      {photoDiscoveredRisks.length > 0 && risks.length > 0 && (
+        <div className="flex items-center gap-2 mb-2">
+          <ShieldCheck className="h-4 w-4 text-brand-600" />
+          <h4 className="text-sm font-semibold text-brand-700">
+            Data-Driven Risks ({risks.length})
+          </h4>
+        </div>
+      )}
+
       {/* Checklist items */}
       <div className="space-y-1">
         {risks.map((risk) => {
@@ -136,6 +208,8 @@ export function RiskChecklist({
           const isExpanded = expandedId === risk.id;
           const isActive = activeRiskId === risk.id;
           const riskMedia = riskMediaMap[risk.id] || [];
+          const aiResult = aiResults.find((r) => r.riskId === risk.id);
+          const refinedCost = aiResult?.refinedCost;
 
           return (
             <div
@@ -172,11 +246,18 @@ export function RiskChecklist({
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white shrink-0">RECALL</span>
                     )}
                   </div>
-                  {/* Repair cost shown inline when present */}
-                  {risk.cost.low > 0 && status === "NOT_CHECKED" && (
-                    <span className="text-[11px] text-text-tertiary">
-                      Est. {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
-                    </span>
+                  {/* Repair cost — refined after inspection, full range before */}
+                  {risk.cost.low > 0 && status !== "NOT_FOUND" && (
+                    refinedCost ? (
+                      <span className="text-[11px] text-amber-700 font-medium">
+                        Est. {formatCurrency(refinedCost.low)} – {formatCurrency(refinedCost.high)}
+                        <span className="text-text-tertiary font-normal"> · {refinedCost.tierLabel}</span>
+                      </span>
+                    ) : status === "NOT_CHECKED" ? (
+                      <span className="text-[11px] text-text-tertiary">
+                        Est. {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
+                      </span>
+                    ) : null
                   )}
                 </div>
 
@@ -288,7 +369,7 @@ export function RiskChecklist({
                       questionAnswers={checkStatuses[risk.id]?.questionAnswers || []}
                       onAnswerQuestion={(questionId, answer) => onAnswerQuestion?.(risk.id, questionId, answer)}
                       onUploadMedia={onUploadQuestionMedia ? (questionId, file) => onUploadQuestionMedia(risk.id, questionId, file) : undefined}
-                      onCaptureRiskPhoto={onUploadEvidence ? (file) => onUploadEvidence(risk.id, 0, file) : undefined}
+                      onCaptureRiskPhoto={onUploadEvidence ? (file) => onUploadEvidence(risk.id, riskMedia.length, file) : undefined}
                       uploadingQuestionId={uploadingQuestionId}
                       uploadingRiskPhoto={uploadingRiskCapture === risk.id}
                       riskPhotoCount={riskMedia.length}
@@ -327,9 +408,19 @@ export function RiskChecklist({
                       {risk.cost.low > 0 && (
                         <div className="flex items-center gap-1.5 text-xs">
                           <DollarSign className="h-3 w-3 text-text-tertiary" />
-                          <span className="text-text-secondary">
-                            Est. repair: <span className="font-medium text-text-primary">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
-                          </span>
+                          {refinedCost ? (
+                            <span className="text-amber-700">
+                              Est. repair: <span className="font-medium">{formatCurrency(refinedCost.low)} – {formatCurrency(refinedCost.high)}</span>
+                              <span className="text-text-tertiary ml-1">({refinedCost.tierLabel})</span>
+                            </span>
+                          ) : (
+                            <span className="text-text-secondary">
+                              Est. repair: <span className="font-medium text-text-primary">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
+                              {risk.costTiers && risk.costTiers.length > 0 && (
+                                <span className="text-text-tertiary ml-1">(narrows after inspection)</span>
+                              )}
+                            </span>
+                          )}
                         </div>
                       )}
                       {risk.hasActiveRecall && risk.relatedRecalls && risk.relatedRecalls.length > 0 && (

@@ -11,10 +11,12 @@ import { getCapturePromptList, getInspectionGuidance } from "./capture-prompts";
 
 interface KnownIssueInput {
   title: string;
+  description: string;
   category: string;
   severity: Severity;
   likelihood: Likelihood;
   checkMethod?: "photo" | "manual" | "both";
+  componentHint?: string;
   whatToCheck: string;
   whereToLook: string;
   howToInspect: string;
@@ -22,6 +24,12 @@ interface KnownIssueInput {
   whyItMatters: string;
   estimatedCostLow: number;
   estimatedCostHigh: number;
+  costTiers?: Array<{
+    condition: "MINOR" | "MODERATE" | "SEVERE";
+    label: string;
+    costLow: number;
+    costHigh: number;
+  }>;
   capturePrompts: string[];
   inspectionQuestions?: Array<{
     question: string;
@@ -69,13 +77,20 @@ export function buildRiskProfile(input: BuildProfileInput): AggregatedRiskProfil
       id: `known-${risks.length}`,
       severity: issue.severity,
       title: issue.title,
-      description: issue.whyItMatters,
+      description: issue.description,
       category,
       source: "AI_GENERATED",
+      componentHint: issue.componentHint || undefined,
       cost: {
         low: (issue.estimatedCostLow || 0) * 100, // convert dollars to cents
         high: (issue.estimatedCostHigh || 0) * 100,
       },
+      costTiers: issue.costTiers?.map((t) => ({
+        condition: t.condition,
+        label: t.label,
+        costLow: t.costLow * 100,  // dollars to cents
+        costHigh: t.costHigh * 100,
+      })),
       position: getPositionForCategory(category),
       symptoms: issue.signsOfFailure,
       capturePrompts: issue.capturePrompts.length > 0

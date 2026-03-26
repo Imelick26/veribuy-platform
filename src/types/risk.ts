@@ -43,7 +43,8 @@ export type RiskSource =
   | "NHTSA_COMPLAINTS"
   | "NHTSA_RECALLS"
   | "NHTSA_INVESTIGATIONS"
-  | "MERGED";
+  | "MERGED"
+  | "PHOTO_SCAN";
 
 export type Likelihood = "VERY_COMMON" | "COMMON" | "OCCASIONAL" | "RARE";
 
@@ -64,6 +65,13 @@ export interface QuestionAnswer {
   mediaIds?: string[];     // photos taken for this specific question
 }
 
+export interface CostTier {
+  condition: "MINOR" | "MODERATE" | "SEVERE";
+  label: string;
+  costLow: number;   // cents
+  costHigh: number;   // cents
+}
+
 export interface AggregatedRisk {
   id: string;
   severity: Severity;
@@ -71,7 +79,12 @@ export interface AggregatedRisk {
   description: string;
   category: string;
   source: RiskSource;
+  /** Short keyword for 3D hotspot sub-position placement (e.g., "oil", "ball_joint", "differential") */
+  componentHint?: string;
+  /** Full pre-inspection cost range in cents (MINOR low → SEVERE high) */
   cost: { low: number; high: number };
+  /** Severity-based cost tiers — narrows after inspection */
+  costTiers?: CostTier[];
   position: { x: number; y: number; z: number };
   symptoms: string[];
   capturePrompts: string[];
@@ -116,6 +129,8 @@ export interface AIAnalysisResult {
   visualObservations?: string[];
   /** Recommended next action if CONFIRMED or INCONCLUSIVE */
   suggestedAction?: string;
+  /** Refined cost range based on observed condition, mapped from costTiers (in cents) */
+  refinedCost?: { low: number; high: number; tierCondition: string; tierLabel: string };
 }
 
 export interface UnexpectedFinding {
@@ -127,13 +142,43 @@ export interface UnexpectedFinding {
   confidence: number;
 }
 
+/** Result from scanForUnexpectedIssues() — grade fields removed, now handled by ConditionAssessment */
 export interface OverallConditionResult {
-  overallGrade: "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
-  exteriorCondition: "EXCELLENT" | "GOOD" | "FAIR" | "POOR";
-  interiorVisible: boolean;
-  engineBayCondition?: "CLEAN" | "NORMAL" | "DIRTY" | "CONCERNING";
   unexpectedFindings: UnexpectedFinding[];
   summary: string;
+}
+
+// ---------------------------------------------------------------------------
+//  AI-Driven Condition Assessment (4-area photo scoring)
+// ---------------------------------------------------------------------------
+
+export interface AreaConditionDetail {
+  score: number;              // 1-10
+  confidence: number;         // 0-1
+  keyObservations: string[];
+  concerns: string[];
+  summary: string;
+}
+
+export interface ConditionAssessment {
+  overallScore: number;           // 0-100 weighted composite
+  exteriorBodyScore: number;      // 1-10
+  interiorScore: number;          // 1-10
+  mechanicalVisualScore: number;  // 1-10
+  underbodyFrameScore: number;    // 1-10
+
+  exteriorBody: AreaConditionDetail;
+  interior: AreaConditionDetail;
+  mechanicalVisual: AreaConditionDetail;
+  underbodyFrame: AreaConditionDetail;
+
+  summary: string;
+  photoCoverage: {
+    exteriorBody: number;   // count of photos used
+    interior: number;
+    mechanicalVisual: number;
+    underbodyFrame: number;
+  };
 }
 
 export interface AggregatedRiskProfile {

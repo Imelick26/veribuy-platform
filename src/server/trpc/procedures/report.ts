@@ -5,7 +5,6 @@ import { generateReportPDF } from "@/lib/pdf/generate-report";
 import { supabaseAdmin, MEDIA_BUCKET } from "@/lib/supabase";
 import type { ReportData } from "@/lib/pdf/report-template";
 import type { RiskCheckStatus } from "@/types/risk";
-import { recalculateScore } from "@/lib/scoring";
 
 export const reportRouter = router({
   // Generate report from completed inspection
@@ -26,10 +25,7 @@ export const reportRouter = router({
 
       if (!inspection) throw new Error("Inspection not found");
 
-      // Ensure condition scores are up-to-date before generating report
-      if (inspection.findings.length > 0) {
-        await recalculateScore(ctx.db, input.inspectionId);
-      }
+      // Condition scores are now set by AI condition assessment (independent of findings).
 
       const org = await ctx.db.organization.findUnique({
         where: { id: ctx.orgId },
@@ -92,19 +88,27 @@ export const reportRouter = router({
         generatedAt: new Date(),
         orgName: org?.name,
         inspectorName: inspection.inspector?.name ?? undefined,
-        vehicle: {
+        vehicle: inspection.vehicle ? {
           year: inspection.vehicle.year,
           make: inspection.vehicle.make,
           model: inspection.vehicle.model,
           vin: inspection.vehicle.vin,
           trim: inspection.vehicle.trim,
           exteriorColor: inspection.vehicle.exteriorColor,
+        } : {
+          year: 0,
+          make: "Unknown",
+          model: "Unknown",
+          vin: "N/A",
+          trim: null,
+          exteriorColor: null,
         },
         scores: {
           overall: inspection.overallScore,
-          structural: inspection.structuralScore,
-          cosmetic: inspection.cosmeticScore,
-          electronics: inspection.electronicsScore,
+          exteriorBody: inspection.exteriorBodyScore,
+          interior: inspection.interiorScore,
+          mechanicalVisual: inspection.mechanicalVisualScore,
+          underbodyFrame: inspection.underbodyFrameScore,
         },
         findings: inspection.findings.map((f) => ({
           title: f.title,

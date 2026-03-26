@@ -1,12 +1,11 @@
 "use client";
 
-import { use, useState, useMemo, useCallback } from "react";
+import { use, useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Progress } from "@/components/ui/Progress";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -19,16 +18,14 @@ import {
   Car,
   BarChart3,
   ChevronRight,
-  Plus,
-  Wrench,
   ShieldAlert,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { StepPanel } from "@/components/inspection/StepPanel";
 import { RiskChecklist } from "@/components/inspection/RiskChecklist";
 import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
-import { VehicleDiagram } from "@/components/vehicle/VehicleDiagram";
 import { ReportModal } from "@/components/inspection/ReportModal";
+import { GuidedCapture } from "@/components/inspection/GuidedCapture";
 
 // Dynamic import to avoid SSR issues with Three.js
 const VehicleViewer = dynamic(
@@ -48,16 +45,26 @@ import type { AggregatedRisk, RiskCheckStatus } from "@/types/risk";
 
 
 const STEP_META: Record<string, { label: string; icon: typeof CheckCircle }> = {
-  VIN_DECODE: { label: "VIN Decode", icon: Car },
-  RISK_REVIEW: { label: "Risk Review", icon: AlertTriangle },
-  MEDIA_CAPTURE: { label: "Media Capture", icon: Camera },
-  AI_ANALYSIS: { label: "AI Analysis", icon: ShieldAlert },
+  // New workflow
+  MEDIA_CAPTURE: { label: "Capture", icon: Camera },
+  VIN_CONFIRM: { label: "VIN", icon: Car },
+  AI_CONDITION_SCAN: { label: "Condition", icon: ShieldAlert },
+  RISK_INSPECTION: { label: "Risk Check", icon: AlertTriangle },
   VEHICLE_HISTORY: { label: "History", icon: Clock },
   MARKET_ANALYSIS: { label: "Market", icon: BarChart3 },
   REPORT_GENERATION: { label: "Report", icon: FileText },
+  // Deprecated — kept for backward compat with old inspections
+  VIN_DECODE: { label: "VIN Decode", icon: Car },
+  RISK_REVIEW: { label: "Risk Review", icon: AlertTriangle },
+  AI_ANALYSIS: { label: "AI Analysis", icon: ShieldAlert },
 };
 
-const STEP_ORDER = [
+const NEW_STEP_ORDER = [
+  "MEDIA_CAPTURE", "VIN_CONFIRM", "AI_CONDITION_SCAN", "RISK_INSPECTION",
+  "VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION",
+];
+
+const LEGACY_STEP_ORDER = [
   "VIN_DECODE", "RISK_REVIEW", "MEDIA_CAPTURE", "AI_ANALYSIS",
   "VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION",
 ];
@@ -103,6 +110,24 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
+  // Auto-trigger risk enrichment when page loads without a risk profile
+  const enrichTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (
+      inspection &&
+      !riskProfile &&
+      !enrichRiskProfile.isPending &&
+      !enrichTriggeredRef.current
+    ) {
+      // Only auto-trigger if RISK_REVIEW step exists and isn't completed
+      const riskStep = inspection.steps.find((s) => s.step === "RISK_REVIEW");
+      if (riskStep && riskStep.status !== "COMPLETED") {
+        enrichTriggeredRef.current = true;
+        enrichRiskProfile.mutate({ inspectionId: id });
+      }
+    }
+  }, [inspection, riskProfile, enrichRiskProfile, id]);
+
   const addFinding = trpc.inspection.addFinding.useMutation({
     onSuccess: () => {
       utils.inspection.get.invalidate({ id });
@@ -126,11 +151,27 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
-  // AI Analysis
+  // AI Analysis (legacy)
   const runAIAnalysis = trpc.inspection.runAIAnalysis.useMutation({
     onSuccess: () => {
       utils.inspection.get.invalidate({ id });
       utils.inspection.getAIAnalysisResults.invalidate({ inspectionId: id });
+    },
+  });
+
+  // Condition Scan (new workflow)
+  const runConditionScan = trpc.inspection.runConditionScan.useMutation({
+    onSuccess: () => {
+      utils.inspection.get.invalidate({ id });
+    },
+  });
+
+  // VIN Confirm (new workflow)
+  const confirmVin = trpc.inspection.confirmVin.useMutation({
+    onSuccess: () => {
+      utils.inspection.get.invalidate({ id });
+      // Auto-trigger risk profile generation after VIN confirmed
+      enrichRiskProfile.mutate({ inspectionId: id });
     },
   });
 
@@ -151,12 +192,58 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
+  // VIN Detection (new workflow)
+  const detectVin = trpc.inspection.detectVin.useMutation();
+  const [detectedVin, setDetectedVin] = useState<string | null>(null);
+
+  // Auto-trigger VIN OCR when entering VIN_CONFIRM step
+  const vinDetectTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!inspection || vinDetectTriggeredRef.current) return;
+    const vinStep = inspection.steps.find((s) => s.step === "VIN_CONFIRM");
+    if (!vinStep || vinStep.status === "COMPLETED") return;
+    // Only trigger if MEDIA_CAPTURE is completed (photos exist)
+    const mediaStep = inspection.steps.find((s) => s.step === "MEDIA_CAPTURE");
+    if (!mediaStep || mediaStep.status !== "COMPLETED") return;
+    // Only if no vehicle linked yet (VIN not already confirmed)
+    if (inspection.vehicle) return;
+
+    vinDetectTriggeredRef.current = true;
+    detectVin.mutate(
+      { inspectionId: id },
+      {
+        onSuccess: (result) => {
+          if (result.vin && result.confidence >= 0.6) {
+            setDetectedVin(result.vin);
+          }
+        },
+      }
+    );
+  }, [inspection, detectVin, id]);
+
+  // Auto-trigger condition scan when entering AI_CONDITION_SCAN step
+  const conditionScanTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!inspection || conditionScanTriggeredRef.current) return;
+    const scanStep = inspection.steps.find((s) => s.step === "AI_CONDITION_SCAN");
+    if (!scanStep || scanStep.status === "COMPLETED") return;
+    // Only trigger if VIN_CONFIRM is completed
+    const vinStep = inspection.steps.find((s) => s.step === "VIN_CONFIRM");
+    if (!vinStep || vinStep.status !== "COMPLETED") return;
+    // Must have a vehicle linked
+    if (!inspection.vehicle) return;
+
+    conditionScanTriggeredRef.current = true;
+    runConditionScan.mutate({ inspectionId: id });
+  }, [inspection, runConditionScan, id]);
+
   // Media upload hook
   const mediaUpload = useMediaUpload(id);
 
   // UI state
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showGuidedCapture, setShowGuidedCapture] = useState(false);
   const [findingFromRisk, setFindingFromRisk] = useState<AggregatedRisk | null>(null);
   const [uploadingRiskCapture, setUploadingRiskCapture] = useState<string | null>(null);
 
@@ -225,6 +312,10 @@ export default function InspectionDetailPage({
       </div>
     );
   }
+
+  // Detect workflow version: new inspections have MEDIA_CAPTURE as first step
+  const isNewWorkflow = inspection.steps.some((s) => s.step === "VIN_CONFIRM" || s.step === "AI_CONDITION_SCAN");
+  const STEP_ORDER = isNewWorkflow ? NEW_STEP_ORDER : LEGACY_STEP_ORDER;
 
   const completedSteps = inspection.steps.filter((s) => s.status === "COMPLETED").length;
   const progressPct = (completedSteps / inspection.steps.length) * 100;
@@ -333,6 +424,17 @@ export default function InspectionDetailPage({
     }
   }
 
+  // Extract photo-discovered risks from AI_CONDITION_SCAN step data
+  const conditionScanStep = inspection.steps.find((s) => s.step === "AI_CONDITION_SCAN");
+  const conditionScanData = (conditionScanStep?.data as Record<string, unknown>) || {};
+  const photoDiscoveredRisks = (conditionScanData.unexpectedFindings as Array<{
+    title: string;
+    description: string;
+    severity: string;
+    category: string;
+    confidence: number;
+  }>) || [];
+
   // Compute inspection confidence for StepPanel (not a hook — after early returns)
   const inspectionConfidence = riskProfile
     ? computeInspectionConfidence(
@@ -355,7 +457,7 @@ export default function InspectionDetailPage({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold text-text-primary truncate">
-                {inspection.vehicle.year} {inspection.vehicle.make} {inspection.vehicle.model}
+                {inspection.vehicle ? `${inspection.vehicle.year} ${inspection.vehicle.make} ${inspection.vehicle.model}` : "Vehicle Pending"}
               </h1>
               <Badge
                 variant={isCompleted ? "success" : isCancelled ? "danger" : "info"}
@@ -364,7 +466,7 @@ export default function InspectionDetailPage({
               </Badge>
             </div>
             <p className="text-text-secondary font-mono text-xs sm:text-sm truncate">
-              {inspection.number} &middot; VIN: {inspection.vehicle.vin}
+              {inspection.number}{inspection.vehicle ? ` · VIN: ${inspection.vehicle.vin}` : ""}
             </p>
           </div>
         </div>
@@ -428,8 +530,8 @@ export default function InspectionDetailPage({
           <Card className="p-0 overflow-hidden">
             <VehicleViewer
               vehicle={{
-                bodyStyle: inspection.vehicle.bodyStyle,
-                nhtsaData: inspection.vehicle.nhtsaData as Record<string, unknown> | null,
+                bodyStyle: inspection.vehicle?.bodyStyle ?? null,
+                nhtsaData: (inspection.vehicle?.nhtsaData as Record<string, unknown> | null) ?? null,
               }}
               risks={riskProfile.aggregatedRisks}
               activeRiskId={activeHotspot}
@@ -453,6 +555,7 @@ export default function InspectionDetailPage({
               onAnswerQuestion={handleAnswerQuestion}
               onUploadQuestionMedia={handleUploadQuestionMedia}
               uploadingQuestionId={mediaUpload.currentCaptureType?.startsWith("RISK_Q_") ? mediaUpload.currentCaptureType : null}
+              photoDiscoveredRisks={photoDiscoveredRisks}
             />
           </Card>
         </div>
@@ -490,10 +593,18 @@ export default function InspectionDetailPage({
           onGenerateReport={() => generateReport.mutate({ inspectionId: id })}
           isGeneratingReport={generateReport.isPending}
           isAdvancingStep={advanceStep.isPending}
+          onStartGuidedCapture={() => setShowGuidedCapture(true)}
           onRunAIAnalysis={() => runAIAnalysis.mutate({ inspectionId: id })}
           isRunningAIAnalysis={runAIAnalysis.isPending}
           aiAnalysisResults={aiAnalysisResults || undefined}
           overallConditionResult={overallConditionResult || undefined}
+          onRunConditionScan={() => runConditionScan.mutate({ inspectionId: id })}
+          isRunningConditionScan={runConditionScan.isPending}
+          conditionScanComplete={inspection.steps.some((s) => s.step === "AI_CONDITION_SCAN" && s.status === "COMPLETED")}
+          onConfirmVin={(vin) => confirmVin.mutate({ inspectionId: id, vin })}
+          isConfirmingVin={confirmVin.isPending}
+          detectedVin={detectedVin}
+          isDetectingVin={detectVin.isPending}
           onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
           isFetchingHistory={fetchHistory.isPending}
           onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}
@@ -511,6 +622,21 @@ export default function InspectionDetailPage({
           onClose={() => setFindingFromRisk(null)}
           onCaptureEvidence={() => {}}
           isSubmitting={addFinding.isPending}
+        />
+      )}
+
+      {/* Guided Capture Overlay */}
+      {showGuidedCapture && (
+        <GuidedCapture
+          inspectionId={inspection.id}
+          captures={(inspection.media || []).filter((m) => m.captureType).map((m) => ({
+            captureType: m.captureType as string,
+            url: m.url || undefined,
+            thumbnailUrl: m.thumbnailUrl || m.url || undefined,
+          }))}
+          onCapture={(captureType, file) => mediaUpload.upload(file, captureType)}
+          isUploading={mediaUpload.currentCaptureType}
+          onClose={() => setShowGuidedCapture(false)}
         />
       )}
 

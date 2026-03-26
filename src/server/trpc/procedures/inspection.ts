@@ -1,12 +1,12 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
-import { analyzeRiskMedia, analyzeOverallCondition } from "@/lib/ai/media-analyzer";
+import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, extractVinFromPhoto } from "@/lib/ai/media-analyzer";
 import { fetchMarketValue } from "@/lib/marketcheck";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { calculateFairPrice, calculateDealEconomics, type HistoryData } from "@/lib/market-valuation";
-import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult } from "@/types/risk";
-import { recalculateScore } from "@/lib/scoring";
+import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult, ConditionAssessment } from "@/types/risk";
+import { persistConditionScores } from "@/lib/scoring";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -24,7 +24,7 @@ export const inspectionRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        vehicleId: z.string(),
+        vehicleId: z.string().optional(),
         odometer: z.number().optional(),
         location: z.string().optional(),
         notes: z.string().optional(),
@@ -61,10 +61,11 @@ export const inspectionRouter = router({
 
       const number = await generateInspectionNumber(ctx.db);
 
+      // New workflow: MEDIA_CAPTURE first, VIN comes from photo
       const inspection = await ctx.db.inspection.create({
         data: {
           number,
-          vehicleId: input.vehicleId,
+          vehicleId: input.vehicleId ?? null,
           inspectorId: ctx.userId,
           orgId: ctx.orgId,
           odometer: input.odometer,
@@ -73,10 +74,10 @@ export const inspectionRouter = router({
           steps: {
             createMany: {
               data: [
-                { step: "VIN_DECODE", status: "COMPLETED", completedAt: new Date() },
-                { step: "RISK_REVIEW" },
                 { step: "MEDIA_CAPTURE" },
-                { step: "AI_ANALYSIS" },
+                { step: "VIN_CONFIRM" },
+                { step: "AI_CONDITION_SCAN" },
+                { step: "RISK_INSPECTION" },
                 { step: "VEHICLE_HISTORY" },
                 { step: "MARKET_ANALYSIS" },
                 { step: "REPORT_GENERATION" },
@@ -119,17 +120,211 @@ export const inspectionRouter = router({
   getRiskProfile: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const step = await ctx.db.inspectionStep.findUnique({
+      // Check new step name first, then fall back to old
+      let step = await ctx.db.inspectionStep.findUnique({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "RISK_REVIEW",
+            step: "RISK_INSPECTION",
           },
         },
       });
+      if (!step?.data) {
+        step = await ctx.db.inspectionStep.findUnique({
+          where: {
+            inspectionId_step: {
+              inspectionId: input.inspectionId,
+              step: "RISK_REVIEW",
+            },
+          },
+        });
+      }
 
       if (!step?.data) return null;
       return step.data as unknown as AggregatedRiskProfile;
+    }),
+
+  // Confirm VIN from photo OCR → decode + link vehicle + trigger risk profile
+  confirmVin: protectedProcedure
+    .input(
+      z.object({
+        inspectionId: z.string(),
+        vin: z.string().length(17),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+      });
+      if (!inspection) throw new TRPCError({ code: "NOT_FOUND", message: "Inspection not found" });
+
+      const vin = input.vin.toUpperCase();
+
+      // Check if vehicle already exists
+      let vehicle = await ctx.db.vehicle.findUnique({ where: { vin } });
+
+      if (!vehicle) {
+        // Decode VIN via NHTSA vPIC API
+        const res = await fetch(
+          `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`
+        );
+        const data = await res.json();
+        const r = data.Results?.[0];
+
+        if (!r || !r.ModelYear) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Unable to decode VIN. Please check and try again." });
+        }
+
+        vehicle = await ctx.db.vehicle.create({
+          data: {
+            vin,
+            year: parseInt(r.ModelYear) || 0,
+            make: r.Make || "Unknown",
+            model: r.Model || "Unknown",
+            trim: r.Trim || null,
+            bodyStyle: r.BodyClass || null,
+            drivetrain: r.DriveType || null,
+            engine: [r.EngineConfiguration, r.DisplacementL ? `${r.DisplacementL}L` : null, r.EngineCylinders ? `${r.EngineCylinders}cyl` : null]
+              .filter(Boolean).join(" ") || null,
+            transmission: r.TransmissionStyle || null,
+            nhtsaData: JSON.parse(JSON.stringify(r)),
+            orgId: ctx.orgId,
+          },
+        });
+      }
+
+      // Link vehicle to inspection
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId },
+        data: {
+          vehicleId: vehicle.id,
+          status: "VIN_DECODED",
+        },
+      });
+
+      // Mark VIN_CONFIRM step complete
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "VIN_CONFIRM",
+          },
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          data: JSON.parse(JSON.stringify({
+            vin,
+            decoded: {
+              year: vehicle.year,
+              make: vehicle.make,
+              model: vehicle.model,
+              trim: vehicle.trim,
+              bodyStyle: vehicle.bodyStyle,
+              engine: vehicle.engine,
+            },
+          })),
+        },
+      });
+
+      return { vehicle };
+    }),
+
+  // Detect VIN from hood label photo using GPT-4o Vision OCR
+  detectVin: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { media: true },
+      });
+      if (!inspection) throw new TRPCError({ code: "NOT_FOUND", message: "Inspection not found" });
+
+      // Find the hood label photo
+      const hoodLabelPhoto = inspection.media.find(
+        (m) => m.captureType === "UNDER_HOOD_LABEL" && m.url
+      );
+
+      if (!hoodLabelPhoto?.url) {
+        return { vin: null, confidence: 0 };
+      }
+
+      const result = await extractVinFromPhoto(hoodLabelPhoto.url);
+      return result;
+    }),
+
+  // Run AI condition scan (4-area assessment + unexpected issues)
+  runConditionScan: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { vehicle: true, media: true },
+      });
+      if (!inspection) throw new TRPCError({ code: "NOT_FOUND", message: "Inspection not found" });
+      if (!inspection.vehicle) throw new TRPCError({ code: "BAD_REQUEST", message: "VIN not confirmed yet" });
+
+      // Mark step as in progress
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_CONDITION_SCAN",
+          },
+        },
+        data: {
+          status: "IN_PROGRESS",
+          enteredAt: new Date(),
+        },
+      });
+
+      const mediaForAnalysis = inspection.media
+        .filter((m) => m.url && m.captureType)
+        .map((m) => ({ id: m.id, url: m.url!, captureType: m.captureType! }));
+
+      if (mediaForAnalysis.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No photos captured yet" });
+      }
+
+      const vehicleInfo = {
+        year: inspection.vehicle.year,
+        make: inspection.vehicle.make,
+        model: inspection.vehicle.model,
+        mileage: inspection.odometer,
+      };
+
+      // Run condition assessment + unexpected issues in parallel
+      const [conditionAssessment, unexpectedResult] = await Promise.all([
+        analyzeVehicleCondition(vehicleInfo, mediaForAnalysis),
+        scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis),
+      ]);
+
+      // Persist condition scores to Inspection record
+      await persistConditionScores(ctx.db, input.inspectionId, conditionAssessment);
+
+      // Store results in step data (including photo-discovered risks)
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_CONDITION_SCAN",
+          },
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          data: JSON.parse(JSON.stringify({
+            conditionAssessment,
+            unexpectedFindings: unexpectedResult.unexpectedFindings,
+            unexpectedSummary: unexpectedResult.summary,
+          })),
+        },
+      });
+
+      return {
+        conditionAssessment,
+        unexpectedFindings: unexpectedResult.unexpectedFindings,
+      };
     }),
 
   // List inspections for the org
@@ -177,9 +372,11 @@ export const inspectionRouter = router({
       z.object({
         inspectionId: z.string(),
         step: z.enum([
-          "VIN_DECODE", "RISK_REVIEW", "MEDIA_CAPTURE",
-          "AI_ANALYSIS", "VEHICLE_HISTORY", "MARKET_ANALYSIS",
+          "MEDIA_CAPTURE", "VIN_CONFIRM", "AI_CONDITION_SCAN",
+          "RISK_INSPECTION", "VEHICLE_HISTORY", "MARKET_ANALYSIS",
           "REPORT_GENERATION",
+          // Deprecated — kept for backward compat
+          "VIN_DECODE", "RISK_REVIEW", "AI_ANALYSIS",
         ]),
         data: z.record(z.string(), z.unknown()).optional(),
       })
@@ -202,13 +399,18 @@ export const inspectionRouter = router({
 
       // Map step → inspection status
       const statusMap: Record<string, string> = {
-        VIN_DECODE: "VIN_DECODED",
-        RISK_REVIEW: "RISK_REVIEWED",
+        // New workflow steps
         MEDIA_CAPTURE: "MEDIA_CAPTURE",
-        AI_ANALYSIS: "AI_ANALYZED",
+        VIN_CONFIRM: "VIN_DECODED",
+        AI_CONDITION_SCAN: "AI_ANALYZED",
+        RISK_INSPECTION: "RISK_REVIEWED",
         VEHICLE_HISTORY: "AI_ANALYZED",
         MARKET_ANALYSIS: "MARKET_PRICED",
         REPORT_GENERATION: "COMPLETED",
+        // Deprecated
+        VIN_DECODE: "VIN_DECODED",
+        RISK_REVIEW: "RISK_REVIEWED",
+        AI_ANALYSIS: "AI_ANALYZED",
       };
 
       await ctx.db.inspection.update({
@@ -251,13 +453,13 @@ export const inspectionRouter = router({
         data: input,
       });
 
-      // Recalculate condition score
-      await recalculateScore(ctx.db, input.inspectionId);
+      // Condition score is now independent (AI-driven from photos).
+      // Findings only affect repair costs, not condition score.
 
       return finding;
     }),
 
-  // Update condition scores
+  // Update condition scores — now only used if manual override needed
   updateScores: protectedProcedure
     .input(
       z.object({
@@ -265,7 +467,9 @@ export const inspectionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return recalculateScore(ctx.db, input.inspectionId);
+      // Condition scores are now set by AI condition assessment.
+      // This endpoint is a no-op placeholder for backward compat.
+      return ctx.db.inspection.findUnique({ where: { id: input.inspectionId } });
     }),
 
   // Run AI analysis on captured photos against risk items + overall condition scan
@@ -304,6 +508,10 @@ export const inspectionRouter = router({
         throw new Error("No photos captured yet — capture photos before running AI analysis");
       }
 
+      if (!inspection.vehicle) {
+        throw new Error("No vehicle linked — confirm VIN before running AI analysis");
+      }
+
       const vehicleInfo = {
         year: inspection.vehicle.year,
         make: inspection.vehicle.make,
@@ -328,10 +536,10 @@ export const inspectionRouter = router({
         }
       }
 
-      // Run risk-specific + overall condition analysis in parallel
+      // Run risk-specific + unexpected issues scan in parallel
       const [riskResults, overallCondition] = await Promise.all([
         analyzeRiskMedia(vehicleInfo, riskProfile.aggregatedRisks, mediaForAnalysis, questionAnswersByRisk as Record<string, import("@/types/risk").QuestionAnswer[]>),
-        analyzeOverallCondition(vehicleInfo, mediaForAnalysis),
+        scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis),
       ]);
 
       // Auto-create findings for CONFIRMED risks with evidence linking
@@ -347,8 +555,8 @@ export const inspectionRouter = router({
                 severity: risk.severity as never,
                 category: risk.category as never,
                 evidence: `AI Analysis (${Math.round(result.confidence * 100)}% confidence): ${result.explanation}`,
-                repairCostLow: risk.cost.low,
-                repairCostHigh: risk.cost.high,
+                repairCostLow: result.refinedCost?.low ?? risk.cost.low,
+                repairCostHigh: result.refinedCost?.high ?? risk.cost.high,
                 positionX: risk.position.x,
                 positionY: risk.position.y,
                 positionZ: risk.position.z,
@@ -393,8 +601,8 @@ export const inspectionRouter = router({
         }
       }
 
-      // Recalculate scores after auto-creating all findings
-      await recalculateScore(ctx.db, input.inspectionId);
+      // Condition scores are now set by the separate AI condition assessment
+      // (runConditionScan procedure). Findings affect repair costs, not score.
 
       // Store both result sets in the AI_ANALYSIS step data
       await ctx.db.inspectionStep.update({
@@ -454,6 +662,7 @@ export const inspectionRouter = router({
       if (!inspection) throw new Error("Inspection not found");
 
       const vehicle = inspection.vehicle;
+      if (!vehicle) throw new Error("No vehicle linked — confirm VIN first");
 
       // Fetch recalls from NHTSA (free, no API key needed)
       const nhtsaRecalls = await fetchRecalls(
@@ -525,6 +734,7 @@ export const inspectionRouter = router({
       if (!inspection) throw new Error("Inspection not found");
 
       const vehicle = inspection.vehicle;
+      if (!vehicle) throw new Error("No vehicle linked — confirm VIN first");
 
       // Extract ZIP code from location string, or default
       const zipMatch = (inspection.location || "").match(/\b(\d{5})\b/);

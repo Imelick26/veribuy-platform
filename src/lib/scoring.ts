@@ -1,57 +1,35 @@
 /**
- * Condition score calculation for inspections.
- * Shared between inspection procedures (on finding add) and report generation.
+ * AI-driven condition score persistence.
+ *
+ * Condition is now assessed independently via GPT-4o Vision photo analysis
+ * (4 area scores 1-10 → weighted 0-100 overall). Findings/repair costs are
+ * a SEPARATE input to the final market price — they no longer affect the
+ * condition score.
+ *
+ * Fair Price = Market Baseline × Condition Multiplier × History Multiplier − Repair Costs
  */
 import { db } from "@/server/db";
-
-const WEIGHTS = { structural: 0.45, cosmetic: 0.30, electronics: 0.25 };
-
-const DEDUCTIONS: Record<string, number> = {
-  CRITICAL: 30,
-  MAJOR: 15,
-  MODERATE: 7,
-  MINOR: 3,
-  INFO: 0,
-};
-
-function mapCategory(cat: string): "structural" | "cosmetic" | "electronics" {
-  const structural = ["STRUCTURAL", "DRIVETRAIN", "ENGINE", "TRANSMISSION", "BRAKES", "SUSPENSION"];
-  const electronics = ["ELECTRICAL", "ELECTRONICS", "SAFETY"];
-  if (structural.includes(cat)) return "structural";
-  if (electronics.includes(cat)) return "electronics";
-  return "cosmetic";
-}
+import type { ConditionAssessment } from "@/types/risk";
 
 /**
- * Recalculate and persist the condition scores for an inspection based on its findings.
- * Returns the updated inspection record.
+ * Persist AI-driven condition scores to the Inspection record.
+ * Called after `analyzeVehicleCondition()` completes.
  */
-export async function recalculateScore(prisma: typeof db, inspectionId: string) {
-  const findings = await prisma.finding.findMany({
-    where: { inspectionId },
-  });
-
-  const scores = { structural: 100, cosmetic: 100, electronics: 100 };
-
-  for (const f of findings) {
-    const ded = DEDUCTIONS[f.severity] || 0;
-    const bucket = mapCategory(f.category);
-    scores[bucket] = Math.max(0, scores[bucket] - ded);
-  }
-
-  const overall = Math.round(
-    scores.structural * WEIGHTS.structural +
-    scores.cosmetic * WEIGHTS.cosmetic +
-    scores.electronics * WEIGHTS.electronics
-  );
-
+export async function persistConditionScores(
+  prisma: typeof db,
+  inspectionId: string,
+  assessment: ConditionAssessment
+) {
   return prisma.inspection.update({
     where: { id: inspectionId },
     data: {
-      overallScore: overall,
-      structuralScore: scores.structural,
-      cosmeticScore: scores.cosmetic,
-      electronicsScore: scores.electronics,
+      overallScore: assessment.overallScore,
+      exteriorBodyScore: assessment.exteriorBodyScore,
+      interiorScore: assessment.interiorScore,
+      mechanicalVisualScore: assessment.mechanicalVisualScore,
+      underbodyFrameScore: assessment.underbodyFrameScore,
+      conditionSummary: assessment.summary,
+      conditionRawData: JSON.parse(JSON.stringify(assessment)),
     },
   });
 }

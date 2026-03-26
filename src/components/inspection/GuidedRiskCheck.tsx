@@ -58,7 +58,13 @@ export function GuidedRiskCheck({
   });
   const hasFailures = failedQuestions.length > 0;
 
-  // Photo capture state
+  // Get all capture prompts
+  const capturePrompts = risk.capturePrompts?.length
+    ? risk.capturePrompts
+    : [`Photograph the ${risk.whatToCheck || risk.title}`];
+  const recommendedPhotos = capturePrompts.length;
+
+  // Photo capture state — complete when at least 1 photo taken (recommended = all prompts)
   const hasPhotos = riskPhotoCount > 0;
   const photoComplete = !hasPhotoCapture || hasPhotos;
 
@@ -79,13 +85,15 @@ export function GuidedRiskCheck({
     e.target.value = "";
   };
 
-  // Get the best capture prompt
-  const capturePrompt = risk.capturePrompts?.[0] || `Photograph the ${risk.whatToCheck || risk.title}`;
-
   return (
     <div className="space-y-3">
       {/* Instruction header */}
       <div className="space-y-1.5">
+        {risk.description && (
+          <p className="text-xs text-text-secondary leading-relaxed">
+            {risk.description}
+          </p>
+        )}
         {risk.whatToCheck && (
           <div className="flex items-start gap-1.5 text-xs">
             <Wrench className="h-3.5 w-3.5 text-brand-600 shrink-0 mt-0.5" />
@@ -109,6 +117,9 @@ export function GuidedRiskCheck({
             <DollarSign className="h-3.5 w-3.5 text-text-tertiary shrink-0" />
             <span className="text-text-secondary">
               Est. repair: <span className="font-medium text-text-primary">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
+              {risk.costTiers && risk.costTiers.length > 0 && (
+                <span className="text-text-tertiary ml-1">(narrows after inspection)</span>
+              )}
             </span>
           </div>
         )}
@@ -118,16 +129,53 @@ export function GuidedRiskCheck({
       {hasPhotoCapture && (
         <div className={cn(
           "rounded-lg border p-3 transition-all",
-          hasPhotos ? "border-green-200 bg-green-50/50" : "border-brand-400 bg-brand-50/30"
+          riskPhotoCount >= recommendedPhotos ? "border-green-200 bg-green-50/50" :
+          hasPhotos ? "border-amber-300 bg-amber-50/30" :
+          "border-brand-400 bg-brand-50/30"
         )}>
           <div className="flex items-start gap-2 mb-2">
-            <ImageIcon className={cn("h-4 w-4 shrink-0 mt-0.5", hasPhotos ? "text-green-600" : "text-brand-600")} />
+            <ImageIcon className={cn(
+              "h-4 w-4 shrink-0 mt-0.5",
+              riskPhotoCount >= recommendedPhotos ? "text-green-600" :
+              hasPhotos ? "text-amber-600" : "text-brand-600"
+            )} />
             <div className="flex-1">
               <p className="text-sm font-medium text-text-primary">
-                {hasPhotos ? "Photo captured" : "Capture photo"}
+                {riskPhotoCount >= recommendedPhotos
+                  ? `${riskPhotoCount} photo${riskPhotoCount > 1 ? "s" : ""} captured`
+                  : hasPhotos
+                    ? `${riskPhotoCount} of ${recommendedPhotos} photos`
+                    : `Capture ${recommendedPhotos} photo${recommendedPhotos > 1 ? "s" : ""}`}
               </p>
-              <p className="text-xs text-text-secondary mt-0.5">{capturePrompt}</p>
+              {recommendedPhotos > 1 && !hasPhotos && (
+                <p className="text-[11px] text-text-tertiary mt-0.5">
+                  Multiple angles needed for accurate cost assessment
+                </p>
+              )}
             </div>
+          </div>
+
+          {/* Capture prompt checklist */}
+          <div className="ml-6 space-y-1.5 mb-2">
+            {capturePrompts.map((prompt, i) => {
+              const isCaptured = i < riskPhotoCount;
+              return (
+                <div key={i} className="flex items-start gap-1.5">
+                  <span className={cn(
+                    "shrink-0 mt-0.5 h-3.5 w-3.5 rounded-full flex items-center justify-center text-[8px] font-bold",
+                    isCaptured ? "bg-green-200 text-green-800" : "bg-surface-overlay text-text-tertiary"
+                  )}>
+                    {isCaptured ? "✓" : i + 1}
+                  </span>
+                  <p className={cn(
+                    "text-xs leading-snug",
+                    isCaptured ? "text-text-tertiary line-through" : "text-text-secondary"
+                  )}>
+                    {prompt}
+                  </p>
+                </div>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-2 ml-6">
@@ -136,7 +184,7 @@ export function GuidedRiskCheck({
               disabled={uploadingRiskPhoto}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
-                hasPhotos
+                riskPhotoCount >= recommendedPhotos
                   ? "bg-green-100 text-green-700 hover:bg-green-200"
                   : "bg-brand-gradient text-white hover:brightness-110"
               )}
@@ -146,7 +194,11 @@ export function GuidedRiskCheck({
               ) : (
                 <Camera className="h-3.5 w-3.5" />
               )}
-              {hasPhotos ? `${riskPhotoCount} photo${riskPhotoCount > 1 ? "s" : ""} · Add more` : "Take Photo"}
+              {riskPhotoCount >= recommendedPhotos
+                ? `${riskPhotoCount} photo${riskPhotoCount > 1 ? "s" : ""} · Add more`
+                : hasPhotos
+                  ? `Take Photo ${riskPhotoCount + 1} of ${recommendedPhotos}`
+                  : "Take Photo"}
             </button>
             <input
               type="file"

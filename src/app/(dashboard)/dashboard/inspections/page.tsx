@@ -50,7 +50,7 @@ export default function InspectionsPage() {
               <Link key={insp.id} href={`/dashboard/inspections/${insp.id}`} className="block px-4 py-3 hover:bg-surface-hover transition-colors">
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-medium text-text-primary text-sm">
-                    {insp.vehicle.year} {insp.vehicle.make} {insp.vehicle.model}
+                    {insp.vehicle ? `${insp.vehicle.year} ${insp.vehicle.make} ${insp.vehicle.model}` : "Vehicle pending"}
                   </p>
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(insp.status)}`}>
                     {insp.status.replace(/_/g, " ")}
@@ -95,9 +95,9 @@ export default function InspectionsPage() {
                   <td className="px-5 py-3">
                     <Link href={`/dashboard/inspections/${insp.id}`} className="block">
                       <p className="font-medium text-text-primary">
-                        {insp.vehicle.year} {insp.vehicle.make} {insp.vehicle.model}
+                        {insp.vehicle ? `${insp.vehicle.year} ${insp.vehicle.make} ${insp.vehicle.model}` : "Vehicle pending"}
                       </p>
-                      <p className="text-xs text-text-secondary font-mono">{insp.vehicle.vin}</p>
+                      <p className="text-xs text-text-secondary font-mono">{insp.vehicle?.vin || insp.number}</p>
                     </Link>
                   </td>
                   <td className="px-5 py-3 text-sm text-text-secondary font-mono">{insp.number}</td>

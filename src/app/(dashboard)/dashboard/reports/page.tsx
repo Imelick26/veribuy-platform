@@ -50,7 +50,7 @@ export default function ReportsPage() {
               <div key={r.id} className="px-4 py-3 hover:bg-surface-hover transition-colors cursor-pointer" onClick={() => router.push(`/dashboard/reports/${r.id}`)}>
                 <div className="flex items-center justify-between mb-1">
                   <p className="font-medium text-text-primary text-sm">
-                    {r.inspection.vehicle.year} {r.inspection.vehicle.make} {r.inspection.vehicle.model}
+                    {r.inspection.vehicle ? `${r.inspection.vehicle.year} ${r.inspection.vehicle.make} ${r.inspection.vehicle.model}` : "Vehicle pending"}
                   </p>
                   <Badge variant="info">{r.inspection._count.findings} additional findings</Badge>
                 </div>
@@ -82,7 +82,7 @@ export default function ReportsPage() {
                   <td className="px-5 py-3 font-mono text-sm text-text-primary">{r.number}</td>
                   <td className="px-5 py-3">
                     <p className="font-medium text-text-primary">
-                      {r.inspection.vehicle.year} {r.inspection.vehicle.make} {r.inspection.vehicle.model}
+                      {r.inspection.vehicle ? `${r.inspection.vehicle.year} ${r.inspection.vehicle.make} ${r.inspection.vehicle.model}` : "Vehicle pending"}
                     </p>
                   </td>
                   <td className="px-5 py-3">

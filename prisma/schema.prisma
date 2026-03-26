@@ -195,13 +195,16 @@ model Inspection {
   location String?
   notes    String?
 
-  overallScore     Int?
-  structuralScore  Int?
-  cosmeticScore    Int?
-  electronicsScore Int?
+  overallScore         Int?
+  exteriorBodyScore    Int?    // 1-10 AI condition assessment
+  interiorScore        Int?    // 1-10 AI condition assessment
+  mechanicalVisualScore Int?   // 1-10 AI condition assessment
+  underbodyFrameScore  Int?    // 1-10 AI condition assessment
+  conditionSummary     String? // AI-generated condition summary
+  conditionRawData     Json?   // Full AI response for audit trail
 
-  vehicleId String
-  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
 
   inspectorId String
   inspector   User @relation(fields: [inspectorId], references: [id])
@@ -255,13 +258,18 @@ model InspectionStep {
 }
 
 enum WorkflowStep {
-  VIN_DECODE
-  RISK_REVIEW
+  // Active workflow steps (new flow)
   MEDIA_CAPTURE
-  AI_ANALYSIS
+  VIN_CONFIRM
+  AI_CONDITION_SCAN
+  RISK_INSPECTION
   VEHICLE_HISTORY
   MARKET_ANALYSIS
   REPORT_GENERATION
+  // Deprecated (kept for backward compat with existing inspections)
+  VIN_DECODE
+  RISK_REVIEW
+  AI_ANALYSIS
 }
 
 enum StepStatus {
@@ -371,6 +379,7 @@ enum MediaType {
 }
 
 enum CaptureType {
+  // Exterior (9)
   FRONT_CENTER
   FRONT_34_DRIVER
   FRONT_34_PASSENGER
@@ -380,9 +389,22 @@ enum CaptureType {
   REAR_CENTER
   PASSENGER_SIDE
   ROOF
-  UNDERCARRIAGE
+  // Interior (4)
+  DASHBOARD_DRIVER
+  FRONT_SEATS
+  REAR_SEATS
+  CARGO_AREA
+  // Mechanical (6)
   ENGINE_BAY
+  UNDERCARRIAGE
+  TIRE_FRONT_DRIVER
+  TIRE_REAR_DRIVER
+  TIRE_FRONT_PASSENGER
+  TIRE_REAR_PASSENGER
+  // Identification (2)
   UNDER_HOOD_LABEL
+  ODOMETER
+  // Legacy / other
   WALKAROUND_VIDEO
   ENGINE_AUDIO
   INTERIOR_WALKTHROUGH

@@ -59,24 +59,42 @@ function Marker({
   risk,
   position,
   isActive,
+  isDimmed,
   onClick,
 }: {
   risk: RiskMarker;
   position: [number, number, number];
   isActive: boolean;
+  /** True when another marker is active and this one isn't */
+  isDimmed: boolean;
   onClick?: () => void;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
 
-  // Breathing pulse animation
+  // Breathing pulse animation — active marker pulses prominently, dimmed ones shrink
   useFrame((state) => {
     if (meshRef.current) {
-      const scale =
-        isActive || hovered
-          ? 1.5
-          : 1 + Math.sin(state.clock.elapsedTime * 2) * 0.15;
+      let scale: number;
+      if (isActive) {
+        // Bold pulse for active marker
+        scale = 1.6 + Math.sin(state.clock.elapsedTime * 3) * 0.2;
+      } else if (isDimmed) {
+        // Shrink dimmed markers
+        scale = 0.6;
+      } else if (hovered) {
+        scale = 1.4;
+      } else {
+        // Normal breathing
+        scale = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.15;
+      }
       meshRef.current.scale.setScalar(scale);
+    }
+    // Expanding ring on active marker
+    if (ringRef.current && isActive) {
+      const ringScale = 1 + Math.sin(state.clock.elapsedTime * 2.5) * 0.3;
+      ringRef.current.scale.setScalar(ringScale);
     }
   });
 
@@ -100,28 +118,28 @@ function Marker({
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={isActive || hovered ? 1.2 : 0.8}
+          emissiveIntensity={isActive ? 1.5 : isDimmed ? 0.2 : hovered ? 1.2 : 0.8}
           transparent
-          opacity={0.95}
+          opacity={isDimmed ? 0.2 : 0.95}
           depthTest={false}
         />
       </mesh>
 
-      {/* Outer pulse ring */}
-      <mesh renderOrder={9}>
-        <sphereGeometry args={[0.2, 16, 16]} />
+      {/* Outer pulse ring — hidden when dimmed, prominent when active */}
+      <mesh ref={ringRef} renderOrder={9} visible={!isDimmed}>
+        <sphereGeometry args={[isActive ? 0.28 : 0.2, 16, 16]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.3}
+          emissiveIntensity={isActive ? 0.6 : 0.3}
           transparent
-          opacity={0.25}
+          opacity={isActive ? 0.35 : 0.25}
           depthTest={false}
         />
       </mesh>
 
       {/* Tooltip */}
-      {showTooltip && (
+      {showTooltip && !isDimmed && (
         <Html
           distanceFactor={4}
           style={{ pointerEvents: "none" }}
@@ -167,6 +185,8 @@ export function DamageMarkers({
   activeRiskId,
   onRiskClick,
 }: DamageMarkersProps) {
+  const hasActiveSelection = activeRiskId !== null;
+
   return (
     <group>
       {risks.map((risk) => {
@@ -175,13 +195,15 @@ export function DamageMarkers({
           archetypeId,
           risk.componentHint
         );
+        const isActive = activeRiskId === risk.id;
 
         return (
           <Marker
             key={risk.id}
             risk={risk}
             position={position}
-            isActive={activeRiskId === risk.id}
+            isActive={isActive}
+            isDimmed={hasActiveSelection && !isActive}
             onClick={() => onRiskClick?.(risk.id)}
           />
         );

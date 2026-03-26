@@ -36,6 +36,7 @@ import {
 // ---------------------------------------------------------------------------
 
 interface RiskInput {
+  id: string;
   severity: string;
   title: string;
   category: string;
@@ -44,6 +45,7 @@ interface RiskInput {
   symptoms: string[];
   description?: string;
   whatToCheck?: string;
+  componentHint?: string;
 }
 
 interface VehicleViewerProps {
@@ -255,12 +257,12 @@ export function VehicleViewer({
   // Map risks to markers
   const risks: RiskMarker[] = useMemo(
     () =>
-      rawRisks.map((r, i) => ({
-        id: `risk-${i}`,
+      rawRisks.map((r) => ({
+        id: r.id,
         severity: r.severity as RiskMarker["severity"],
         title: r.title,
         category: r.category,
-        componentHint: r.whatToCheck || null,
+        componentHint: r.componentHint || r.whatToCheck || null,
         cost: r.cost,
       })),
     [rawRisks]

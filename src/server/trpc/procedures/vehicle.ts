@@ -167,6 +167,7 @@ export const vehicleRouter = router({
       if (!inspection) throw new Error("Inspection not found");
 
       const { vehicle } = inspection;
+      if (!vehicle) throw new Error("No vehicle linked — confirm VIN first");
       const { vin, make, model, year } = vehicle;
 
       // Fetch all NHTSA data in parallel (don't let one failure block others)

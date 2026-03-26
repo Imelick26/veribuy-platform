@@ -83,9 +83,10 @@ export interface ReportData {
   };
   scores: {
     overall: number | null;
-    structural: number | null;
-    cosmetic: number | null;
-    electronics: number | null;
+    exteriorBody: number | null;
+    interior: number | null;
+    mechanicalVisual: number | null;
+    underbodyFrame: number | null;
   };
   findings: ReportFinding[];
   riskChecklist?: {
@@ -444,26 +445,32 @@ export function ReportDocument({ data }: { data: ReportData }) {
             </View>
           </View>
 
-          {/* Sub-scores */}
+          {/* Sub-scores (4-area, each 1-10) */}
           {data.scores.overall != null && (
             <View style={styles.scoreRow}>
               <View style={styles.scoreCard}>
-                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.structural) }]}>
-                  {data.scores.structural ?? "—"}/100
+                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.exteriorBody ? data.scores.exteriorBody * 10 : null) }]}>
+                  {data.scores.exteriorBody ?? "—"}/10
                 </Text>
-                <Text style={styles.scoreLabel}>STRUCTURAL</Text>
+                <Text style={styles.scoreLabel}>EXTERIOR</Text>
               </View>
               <View style={styles.scoreCard}>
-                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.cosmetic) }]}>
-                  {data.scores.cosmetic ?? "—"}/100
+                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.interior ? data.scores.interior * 10 : null) }]}>
+                  {data.scores.interior ?? "—"}/10
                 </Text>
-                <Text style={styles.scoreLabel}>COSMETIC</Text>
+                <Text style={styles.scoreLabel}>INTERIOR</Text>
               </View>
               <View style={styles.scoreCard}>
-                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.electronics) }]}>
-                  {data.scores.electronics ?? "—"}/100
+                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.mechanicalVisual ? data.scores.mechanicalVisual * 10 : null) }]}>
+                  {data.scores.mechanicalVisual ?? "—"}/10
                 </Text>
-                <Text style={styles.scoreLabel}>ELECTRONICS</Text>
+                <Text style={styles.scoreLabel}>MECHANICAL</Text>
+              </View>
+              <View style={styles.scoreCard}>
+                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.underbodyFrame ? data.scores.underbodyFrame * 10 : null) }]}>
+                  {data.scores.underbodyFrame ?? "—"}/10
+                </Text>
+                <Text style={styles.scoreLabel}>UNDERBODY</Text>
               </View>
             </View>
           )}
