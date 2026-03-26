@@ -213,7 +213,8 @@ export default function InspectionDetailPage({
       { inspectionId: id },
       {
         onSuccess: (result) => {
-          if (result.vin && result.confidence >= 0.6) {
+          // Show any detected VIN — let the user verify correctness
+          if (result.vin) {
             setDetectedVin(result.vin);
           }
         },

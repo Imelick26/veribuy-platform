@@ -433,21 +433,31 @@ export async function extractVinFromPhoto(
       messages: [
         {
           role: "system",
-          content: `You are a vehicle identification expert. Extract the 17-character VIN (Vehicle Identification Number) from the provided photo of a vehicle identification label, door jamb sticker, or hood label.
+          content: `You are a vehicle identification expert. Extract the 17-character VIN (Vehicle Identification Number) from the provided photo.
+
+The VIN may appear on:
+- A metal plate on the dashboard (viewed through the windshield)
+- An embossed/stamped metal tag
+- A hood label or emissions sticker
+- A door jamb sticker
+- Any label or plate on the vehicle
 
 VIN format rules:
 - Exactly 17 characters
-- Only uses characters: A-H, J-N, P, R-Z, 0-9 (never I, O, or Q)
-- First character is country of origin
+- Only uses characters: A-H, J-N, P, R-Z, 0-9 (never uses I, O, or Q)
+- First character is country of origin (1=USA, 2=Canada, 3=Mexico, J=Japan, etc.)
 - Characters 4-8 describe vehicle attributes
 - Character 9 is a check digit
-- Character 10 is model year
+- Character 10 is model year (T=1996, V=1997, W=1998, etc.)
 - Characters 12-17 are sequential production number
 
-Return JSON: { "vin": "<17 char VIN or null if not readable>", "confidence": <0.0 to 1.0> }
-- confidence 0.9+: clearly readable, high certainty
-- confidence 0.6-0.9: partially readable, some characters uncertain
-- confidence below 0.6: too blurry/obscured, return vin: null`,
+IMPORTANT: Even if the image is slightly blurry, shot through glass, or has glare, try your best to read each character. Use context clues — for example, if the vehicle is a Ford F-250, the VIN likely starts with "1FTH" or "1FTN". Return your best reading even if uncertain about 1-2 characters.
+
+Return JSON: { "vin": "<17 char VIN or null if truly unreadable>", "confidence": <0.0 to 1.0> }
+- confidence 0.9+: clearly readable, high certainty on all characters
+- confidence 0.6-0.9: readable but some characters uncertain (glare, blur, angle)
+- confidence 0.3-0.6: partial read, several characters guessed
+- Only return null if the image contains no VIN at all`,
         },
         {
           role: "user",

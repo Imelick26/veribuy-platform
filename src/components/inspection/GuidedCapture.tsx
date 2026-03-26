@@ -3,7 +3,7 @@
 /**
  * GuidedCapture — Full-screen guided walkthrough camera flow.
  *
- * Walks the inspector through all 21 standard vehicle photos one at a time,
+ * Walks the inspector through all 22 standard vehicle photos one at a time,
  * auto-advancing after each capture. Ordered for an efficient physical
  * walkthrough around the vehicle.
  */
@@ -45,6 +45,7 @@ export const GUIDED_SHOTS: CaptureShot[] = [
   { type: "ROOF",                label: "Roof",                   hint: "Overhead or elevated angle showing full roof",  section: "EXTERIOR" },
 
   // ── Interior (open doors, sit inside) ──
+  { type: "VIN_PLATE",           label: "VIN Plate (Dashboard)",  hint: "Close-up of VIN plate on dashboard through windshield, must be readable", section: "INTERIOR" },
   { type: "DASHBOARD_DRIVER",    label: "Dashboard & Steering",   hint: "Wide shot showing dash, steering wheel, gauges, center console", section: "INTERIOR" },
   { type: "ODOMETER",            label: "Odometer",               hint: "Instrument cluster showing current mileage, clearly readable",   section: "INTERIOR" },
   { type: "FRONT_SEATS",         label: "Front Seats",            hint: "Both front seats visible, show bolsters and center console",      section: "INTERIOR" },
@@ -53,7 +54,7 @@ export const GUIDED_SHOTS: CaptureShot[] = [
 
   // ── Mechanical (hood open, get low) ──
   { type: "ENGINE_BAY",              label: "Engine Bay",              hint: "Hood open, overhead angle",                           section: "MECHANICAL" },
-  { type: "UNDER_HOOD_LABEL",        label: "VIN / Hood Label",        hint: "Close-up, readable VIN label",                        section: "MECHANICAL" },
+  { type: "UNDER_HOOD_LABEL",        label: "Hood Label / Sticker",    hint: "Emissions sticker or label under hood, close-up",     section: "MECHANICAL" },
   { type: "UNDERCARRIAGE",           label: "Undercarriage",           hint: "From ground level, showing underside",                section: "MECHANICAL" },
   { type: "TIRE_FRONT_DRIVER",       label: "Front Tire (Driver)",     hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
   { type: "TIRE_REAR_DRIVER",        label: "Rear Tire (Driver)",      hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
@@ -63,7 +64,7 @@ export const GUIDED_SHOTS: CaptureShot[] = [
 
 const SECTIONS = [
   { key: "EXTERIOR",   label: "Exterior",   count: 9 },
-  { key: "INTERIOR",   label: "Interior",   count: 5 },
+  { key: "INTERIOR",   label: "Interior",   count: 6 },
   { key: "MECHANICAL", label: "Mechanical", count: 7 },
 ] as const;
 

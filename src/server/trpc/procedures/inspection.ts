@@ -230,7 +230,8 @@ export const inspectionRouter = router({
       return { vehicle };
     }),
 
-  // Detect VIN from hood label photo using GPT-4o Vision OCR
+  // Detect VIN from captured photos using GPT-4o Vision OCR
+  // Tries VIN-specific photos first, then falls back to other likely candidates
   detectVin: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -240,17 +241,33 @@ export const inspectionRouter = router({
       });
       if (!inspection) throw new TRPCError({ code: "NOT_FOUND", message: "Inspection not found" });
 
-      // Find the hood label photo
-      const hoodLabelPhoto = inspection.media.find(
-        (m) => m.captureType === "UNDER_HOOD_LABEL" && m.url
-      );
+      // Photos most likely to contain a VIN, in priority order
+      const VIN_PHOTO_TYPES = [
+        "UNDER_HOOD_LABEL",       // Hood sticker / VIN label
+        "VIN_PLATE",              // Dashboard VIN plate
+        "DASHBOARD_DRIVER",       // Dashboard area (may show VIN plate)
+        "DOOR_JAMB_DRIVER",       // Door jamb sticker often has VIN
+        "EXTERIOR_FRONT",         // Windshield may show VIN plate
+      ];
 
-      if (!hoodLabelPhoto?.url) {
-        return { vin: null, confidence: 0 };
+      const photosWithUrls = inspection.media.filter((m) => m.url && m.captureType);
+
+      // Try each VIN-likely photo type in order
+      for (const captureType of VIN_PHOTO_TYPES) {
+        const photo = photosWithUrls.find((m) => m.captureType === captureType);
+        if (!photo?.url) continue;
+
+        console.log(`[detectVin] Trying ${captureType} photo...`);
+        const result = await extractVinFromPhoto(photo.url);
+        if (result.vin) {
+          console.log(`[detectVin] Found VIN ${result.vin} (confidence: ${result.confidence}) from ${captureType}`);
+          return result;
+        }
       }
 
-      const result = await extractVinFromPhoto(hoodLabelPhoto.url);
-      return result;
+      // No VIN found in any photo
+      console.log("[detectVin] No VIN detected in any photo");
+      return { vin: null, confidence: 0 };
     }),
 
   // Run AI condition scan (4-area assessment + unexpected issues)
