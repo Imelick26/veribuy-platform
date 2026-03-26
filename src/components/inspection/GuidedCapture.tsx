@@ -3,7 +3,7 @@
 /**
  * GuidedCapture — Full-screen guided walkthrough camera flow.
  *
- * Walks the inspector through all 22 standard vehicle photos one at a time,
+ * Walks the inspector through all 21 standard vehicle photos one at a time,
  * auto-advancing after each capture. Ordered for an efficient physical
  * walkthrough around the vehicle.
  */
@@ -45,7 +45,6 @@ export const GUIDED_SHOTS: CaptureShot[] = [
   { type: "ROOF",                label: "Roof",                   hint: "Overhead or elevated angle showing full roof",  section: "EXTERIOR" },
 
   // ── Interior (open doors, sit inside) ──
-  { type: "VIN_PLATE",           label: "VIN Plate (Dashboard)",  hint: "Close-up of VIN plate on dashboard through windshield, must be readable", section: "INTERIOR" },
   { type: "DASHBOARD_DRIVER",    label: "Dashboard & Steering",   hint: "Wide shot showing dash, steering wheel, gauges, center console", section: "INTERIOR" },
   { type: "ODOMETER",            label: "Odometer",               hint: "Instrument cluster showing current mileage, clearly readable",   section: "INTERIOR" },
   { type: "FRONT_SEATS",         label: "Front Seats",            hint: "Both front seats visible, show bolsters and center console",      section: "INTERIOR" },
@@ -64,7 +63,7 @@ export const GUIDED_SHOTS: CaptureShot[] = [
 
 const SECTIONS = [
   { key: "EXTERIOR",   label: "Exterior",   count: 9 },
-  { key: "INTERIOR",   label: "Interior",   count: 6 },
+  { key: "INTERIOR",   label: "Interior",   count: 5 },
   { key: "MECHANICAL", label: "Mechanical", count: 7 },
 ] as const;
 

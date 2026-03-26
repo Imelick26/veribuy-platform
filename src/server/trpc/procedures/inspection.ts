@@ -242,11 +242,11 @@ export const inspectionRouter = router({
       if (!inspection) throw new TRPCError({ code: "NOT_FOUND", message: "Inspection not found" });
 
       // Photos most likely to contain a VIN, in priority order
+      // Door jamb sticker is the primary source — clear flat label, no glass/glare
       const VIN_PHOTO_TYPES = [
-        "VIN_PLATE",              // Dashboard VIN plate (most common)
-        "DOOR_JAMB_DRIVER",       // Door jamb sticker (always has VIN)
-        "DASHBOARD_DRIVER",       // Dashboard area (may show VIN plate)
-        "EXTERIOR_FRONT",         // Windshield may show VIN plate
+        "DOOR_JAMB_DRIVER",       // Door jamb sticker (always has VIN, clearest source)
+        "VIN_PLATE",              // Dashboard VIN plate (legacy, kept for backward compat)
+        "UNDER_HOOD_LABEL",       // Hood label (legacy, kept for backward compat)
       ];
 
       const photosWithUrls = inspection.media.filter((m) => m.url && m.captureType);
