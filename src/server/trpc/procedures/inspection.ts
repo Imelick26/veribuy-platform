@@ -981,7 +981,6 @@ export const inspectionRouter = router({
       });
       const stepNames = allSteps.map((s) => s.step);
       const checkStepName = stepNames.includes("RISK_INSPECTION") ? "RISK_INSPECTION" : "AI_ANALYSIS";
-      const riskStepName = stepNames.includes("RISK_INSPECTION") ? "RISK_INSPECTION" : "RISK_REVIEW";
 
       // Get the step where check statuses live
       const aiStep = await ctx.db.inspectionStep.findUnique({
@@ -989,16 +988,6 @@ export const inspectionRouter = router({
           inspectionId_step: {
             inspectionId: input.inspectionId,
             step: checkStepName,
-          },
-        },
-      });
-
-      // Get the step where inspectionQuestions/risk profile lives
-      const rrStep = await ctx.db.inspectionStep.findUnique({
-        where: {
-          inspectionId_step: {
-            inspectionId: input.inspectionId,
-            step: riskStepName,
           },
         },
       });
@@ -1039,28 +1028,8 @@ export const inspectionRouter = router({
         riskStatus.hasPhotoEvidence = true;
       }
 
-      // Auto-derive status from question answers
-      // Look up the risk's inspectionQuestions from the RISK_REVIEW step
-      const rrData = (rrStep?.data as Record<string, unknown>) || {};
-      const aggregatedRisks = (rrData.aggregatedRisks as Array<Record<string, unknown>>) || [];
-      const riskDef = aggregatedRisks.find((r) => r.id === input.riskId);
-      const questions = (riskDef?.inspectionQuestions as Array<Record<string, unknown>>) || [];
-
-      if (questions.length > 0) {
-        const answeredQuestions = questionAnswers.filter((qa) => qa.answer === "yes" || qa.answer === "no");
-        const hasFailure = answeredQuestions.some((qa) => {
-          const qDef = questions.find((q) => q.id === qa.questionId);
-          return qDef && qa.answer === qDef.failureAnswer;
-        });
-
-        if (hasFailure) {
-          riskStatus.status = "CONFIRMED";
-        } else if (answeredQuestions.length >= questions.length) {
-          riskStatus.status = "NOT_FOUND";
-        }
-        // If partially answered, keep current status
-      }
-
+      // Just store the answer — don't auto-derive risk status.
+      // Status derivation happens when the user explicitly completes the step.
       riskStatus.checkedAt = new Date().toISOString();
       checkStatuses[input.riskId] = riskStatus;
 
