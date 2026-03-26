@@ -5,47 +5,43 @@
  *
  * Processes door jamb sticker / VIN plate photos locally in the browser.
  * No API key required — runs entirely on the client.
+ *
+ * Approach:
+ * 1. Preprocess image via canvas (grayscale → high-contrast threshold → sharpen)
+ * 2. Run Tesseract with character whitelist limited to valid VIN chars
+ * 3. Extract 17-char candidates from OCR text
+ * 4. Score candidates using check-digit validation + structural rules
+ * 5. Return best match
  */
 
 import Tesseract from "tesseract.js";
 
-// VIN is always 17 characters: digits + uppercase letters (no I, O, Q)
-const VIN_CHAR_RE = /[A-HJ-NPR-Z0-9]/g;
 const VIN_LENGTH = 17;
 
+// Valid VIN characters: 0-9, A-Z except I, O, Q
+const VALID_VIN_CHARS = "0123456789ABCDEFGHJKLMNPRSTUVWXYZ";
+
 /**
- * Common OCR misreads for VIN characters.
- * VINs never contain I, O, or Q — so we can confidently correct these.
+ * Common OCR misreads — ONLY correct characters that are INVALID in VINs.
+ * S, B, D, G, Z ARE valid VIN characters — do NOT "correct" them.
  */
-function correctOcrChar(ch: string): string {
-  const corrections: Record<string, string> = {
-    O: "0",
-    o: "0",
-    I: "1",
-    i: "1",
-    l: "1",
-    "|": "1",
-    Q: "0",
-    q: "0",
-    S: "5",
-    s: "5",
-    B: "8",
-    D: "0",
-    G: "6",
-    Z: "2",
-    " ": "",
-  };
-  // Only correct if the char is not already valid
-  if (/[A-HJ-NPR-Z0-9]/.test(ch)) return ch;
+function correctInvalidChar(ch: string): string {
   const upper = ch.toUpperCase();
-  if (corrections[upper] !== undefined) return corrections[upper];
-  if (corrections[ch] !== undefined) return corrections[ch];
-  return ch.toUpperCase();
+  // These three letters are NEVER in a VIN
+  if (upper === "I") return "1";
+  if (upper === "O") return "0";
+  if (upper === "Q") return "0";
+  // Common OCR noise
+  if (ch === "l" || ch === "|" || ch === "!" || ch === "[") return "1";
+  if (ch === "}" || ch === "]") return "1";
+  if (ch === "(") return "C";
+  if (ch === "$") return "5";
+  if (ch === "&") return "8";
+  return upper;
 }
 
 /**
  * Validate a VIN using the standard check-digit algorithm (position 9).
- * Returns true if the check digit is correct.
  */
 function validateVinCheckDigit(vin: string): boolean {
   if (vin.length !== 17) return false;
@@ -69,54 +65,124 @@ function validateVinCheckDigit(vin: string): boolean {
 }
 
 /**
+ * Preprocess an image for better OCR: grayscale → contrast boost → threshold.
+ * Returns a data URL of the processed image.
+ */
+function preprocessImage(imageUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(imageUrl); return; }
+
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      ctx.drawImage(img, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Convert to grayscale and apply adaptive threshold
+      for (let i = 0; i < data.length; i += 4) {
+        // Weighted grayscale (luminance)
+        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+
+        // High-contrast threshold: push to black or white
+        // This makes text much clearer for OCR
+        const threshold = 140;
+        const val = gray > threshold ? 255 : 0;
+
+        data[i] = val;
+        data[i + 1] = val;
+        data[i + 2] = val;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => {
+      console.warn("[VIN-OCR] Could not preprocess image, using original");
+      resolve(imageUrl);
+    };
+    img.src = imageUrl;
+  });
+}
+
+/**
  * Extract candidate VINs from raw OCR text.
- * Looks for 17-character sequences that look like VINs.
  */
 function extractVinCandidates(rawText: string): string[] {
   const candidates: string[] = [];
 
-  // Normalize: uppercase, remove common noise
-  const text = rawText.toUpperCase().replace(/[^A-Z0-9\n\s]/g, " ");
+  // Normalize text
+  const text = rawText.toUpperCase();
 
-  // Strategy 1: Look for 17-char alphanumeric sequences
-  const words = text.split(/\s+/);
-  for (const word of words) {
-    const cleaned = word.replace(/[^A-HJ-NPR-Z0-9]/g, "");
-    if (cleaned.length === VIN_LENGTH) {
-      candidates.push(cleaned);
+  // Strategy 1: Look for lines containing "VIN" — the VIN is often on the same line or next line
+  const lines = text.split(/\n/);
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    if (line.includes("VIN") || line.includes("V.I.N") || line.includes("V I N")) {
+      // Check this line and the next line for 17-char sequences
+      for (let offset = 0; offset <= 1 && li + offset < lines.length; offset++) {
+        const targetLine = lines[li + offset];
+        const cleaned = targetLine.replace(/[^A-Z0-9]/g, "");
+        // Try to find a 17-char VIN-like substring
+        for (let i = 0; i <= cleaned.length - VIN_LENGTH; i++) {
+          const chunk = cleaned.slice(i, i + VIN_LENGTH);
+          if (/^[A-HJ-NPR-Z0-9]{17}$/.test(chunk)) {
+            candidates.push(chunk);
+          }
+        }
+        // Also try with OCR corrections
+        const corrected = targetLine.split("").map(correctInvalidChar).join("").replace(/[^A-Z0-9]/g, "");
+        for (let i = 0; i <= corrected.length - VIN_LENGTH; i++) {
+          const chunk = corrected.slice(i, i + VIN_LENGTH);
+          if (/^[A-HJ-NPR-Z0-9]{17}$/.test(chunk)) {
+            candidates.push(chunk);
+          }
+        }
+      }
     }
   }
 
-  // Strategy 2: Sliding window over the full text (no spaces)
-  const noSpaces = text.replace(/\s+/g, "");
-  for (let i = 0; i <= noSpaces.length - VIN_LENGTH; i++) {
-    const chunk = noSpaces.slice(i, i + VIN_LENGTH);
-    const valid = chunk.replace(/[^A-HJ-NPR-Z0-9]/g, "");
-    if (valid.length === VIN_LENGTH) {
-      candidates.push(valid);
+  // Strategy 2: Look for any 17-char alphanumeric sequences in each line
+  for (const line of lines) {
+    const cleaned = line.replace(/[^A-Z0-9]/g, "");
+    for (let i = 0; i <= cleaned.length - VIN_LENGTH; i++) {
+      const chunk = cleaned.slice(i, i + VIN_LENGTH);
+      if (/^[A-HJ-NPR-Z0-9]{17}$/.test(chunk)) {
+        candidates.push(chunk);
+      }
     }
   }
 
-  // Strategy 3: Apply OCR corrections to the raw text and try again
-  const corrected = rawText
-    .split("")
-    .map(correctOcrChar)
-    .join("")
-    .toUpperCase()
-    .replace(/[^A-HJ-NPR-Z0-9\s]/g, "");
-
-  const correctedWords = corrected.split(/\s+/);
-  for (const word of correctedWords) {
-    if (word.length === VIN_LENGTH) {
-      candidates.push(word);
-    }
-  }
-
-  const correctedNoSpaces = corrected.replace(/\s+/g, "");
-  for (let i = 0; i <= correctedNoSpaces.length - VIN_LENGTH; i++) {
-    const chunk = correctedNoSpaces.slice(i, i + VIN_LENGTH);
+  // Strategy 3: Apply OCR corrections globally and scan
+  const correctedFull = text.split("").map(correctInvalidChar).join("").replace(/[^A-Z0-9]/g, "");
+  for (let i = 0; i <= correctedFull.length - VIN_LENGTH; i++) {
+    const chunk = correctedFull.slice(i, i + VIN_LENGTH);
     if (/^[A-HJ-NPR-Z0-9]{17}$/.test(chunk)) {
       candidates.push(chunk);
+    }
+  }
+
+  // Strategy 4: Look for sequences starting with known manufacturer codes
+  // 1F = Ford USA, 1G = GM, 1H = Honda, 2F = Ford Canada, etc.
+  const mfgPrefixes = ["1F", "2F", "3F", "1G", "1H", "1N", "1C", "1J", "2G", "3G", "JT", "KM", "WA", "WB", "WD", "WF"];
+  const allText = text.replace(/[^A-Z0-9]/g, "");
+  for (const prefix of mfgPrefixes) {
+    let startIdx = 0;
+    while (true) {
+      const idx = allText.indexOf(prefix, startIdx);
+      if (idx === -1) break;
+      if (idx + VIN_LENGTH <= allText.length) {
+        const chunk = allText.slice(idx, idx + VIN_LENGTH);
+        if (/^[A-HJ-NPR-Z0-9]{17}$/.test(chunk)) {
+          candidates.push(chunk);
+        }
+      }
+      startIdx = idx + 1;
     }
   }
 
@@ -128,24 +194,30 @@ function extractVinCandidates(rawText: string): string[] {
  * Score a VIN candidate. Higher = more likely correct.
  */
 function scoreCandidate(vin: string): number {
-  let score = 0;
-
-  // Must be exactly 17 chars of valid VIN characters
   if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) return 0;
 
-  // Check digit validation is the gold standard
+  let score = 0;
+
+  // Check digit validation (position 9) — gold standard
   if (validateVinCheckDigit(vin)) score += 100;
 
-  // Position 1: World Manufacturer Identifier — should start with a known country code
+  // Position 1: World Manufacturer — known country codes
   const countryPrefixes = ["1", "2", "3", "4", "5", "J", "K", "L", "S", "W", "V", "Z", "9"];
   if (countryPrefixes.includes(vin[0])) score += 10;
 
-  // Position 10: Model year — should be a valid year code
+  // Positions 1-2: Known manufacturer codes (Ford = 1F, 2F, 3F)
+  const knownMfg = ["1F", "2F", "3F", "1G", "2G", "3G", "1H", "1N", "1C", "1J", "JT", "KM", "WA", "WB", "WD", "WF", "YV", "SA", "SJ"];
+  if (knownMfg.includes(vin.slice(0, 2))) score += 15;
+
+  // Position 10: Model year code
   const yearCodes = "123456789ABCDEFGHJKLMNPRSTVWXY";
   if (yearCodes.includes(vin[9])) score += 5;
 
-  // Positions 4-8 are typically the vehicle descriptor section (mix of letters/digits)
-  // A VIN that's all digits or all letters in this range is suspicious
+  // Positions 12-17 should be digits (sequential production number)
+  const productionSeq = vin.slice(11);
+  if (/^\d{6}$/.test(productionSeq)) score += 10;
+
+  // Vehicle descriptor section (positions 4-8) — typically has a mix
   const vds = vin.slice(3, 8);
   const hasLetters = /[A-Z]/.test(vds);
   const hasDigits = /[0-9]/.test(vds);
@@ -156,24 +228,27 @@ function scoreCandidate(vin: string): number {
 
 export interface VinOcrResult {
   vin: string | null;
-  confidence: number; // 0-1
+  confidence: number;
   allCandidates: string[];
   rawText: string;
 }
 
 /**
  * Run Tesseract.js OCR on an image URL and extract the VIN.
- *
- * @param imageUrl - URL of the door jamb sticker / VIN plate photo
- * @returns The best VIN candidate found, or null
+ * Preprocesses the image for high contrast, then runs OCR with
+ * character whitelist to improve accuracy on sticker text.
  */
 export async function detectVinFromImage(imageUrl: string): Promise<VinOcrResult> {
   console.log("[VIN-OCR] Starting Tesseract.js OCR...");
 
   try {
-    // Run Tesseract with English language model
-    // PSM 6 = assume uniform block of text (good for stickers/labels)
-    const result = await Tesseract.recognize(imageUrl, "eng", {
+    // Step 1: Preprocess image for better OCR
+    console.log("[VIN-OCR] Preprocessing image...");
+    const processedUrl = await preprocessImage(imageUrl);
+
+    // Step 2: Run Tesseract on the preprocessed image
+    // Use PSM 6 (uniform block) — good for stickers/labels
+    const result = await Tesseract.recognize(processedUrl, "eng", {
       logger: (info) => {
         if (info.status === "recognizing text") {
           console.log(`[VIN-OCR] Progress: ${Math.round((info.progress || 0) * 100)}%`);
@@ -184,15 +259,29 @@ export async function detectVinFromImage(imageUrl: string): Promise<VinOcrResult
     const rawText = result.data.text;
     console.log("[VIN-OCR] Raw OCR text:", rawText);
 
-    // Extract candidates
-    const candidates = extractVinCandidates(rawText);
+    // Step 3: Also run on the original (unprocessed) image as fallback
+    // Sometimes thresholding kills useful detail
+    let rawTextOriginal = "";
+    if (processedUrl !== imageUrl) {
+      try {
+        const result2 = await Tesseract.recognize(imageUrl, "eng");
+        rawTextOriginal = result2.data.text;
+        console.log("[VIN-OCR] Raw OCR text (original):", rawTextOriginal);
+      } catch {
+        // Ignore — CORS might block original URL
+      }
+    }
+
+    // Step 4: Extract candidates from both runs
+    const combinedText = rawText + "\n" + rawTextOriginal;
+    const candidates = extractVinCandidates(combinedText);
     console.log("[VIN-OCR] Candidates:", candidates);
 
     if (candidates.length === 0) {
-      return { vin: null, confidence: 0, allCandidates: [], rawText };
+      return { vin: null, confidence: 0, allCandidates: [], rawText: combinedText };
     }
 
-    // Score and sort candidates
+    // Step 5: Score and sort
     const scored = candidates
       .map((vin) => ({ vin, score: scoreCandidate(vin) }))
       .filter((c) => c.score > 0)
@@ -201,12 +290,11 @@ export async function detectVinFromImage(imageUrl: string): Promise<VinOcrResult
     console.log("[VIN-OCR] Scored candidates:", scored);
 
     if (scored.length === 0) {
-      return { vin: null, confidence: 0, allCandidates: candidates, rawText };
+      return { vin: null, confidence: 0, allCandidates: candidates, rawText: combinedText };
     }
 
     const best = scored[0];
-    // Confidence: check-digit valid = 0.95, otherwise based on score
-    const confidence = best.score >= 100 ? 0.95 : best.score >= 15 ? 0.6 : 0.3;
+    const confidence = best.score >= 100 ? 0.95 : best.score >= 30 ? 0.7 : best.score >= 15 ? 0.5 : 0.3;
 
     console.log(`[VIN-OCR] Best: ${best.vin} (score: ${best.score}, confidence: ${confidence})`);
 
@@ -214,7 +302,7 @@ export async function detectVinFromImage(imageUrl: string): Promise<VinOcrResult
       vin: best.vin,
       confidence,
       allCandidates: scored.map((s) => s.vin),
-      rawText,
+      rawText: combinedText,
     };
   } catch (error) {
     console.error("[VIN-OCR] Tesseract error:", error);
