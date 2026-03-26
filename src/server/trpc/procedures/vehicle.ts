@@ -242,27 +242,40 @@ export const vehicleRouter = router({
         curatedProfileId: curatedProfile?.id,
       });
 
-      // Store in the RISK_REVIEW step's data field
+      // Determine which step name to store the risk profile in.
+      // New workflow uses RISK_INSPECTION; legacy uses RISK_REVIEW.
+      const allSteps = await ctx.db.inspectionStep.findMany({
+        where: { inspectionId: input.inspectionId },
+        select: { step: true },
+      });
+      const stepNames = allSteps.map((s) => s.step);
+      const riskStepName = stepNames.includes("RISK_INSPECTION")
+        ? "RISK_INSPECTION"
+        : "RISK_REVIEW";
+
+      // Store in the risk step's data field
       await ctx.db.inspectionStep.update({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "RISK_REVIEW",
+            step: riskStepName,
           },
         },
         data: {
-          status: "COMPLETED",
-          completedAt: new Date(),
+          status: riskStepName === "RISK_REVIEW" ? "COMPLETED" : undefined,
+          completedAt: riskStepName === "RISK_REVIEW" ? new Date() : undefined,
           enteredAt: new Date(),
           data: JSON.parse(JSON.stringify(profile)),
         },
       });
 
-      // Advance inspection status
-      await ctx.db.inspection.update({
-        where: { id: input.inspectionId },
-        data: { status: "RISK_REVIEWED" },
-      });
+      // Advance inspection status (only for legacy workflow where risk review auto-completes)
+      if (riskStepName === "RISK_REVIEW") {
+        await ctx.db.inspection.update({
+          where: { id: input.inspectionId },
+          data: { status: "RISK_REVIEWED" },
+        });
+      }
 
       return profile as AggregatedRiskProfile;
     }),

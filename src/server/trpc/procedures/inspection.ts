@@ -894,12 +894,21 @@ export const inspectionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Get the AI_ANALYSIS step
+      // Determine which step stores check statuses (AI_ANALYSIS for legacy, RISK_INSPECTION for new)
+      const allSteps = await ctx.db.inspectionStep.findMany({
+        where: { inspectionId: input.inspectionId },
+        select: { step: true },
+      });
+      const stepNames = allSteps.map((s) => s.step);
+      const checkStepName = stepNames.includes("RISK_INSPECTION")
+        ? "RISK_INSPECTION"
+        : "AI_ANALYSIS";
+
       const step = await ctx.db.inspectionStep.findUnique({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "AI_ANALYSIS",
+            step: checkStepName,
           },
         },
       });
@@ -924,7 +933,7 @@ export const inspectionRouter = router({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "AI_ANALYSIS",
+            step: checkStepName,
           },
         },
         data: {
@@ -949,22 +958,31 @@ export const inspectionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Get the AI_ANALYSIS step (where check statuses live)
+      // Determine which steps store data (new vs legacy workflow)
+      const allSteps = await ctx.db.inspectionStep.findMany({
+        where: { inspectionId: input.inspectionId },
+        select: { step: true },
+      });
+      const stepNames = allSteps.map((s) => s.step);
+      const checkStepName = stepNames.includes("RISK_INSPECTION") ? "RISK_INSPECTION" : "AI_ANALYSIS";
+      const riskStepName = stepNames.includes("RISK_INSPECTION") ? "RISK_INSPECTION" : "RISK_REVIEW";
+
+      // Get the step where check statuses live
       const aiStep = await ctx.db.inspectionStep.findUnique({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "AI_ANALYSIS",
+            step: checkStepName,
           },
         },
       });
 
-      // Get the RISK_REVIEW step (where inspectionQuestions live)
+      // Get the step where inspectionQuestions/risk profile lives
       const rrStep = await ctx.db.inspectionStep.findUnique({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "RISK_REVIEW",
+            step: riskStepName,
           },
         },
       });
@@ -1035,7 +1053,7 @@ export const inspectionRouter = router({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "AI_ANALYSIS",
+            step: checkStepName,
           },
         },
         data: {
@@ -1052,14 +1070,25 @@ export const inspectionRouter = router({
   getRiskChecklist: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const step = await ctx.db.inspectionStep.findUnique({
+      // Check new step first, then fall back to legacy
+      let step = await ctx.db.inspectionStep.findUnique({
         where: {
           inspectionId_step: {
             inspectionId: input.inspectionId,
-            step: "AI_ANALYSIS",
+            step: "RISK_INSPECTION",
           },
         },
       });
+      if (!step?.data) {
+        step = await ctx.db.inspectionStep.findUnique({
+          where: {
+            inspectionId_step: {
+              inspectionId: input.inspectionId,
+              step: "AI_ANALYSIS",
+            },
+          },
+        });
+      }
 
       if (!step?.data) return {};
       const data = step.data as Record<string, unknown>;
