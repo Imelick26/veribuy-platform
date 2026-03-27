@@ -48,6 +48,17 @@ export interface MarketAnalysisData {
     source: string;
     url?: string;
   }> | null;
+
+  // Multi-source pricing metadata
+  dataSource?: string | null;              // "vinaudit" | "marketcheck" | "fallback"
+  dataSourceConfidence?: number | null;    // 0-1
+  configPremiums?: Array<{
+    factor: string;
+    multiplier: number;
+    explanation: string;
+  }> | null;
+  configMultiplier?: number | null;
+  baseValuePreConfig?: number | null;      // cents
 }
 
 interface MarketAnalysisSectionProps {
@@ -96,8 +107,61 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
   const hasBreakdown = data.conditionMultiplier != null;
   const bands = data.priceBands as MarketAnalysisData["priceBands"];
 
+  const configPremiums = data.configPremiums as MarketAnalysisData["configPremiums"];
+  const hasConfigPremiums = configPremiums && configPremiums.length > 0;
+
   return (
     <div className={cn("space-y-5", compact && "space-y-3")}>
+      {/* ── Data Source + Confidence ── */}
+      {data.dataSource && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant={
+            data.dataSource === "vinaudit" ? "info" as const :
+            data.dataSource === "marketcheck" ? "success" as const :
+            "warning" as const
+          }>
+            {data.dataSource === "vinaudit" ? "VinAudit" :
+             data.dataSource === "marketcheck" ? "MarketCheck" :
+             "Estimated"}
+          </Badge>
+          {data.dataSourceConfidence != null && (
+            <span className="text-[10px] text-text-tertiary">
+              {Math.round(data.dataSourceConfidence * 100)}% confidence
+            </span>
+          )}
+          {data.dataSource === "fallback" && (
+            <span className="text-[10px] text-amber-600">
+              No live market data available — using category estimate + config premiums
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── Configuration Premiums ── */}
+      {hasConfigPremiums && (
+        <div className="p-3 rounded-lg bg-brand-50/50 border border-brand-200">
+          <h4 className="text-xs font-semibold text-brand-700 mb-1.5">
+            Configuration Premiums Applied
+            {data.configMultiplier != null && (
+              <span className="ml-1 font-bold">({data.configMultiplier.toFixed(2)}x total)</span>
+            )}
+          </h4>
+          <div className="space-y-1">
+            {configPremiums!.map((p, i) => (
+              <div key={i} className="flex items-center justify-between text-xs">
+                <span className="text-text-secondary">{p.factor}</span>
+                <span className="font-semibold text-brand-700">+{Math.round((p.multiplier - 1) * 100)}%</span>
+              </div>
+            ))}
+          </div>
+          {data.baseValuePreConfig != null && (
+            <p className="text-[10px] text-text-tertiary mt-1.5 border-t border-brand-200 pt-1">
+              Base value before premiums: {formatCurrency(data.baseValuePreConfig)}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── Comparable Listings ── */}
       {comps && comps.length > 0 && (
         <div>
@@ -175,7 +239,14 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
           </h4>
           <div className="space-y-1.5">
             {/* Market Baseline */}
-            <WaterfallRow label="Market Baseline (MarketCheck)" value={data.baselinePrice} />
+            <WaterfallRow
+              label={`Market Baseline (${
+                data.dataSource === "vinaudit" ? "VinAudit" :
+                data.dataSource === "marketcheck" ? "MarketCheck" :
+                "Estimate"
+              })`}
+              value={data.baselinePrice}
+            />
 
             {/* Condition Adjustment */}
             {data.conditionMultiplier != null && data.adjustedValueBeforeRecon != null && (

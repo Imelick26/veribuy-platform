@@ -150,19 +150,23 @@ async function getMarketStats(
  * Calls both the search and stats endpoints, then normalizes into the
  * same shape the rest of the app expects (dollars, not cents).
  *
+ * Returns null if MarketCheck has no data for the vehicle (common for
+ * old/rare vehicles not in active dealer inventory). The caller
+ * (market-data.ts orchestrator) handles fallback.
+ *
  * @param year   - Vehicle model year
  * @param make   - Vehicle make (e.g. "Toyota")
  * @param model  - Vehicle model (e.g. "Camry")
  * @param zip    - ZIP code for nearby search (defaults to "97201" Portland)
  * @param mileage - Current odometer for mileage adjustment estimate
  */
-export async function fetchMarketValue(
+export async function fetchMarketCheckData(
   year: number,
   make: string,
   model: string,
   zip: string = "97201",
   mileage?: number,
-): Promise<MarketValueResult> {
+): Promise<MarketValueResult | null> {
   // Fire both requests in parallel — catch both so we can fallback gracefully
   const [searchResult, stats] = await Promise.all([
     searchActiveListings(year, make, model, zip, 100, 10).catch((err) => {
@@ -195,21 +199,15 @@ export async function fetchMarketValue(
     valueLow = Math.round(stats.min || stats.mean * 0.8);
     valueHigh = Math.round(stats.max || stats.mean * 1.2);
   } else if (nearbyListings.length > 0) {
-    // Fallback: calculate from listings
+    // Calculate from listings
     const prices = nearbyListings.map((l) => l.price).sort((a, b) => a - b);
     estimatedValue = prices[Math.floor(prices.length / 2)]; // median
     valueLow = prices[0];
     valueHigh = prices[prices.length - 1];
   } else {
-    // No data from MarketCheck — use a rough estimate based on vehicle age
-    // This handles old/rare vehicles that aren't in dealer inventory
-    console.warn(`[MarketCheck] No data for ${year} ${make} ${model} — using age-based estimate`);
-    const vehicleAge = new Date().getFullYear() - year;
-    // Rough depreciation curve for trucks/vehicles
-    const baseValue = vehicleAge > 25 ? 5000 : vehicleAge > 15 ? 8000 : vehicleAge > 10 ? 12000 : 18000;
-    estimatedValue = baseValue;
-    valueLow = Math.round(baseValue * 0.6);
-    valueHigh = Math.round(baseValue * 1.5);
+    // No data from MarketCheck — return null so the orchestrator can try other sources
+    console.warn(`[MarketCheck] No data for ${year} ${make} ${model}`);
+    return null;
   }
 
   // Rough mileage adjustment: if we have avg miles from stats and actual mileage,

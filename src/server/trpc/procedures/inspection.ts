@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
 import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, extractVinFromPhoto } from "@/lib/ai/media-analyzer";
-import { fetchMarketValue } from "@/lib/marketcheck";
+import { fetchMarketData } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { calculateFairPrice, calculateDealEconomics, type HistoryData } from "@/lib/market-valuation";
 import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult, ConditionAssessment } from "@/types/risk";
@@ -756,13 +756,22 @@ export const inspectionRouter = router({
       const zipMatch = (inspection.location || "").match(/\b(\d{5})\b/);
       const zip = zipMatch ? zipMatch[1] : "97201"; // default Portland, OR
 
-      // Fetch market value + comps from MarketCheck
-      const marketData = await fetchMarketValue(
-        vehicle.year,
-        vehicle.make,
-        vehicle.model,
+      // Fetch market value from multi-source orchestrator (VinAudit → MarketCheck → fallback)
+      const marketData = await fetchMarketData(
+        {
+          vin: vehicle.vin,
+          year: vehicle.year,
+          make: vehicle.make,
+          model: vehicle.model,
+          bodyStyle: vehicle.bodyStyle,
+          drivetrain: vehicle.drivetrain,
+          engine: vehicle.engine,
+          transmission: vehicle.transmission,
+          trim: vehicle.trim,
+          nhtsaData: vehicle.nhtsaData as Record<string, unknown> | null,
+        },
         zip,
-        inspection.odometer || undefined
+        inspection.odometer || undefined,
       );
 
       // Build comparables from nearby listings
@@ -775,7 +784,7 @@ export const inspectionRouter = router({
         url: l.url,
       }));
 
-      // Convert MarketCheck dollar values → cents (DB stores cents)
+      // Convert dollar values → cents (DB stores cents)
       const basePriceCents = Math.round(marketData.estimatedValue * 100);
       const retailPriceCents = Math.round(
         (marketData.valueHigh || marketData.estimatedValue * 1.1) * 100
@@ -868,6 +877,18 @@ export const inspectionRouter = router({
         fairValueAtBaseline: baselineResult.fairPurchasePrice,
         adjustedValueBeforeRecon: fairResult.adjustedValueBeforeRecon,
         priceBands: JSON.parse(JSON.stringify(bands)),
+        // Multi-source pricing metadata
+        dataSource: marketData.dataSource,
+        dataSourceConfidence: marketData.confidence,
+        configPremiums: marketData.configPremiums.length > 0
+          ? JSON.parse(JSON.stringify(marketData.configPremiums))
+          : undefined,
+        configMultiplier: marketData.configMultiplier !== 1.0
+          ? marketData.configMultiplier
+          : undefined,
+        baseValuePreConfig: marketData.baseValuePreConfig !== marketData.estimatedValue
+          ? Math.round(marketData.baseValuePreConfig * 100)
+          : undefined,
       };
 
       // Create or update MarketAnalysis record

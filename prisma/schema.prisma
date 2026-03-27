@@ -445,6 +445,13 @@ model MarketAnalysis {
   overpayingMax            Int?      // PASS threshold price (cents)
   priceBands               Json?     // [{ label, maxPriceCents, marginPercent }]
 
+  // Data source + configuration premiums (multi-source pricing)
+  dataSource            String?   // "vinaudit" | "marketcheck" | "fallback"
+  dataSourceConfidence  Float?    // 0.0-1.0 confidence in the base price
+  configPremiums        Json?     // [{ factor, multiplier, explanation }]
+  configMultiplier      Float?    // Combined config premium multiplier
+  baseValuePreConfig    Int?      // Base value before config premiums applied (cents)
+
   inspectionId String     @unique
   inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
 
