@@ -6,9 +6,15 @@ import { fetchMarketData } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
 import { reportSuccess, reportFailure } from "@/lib/api-health";
-import { calculateFairPrice, calculateDealEconomics, type HistoryData } from "@/lib/market-valuation";
+import { calculateFairPrice, calculateDealEconomics, getConditionGrade, type HistoryData } from "@/lib/market-valuation";
+import { classifyBody, type VehicleConfig } from "@/lib/config-premiums";
 import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult, ConditionAssessment } from "@/types/risk";
 import { persistConditionScores } from "@/lib/scoring";
+import { analyzeHistoryImpact } from "@/lib/ai/history-adjuster";
+import { analyzeConditionValue } from "@/lib/ai/condition-adjuster";
+import { estimateReconCosts } from "@/lib/ai/recon-estimator";
+import { rateDeal } from "@/lib/ai/deal-rater";
+import { auditPrice } from "@/lib/ai/price-auditor";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -846,46 +852,165 @@ export const inspectionRouter = router({
             openRecallCount: 0,
           };
 
-      // Recon cost from findings (already in cents in DB)
-      const totalRepairLow = inspection.findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
-      const totalRepairHigh = inspection.findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
-      const reconCostCents = Math.round((totalRepairLow + totalRepairHigh) / 2);
+      // ── AI-Powered Valuation ──────────────────────────────────────
+      const bodyCategory = classifyBody(vehicle as VehicleConfig);
 
-      // Fair value at baseline (score 85 = good condition, no recon) — the reference point
+      // Parallel batch: History + Condition + Recon (all independent)
+      const [aiHistoryResult, aiConditionResult, aiReconResult] = await Promise.all([
+        analyzeHistoryImpact({
+          vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim },
+          bodyCategory,
+          baseMarketValue: marketData.estimatedValue,
+          history: historyData,
+          conditionScore,
+          mileage: inspection.odometer || undefined,
+        }),
+        analyzeConditionValue({
+          vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model },
+          mileage: inspection.odometer || undefined,
+          baseMarketValue: marketData.estimatedValue,
+          bodyCategory,
+          conditionScore,
+          areaScores: {
+            exteriorBody: inspection.exteriorBodyScore ?? undefined,
+            interior: inspection.interiorScore ?? undefined,
+            mechanicalVisual: inspection.mechanicalVisualScore ?? undefined,
+            underbodyFrame: inspection.underbodyFrameScore ?? undefined,
+          },
+          keyObservations: inspection.conditionSummary ? [inspection.conditionSummary] : undefined,
+          conditionAttenuation: marketData.conditionAttenuation,
+        }),
+        estimateReconCosts({
+          vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim, engine: vehicle.engine },
+          zip,
+          mileage: inspection.odometer || undefined,
+          findings: inspection.findings
+            .filter((f) => f.repairCostLow || f.repairCostHigh)
+            .map((f) => ({
+              title: f.title,
+              costLow: f.repairCostLow || undefined,
+              costHigh: f.repairCostHigh || undefined,
+              category: f.category || undefined,
+              severity: f.severity || undefined,
+            })),
+          baseMarketValue: marketData.estimatedValue,
+        }),
+      ]);
+
+      const aiConditionMultiplier = aiConditionResult.result.conditionMultiplier;
+      const aiHistoryMultiplier = aiHistoryResult.result.historyMultiplier;
+      const aiReconCostCents = aiReconResult.result.totalReconCost;
+
+      // Compute fair price: base × condition × history - recon
+      const adjustedValueBeforeRecon = Math.round(basePriceCents * aiConditionMultiplier * aiHistoryMultiplier);
+      const minFloor = Math.round(basePriceCents * 0.05); // 5% floor
+      const fairPurchasePrice = Math.max(minFloor, adjustedValueBeforeRecon - aiReconCostCents);
+
+      // Baseline (what car would be worth in good condition, no recon)
       const baselineResult = calculateFairPrice(basePriceCents, 85, historyData, 0, marketData.conditionAttenuation);
 
-      // Actual fair value for THIS specific car
-      const fairResult = calculateFairPrice(basePriceCents, conditionScore, historyData, reconCostCents, marketData.conditionAttenuation);
+      // Build fairResult-like object for downstream compat
+      const fairResult = {
+        fairPurchasePrice,
+        baseMarketValue: basePriceCents,
+        conditionMultiplier: aiConditionMultiplier,
+        conditionGrade: getConditionGrade(conditionScore),
+        historyMultiplier: aiHistoryMultiplier,
+        historyBreakdown: {
+          titleFactor: aiHistoryResult.result.breakdown.titleImpact.factor,
+          accidentFactor: aiHistoryResult.result.breakdown.accidentImpact.factor,
+          ownerFactor: aiHistoryResult.result.breakdown.ownerImpact.factor,
+          structuralDamageFactor: aiHistoryResult.result.breakdown.structuralImpact.factor,
+          floodDamageFactor: aiHistoryResult.result.breakdown.floodImpact.factor,
+          recallFactor: aiHistoryResult.result.breakdown.recallImpact.factor,
+        },
+        adjustedValueBeforeRecon,
+        estReconCost: aiReconCostCents,
+      };
 
-      // Price bands around the fair value
-      const dealEcon = calculateDealEconomics(
-        fairResult.fairPurchasePrice,
-        retailPriceCents,
-        conditionScore,
-        historyData,
+      console.log(
+        `[Inspection] AI Valuation: condition=${aiConditionMultiplier.toFixed(3)}x (tier ${aiConditionResult.fallbackTier}), ` +
+        `history=${aiHistoryMultiplier.toFixed(3)}x (tier ${aiHistoryResult.fallbackTier}), ` +
+        `recon=$${(aiReconCostCents / 100).toLocaleString()} (tier ${aiReconResult.fallbackTier}), ` +
+        `fairPrice=$${(fairPurchasePrice / 100).toLocaleString()}`,
       );
 
-      // Derive recommendation: compare fair value against bands
-      const bands = dealEcon.priceBands;
-      let recommendation: string;
-      const hasDealBreaker =
-        conditionScore < 40 ||
-        historyData.floodDamage ||
-        historyData.titleStatus.toUpperCase().includes("SALVAGE");
+      // History summary for deal rater
+      const historySummary = [
+        `Title: ${historyData.titleStatus}`,
+        historyData.accidentCount > 0 ? `${historyData.accidentCount} accident(s)` : null,
+        historyData.structuralDamage ? "Structural damage" : null,
+        historyData.floodDamage ? "Flood damage" : null,
+        `${historyData.ownerCount} owner(s)`,
+      ].filter(Boolean).join(", ");
 
-      if (hasDealBreaker) {
-        recommendation = "PASS";
-      } else if (fairResult.fairPurchasePrice <= bands[0].maxPriceCents) {
-        recommendation = "STRONG_BUY";
-      } else if (fairResult.fairPurchasePrice <= bands[1].maxPriceCents) {
-        recommendation = "FAIR_BUY";
-      } else if (fairResult.fairPurchasePrice <= bands[2].maxPriceCents) {
-        recommendation = "OVERPAYING";
+      // Sequential: Deal rating (needs fair price)
+      const aiDealResult = await rateDeal({
+        vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim },
+        fairPurchasePrice,
+        baseMarketValue: basePriceCents,
+        retailValue: retailPriceCents,
+        conditionScore,
+        historyMultiplier: aiHistoryMultiplier,
+        historySummary,
+        reconCostCents: aiReconCostCents,
+        mileage: inspection.odometer || undefined,
+        nearbyListingCount: marketData.nearbyListings.length || undefined,
+      });
+
+      // Sequential: Price auditor (cross-validation)
+      const aiAuditResult = await auditPrice({
+        vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim, engine: vehicle.engine },
+        mileage: inspection.odometer || undefined,
+        sourcePrices: marketData.sourceResults
+          .filter((s) => s.estimatedValue > 0)
+          .map((s) => ({ source: s.source, value: s.estimatedValue })),
+        consensusValue: marketData.baseValuePreConfig,
+        consensusReasoning: marketData.aiMetadata?.consensusReasoning || "",
+        configMultiplier: marketData.configMultiplier,
+        configReasoning: marketData.aiMetadata?.configReasoning || "",
+        regionalMultiplier: marketData.estimatedValue / (marketData.baseValuePreConfig * marketData.configMultiplier) || 1.0,
+        regionalReasoning: marketData.aiMetadata?.geoReasoning || "",
+        adjustedBaseValueCents: basePriceCents,
+        conditionMultiplier: aiConditionMultiplier,
+        conditionScore,
+        conditionReasoning: aiConditionResult.result.reasoning,
+        historyMultiplier: aiHistoryMultiplier,
+        historyReasoning: aiHistoryResult.result.combinedReasoning,
+        historySummary,
+        reconCostCents: aiReconCostCents,
+        reconReasoning: aiReconResult.result.totalReasoning,
+        fairPurchasePrice,
+        dealRating: aiDealResult.result.rating,
+        dealReasoning: aiDealResult.result.reasoning,
+      });
+
+      // Apply auditor correction if not approved
+      let finalFairPurchasePrice = fairPurchasePrice;
+      if (!aiAuditResult.result.approved && aiAuditResult.result.adjustedFairPrice) {
+        console.warn(
+          `[Inspection] ⚠ Price auditor REJECTED — flags: ${aiAuditResult.result.flags.join("; ")}`,
+        );
+        console.warn(
+          `[Inspection] Adjusting fair price: $${(fairPurchasePrice / 100).toLocaleString()} → $${(aiAuditResult.result.adjustedFairPrice / 100).toLocaleString()}`,
+        );
+        finalFairPurchasePrice = aiAuditResult.result.adjustedFairPrice;
       } else {
-        recommendation = "PASS";
+        console.log(
+          `[Inspection] Price auditor APPROVED (coherence: ${(aiAuditResult.result.coherenceScore * 100).toFixed(0)}%)`,
+        );
       }
 
-      const estGrossProfit = retailPriceCents - fairResult.fairPurchasePrice - reconCostCents;
+      // Use AI deal rating bands
+      const bands = [
+        { label: "STRONG_BUY" as const, maxPriceCents: aiDealResult.result.priceBands.strongBuyMax, marginPercent: 0.15 },
+        { label: "FAIR_BUY" as const, maxPriceCents: aiDealResult.result.priceBands.fairBuyMax, marginPercent: 0.05 },
+        { label: "OVERPAYING" as const, maxPriceCents: aiDealResult.result.priceBands.overpayingMax, marginPercent: 0 },
+        { label: "PASS" as const, maxPriceCents: aiDealResult.result.priceBands.overpayingMax, marginPercent: 0 },
+      ];
+
+      const recommendation = aiDealResult.result.rating;
+      const estGrossProfit = retailPriceCents - finalFairPurchasePrice - aiReconCostCents;
 
       // Shared data object for create/update
       const marketAnalysisData = {
@@ -896,13 +1021,13 @@ export const inspectionRouter = router({
           conditionDelta: fairResult.adjustedValueBeforeRecon - basePriceCents,
           historyDelta: Math.round(basePriceCents * fairResult.conditionMultiplier * (fairResult.historyMultiplier - 1)),
         })),
-        adjustedPrice: fairResult.fairPurchasePrice,
+        adjustedPrice: finalFairPurchasePrice,
         recommendation: recommendation as never,
         strongBuyMax: bands[0].maxPriceCents,
         fairBuyMax: bands[1].maxPriceCents,
         overpayingMax: bands[2].maxPriceCents,
         estRetailPrice: retailPriceCents,
-        estReconCost: reconCostCents,
+        estReconCost: aiReconCostCents,
         estGrossProfit,
         conditionScore,
         conditionMultiplier: fairResult.conditionMultiplier,

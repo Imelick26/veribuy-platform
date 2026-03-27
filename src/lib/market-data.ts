@@ -32,10 +32,14 @@ import { zipToState, getRegionalMultiplier } from "./geo-pricing";
 import {
   calculateConsensus,
   selectTierPrices,
+  mapConditionToTier,
   type SourceEstimate,
   type ConsensusResult,
 } from "./pricing-consensus";
 import type { NormalizedListing } from "./marketcheck";
+import { analyzeConsensusWeights } from "./ai/consensus-weighter";
+import { analyzeConfigPremiums } from "./ai/config-premium-analyzer";
+import { analyzeRegionalPricing } from "./ai/geo-pricing-analyzer";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -84,6 +88,16 @@ export interface MarketDataResult {
   conditionAttenuation: number;
   /** Number of sources that contributed */
   sourceCount: number;
+
+  /** AI valuation metadata */
+  aiMetadata?: {
+    consensusTier: number;
+    configPremiumTier: number;
+    geoPricingTier: number;
+    consensusReasoning?: string;
+    configReasoning?: string;
+    geoReasoning?: string;
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -521,24 +535,71 @@ export async function fetchMarketData(
     }
   }
 
-  // ── Calculate consensus ──────────────────────────────────────────
-  const consensus: ConsensusResult = calculateConsensus(sourceEstimates);
+  // ── AI Consensus Weighting ──────────────────────────────────────
+  const bodyCategory = classifyBody(vehicle);
+  const conditionTier = mapConditionToTier(conditionScore);
+
+  const aiConsensus = await analyzeConsensusWeights({
+    vehicle: {
+      year: vehicle.year, make: vehicle.make, model: vehicle.model,
+      trim: vehicle.trim, engine: vehicle.engine, drivetrain: vehicle.drivetrain,
+      transmission: vehicle.transmission,
+    },
+    mileage,
+    conditionScore,
+    conditionTier,
+    sourceEstimates,
+  });
+
+  // Build a ConsensusResult-shaped object from AI result for downstream compat
+  const cr = aiConsensus.result;
+  const consensus: ConsensusResult = {
+    estimatedValue: cr.consensusValue,
+    tradeInValue: cr.tradeInValue,
+    dealerRetailValue: cr.dealerRetailValue,
+    wholesaleValue: cr.wholesaleValue,
+    loanValue: cr.loanValue,
+    confidence: cr.confidenceAssessment,
+    primarySource: (Object.entries(cr.sourceWeights).sort((a, b) => b[1] - a[1])[0]?.[0] || "fallback") as ConsensusResult["primarySource"],
+    consensusMethod: aiConsensus.fallbackTier === 3 ? "weighted-median" : "weighted-median",
+    sourceResults: sourceEstimates,
+    configPremiumMode: cr.configPremiumMode,
+    conditionAttenuation: cr.conditionAttenuation,
+    sourceCount: sourceEstimates.filter((s) => s.estimatedValue > 0).length,
+  };
 
   console.log(
-    `[MarketData] Consensus (${consensus.consensusMethod}, ${consensus.sourceCount} sources): ` +
+    `[MarketData] AI Consensus (tier ${aiConsensus.fallbackTier}, ${consensus.sourceCount} sources): ` +
     `$${consensus.estimatedValue} PP | $${consensus.wholesaleValue} WS | $${consensus.loanValue} Loan | ` +
-    `Primary: ${consensus.primarySource} | Confidence: ${(consensus.confidence * 100).toFixed(0)}%`,
+    `Confidence: ${(consensus.confidence * 100).toFixed(0)}%` +
+    (aiConsensus.reasoning ? ` — ${aiConsensus.reasoning}` : ""),
   );
 
-  // ── Apply configuration premiums ─────────────────────────────────
-  const { premiums, combinedMultiplier } = calculateConfigPremiums(
-    vehicle,
-    consensus.configPremiumMode,
-  );
+  // ── AI Config Premiums + AI Regional Pricing (parallel) ─────────
+  const nearbyListingPrices = allListings.filter((l) => l.price > 0).map((l) => l.price);
+  const nearbyListingTitles = allListings.slice(0, 10).map((l) => ({ title: l.title || `${vehicle.year} ${vehicle.make} ${vehicle.model}`, price: l.price }));
 
-  // ── Apply regional pricing multiplier ──────────────────────────
-  const bodyCategory = classifyBody(vehicle);
-  const regionalMultiplier = getRegionalMultiplier(state, bodyCategory);
+  const [aiConfigResult, aiGeoResult] = await Promise.all([
+    analyzeConfigPremiums({
+      vehicle,
+      bodyCategory,
+      baseConsensusValue: consensus.estimatedValue,
+      premiumMode: consensus.configPremiumMode,
+      nearbyListings: nearbyListingTitles,
+    }),
+    analyzeRegionalPricing({
+      vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim },
+      bodyCategory,
+      zip,
+      state,
+      baseValue: consensus.estimatedValue,
+      nearbyListingPrices: nearbyListingPrices.length > 0 ? nearbyListingPrices : undefined,
+    }),
+  ]);
+
+  const premiums: ConfigPremium[] = aiConfigResult.result.premiums;
+  const combinedMultiplier = aiConfigResult.result.configMultiplier;
+  const regionalMultiplier = aiGeoResult.result.regionalMultiplier;
 
   // Combined adjustment = config premiums × regional multiplier
   const totalMultiplier = combinedMultiplier * regionalMultiplier;
@@ -551,12 +612,12 @@ export async function fetchMarketData(
 
   if (premiums.length > 0 || regionalMultiplier !== 1.0) {
     console.log(
-      `[MarketData] Config premiums (${consensus.configPremiumMode} mode, ${combinedMultiplier.toFixed(2)}x): ` +
+      `[MarketData] AI Config (tier ${aiConfigResult.fallbackTier}, ${consensus.configPremiumMode} mode, ${combinedMultiplier.toFixed(2)}x): ` +
       `${premiums.map((p) => p.factor).join(", ") || "none"}`,
     );
     if (regionalMultiplier !== 1.0) {
       console.log(
-        `[MarketData] Regional: ${state} ${bodyCategory} → ${regionalMultiplier.toFixed(2)}x`,
+        `[MarketData] AI Regional (tier ${aiGeoResult.fallbackTier}): ${state} ${bodyCategory} → ${regionalMultiplier.toFixed(2)}x`,
       );
     }
     console.log(
@@ -590,5 +651,14 @@ export async function fetchMarketData(
     configPremiumMode: consensus.configPremiumMode,
     conditionAttenuation: consensus.conditionAttenuation,
     sourceCount: consensus.sourceCount,
+
+    aiMetadata: {
+      consensusTier: aiConsensus.fallbackTier,
+      configPremiumTier: aiConfigResult.fallbackTier,
+      geoPricingTier: aiGeoResult.fallbackTier,
+      consensusReasoning: aiConsensus.reasoning,
+      configReasoning: aiConfigResult.result.combinedReasoning,
+      geoReasoning: aiGeoResult.result.reasoning,
+    },
   };
 }

@@ -1,0 +1,226 @@
+/**
+ * AI-Powered Price Auditor — Cross-Validation Safety Net
+ *
+ * Reviews the fully assembled pricing result for coherence before it ships.
+ * Catches cases where individual AI modules produced reasonable-looking
+ * outputs that don't make sense when combined:
+ *   - Config premium misapplied (Lariat is NOT a performance trim)
+ *   - History multiplier too lenient for salvage title
+ *   - Recon cost contradicts condition score
+ *   - Final price outside plausible range for this vehicle
+ *
+ * This is the last line of defense — one bad price kills trust.
+ *
+ * Cost: ~$0.04-0.08 per call (GPT-4o, needs full context)
+ */
+
+import { validatedAICall, type AIResult, type ValidationResult } from "./validate-and-retry";
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface PriceAuditInput {
+  vehicle: {
+    year: number;
+    make: string;
+    model: string;
+    trim?: string | null;
+    engine?: string | null;
+  };
+  mileage?: number;
+
+  /** All source prices for reference */
+  sourcePrices: { source: string; value: number }[];
+
+  /** AI consensus value (dollars) */
+  consensusValue: number;
+  consensusReasoning: string;
+
+  /** Config premium applied */
+  configMultiplier: number;
+  configReasoning: string;
+
+  /** Regional multiplier */
+  regionalMultiplier: number;
+  regionalReasoning: string;
+
+  /** Base market value AFTER config + regional (cents) */
+  adjustedBaseValueCents: number;
+
+  /** Condition multiplier */
+  conditionMultiplier: number;
+  conditionScore: number;
+  conditionReasoning: string;
+
+  /** History multiplier */
+  historyMultiplier: number;
+  historyReasoning: string;
+  historySummary: string;
+
+  /** Recon cost */
+  reconCostCents: number;
+  reconReasoning: string;
+
+  /** Final fair purchase price (cents) */
+  fairPurchasePrice: number;
+
+  /** Deal rating */
+  dealRating: string;
+  dealReasoning: string;
+}
+
+export interface PriceAuditResult {
+  approved: boolean;
+  adjustedFairPrice: number | null;
+  flags: string[];
+  coherenceScore: number;
+  reasoning: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Core Function                                                      */
+/* ------------------------------------------------------------------ */
+
+export async function auditPrice(
+  input: PriceAuditInput,
+): Promise<AIResult<PriceAuditResult>> {
+  const { vehicle, mileage } = input;
+  const vehicleDesc = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""}${vehicle.engine ? `, ${vehicle.engine}` : ""}`;
+  const fairDollars = Math.round(input.fairPurchasePrice / 100);
+  const baseDollars = Math.round(input.adjustedBaseValueCents / 100);
+  const reconDollars = Math.round(input.reconCostCents / 100);
+
+  const sourceSummary = input.sourcePrices.map((s) => `${s.source}: $${s.value.toLocaleString()}`).join(", ");
+
+  return validatedAICall<PriceAuditResult>({
+    label: "[PriceAuditor]",
+
+    primary: {
+      model: "gpt-4o",
+      systemPrompt: `You are a pricing quality auditor for a vehicle valuation platform. Your job is to review a fully assembled pricing result and check for coherence issues.
+
+You should flag issues like:
+- Config premium misapplied (e.g., Lariat/XLT treated like a performance trim)
+- History multiplier inconsistent with title status severity
+- Condition multiplier doesn't match the condition score magnitude
+- Recon cost inconsistent with condition findings
+- Final price outside plausible range for this year/make/model/trim
+- Individual reasoning contradicts the numbers
+- Double-counting (condition penalized twice, etc.)
+
+ONLY flag real issues. Don't flag things that are correct but unusual.
+If everything looks reasonable, approve with high coherence score.`,
+      userPrompt: `Audit this pricing result for coherence:
+
+VEHICLE: ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} miles` : ""}
+
+SOURCE PRICES: ${sourceSummary}
+
+PRICING CHAIN:
+1. Consensus: $${input.consensusValue.toLocaleString()} — "${input.consensusReasoning}"
+2. Config premium: ${input.configMultiplier.toFixed(3)}x — "${input.configReasoning}"
+3. Regional: ${input.regionalMultiplier.toFixed(3)}x — "${input.regionalReasoning}"
+4. Adjusted base: $${baseDollars.toLocaleString()} (consensus × config × regional)
+5. Condition: ${input.conditionMultiplier.toFixed(3)}x (score ${input.conditionScore}/100) — "${input.conditionReasoning}"
+6. History: ${input.historyMultiplier.toFixed(3)}x (${input.historySummary}) — "${input.historyReasoning}"
+7. Recon: -$${reconDollars.toLocaleString()} — "${input.reconReasoning}"
+8. FAIR PURCHASE PRICE: $${fairDollars.toLocaleString()}
+9. Deal rating: ${input.dealRating} — "${input.dealReasoning}"
+
+Return JSON:
+{
+  "approved": boolean,
+  "adjustedFairPrice": number | null (in CENTS — only if not approved, your corrected estimate),
+  "flags": ["list of specific issues found"],
+  "coherenceScore": number (0.0-1.0, how internally consistent is this result),
+  "reasoning": "2-3 sentences explaining your audit conclusion"
+}`,
+      temperature: 0.1,
+      maxTokens: 800,
+    },
+
+    validate: (parsed: unknown): ValidationResult<PriceAuditResult> => {
+      const p = parsed as Record<string, unknown>;
+      const errors: string[] = [];
+
+      if (typeof p.approved !== "boolean") {
+        errors.push("approved must be boolean");
+      }
+
+      const cs = Number(p.coherenceScore);
+      if (isNaN(cs) || cs < 0 || cs > 1) {
+        errors.push("coherenceScore must be 0.0-1.0");
+      }
+
+      if (!p.reasoning || typeof p.reasoning !== "string") {
+        errors.push("reasoning missing");
+      }
+
+      // If not approved, adjustedFairPrice is required
+      if (p.approved === false) {
+        let adj = Number(p.adjustedFairPrice);
+        if (!adj || adj <= 0) {
+          errors.push("adjustedFairPrice required when not approved");
+        } else {
+          // Detect if in dollars (< 10000 for any vehicle is likely dollars, not cents)
+          if (adj < 10000 && fairDollars > 1000) {
+            // Likely in dollars, convert to cents
+            adj = adj * 100;
+          }
+          // Must be within 50% of original
+          if (Math.abs(adj - input.fairPurchasePrice) / input.fairPurchasePrice > 0.50) {
+            errors.push(`adjustedFairPrice ${adj} is >50% different from original ${input.fairPurchasePrice}`);
+          }
+        }
+      }
+
+      if (errors.length > 0) {
+        return { valid: false, partial: p, errors };
+      }
+
+      let adjustedPrice: number | null = null;
+      if (p.approved === false && p.adjustedFairPrice) {
+        adjustedPrice = Number(p.adjustedFairPrice);
+        // Auto-detect dollars vs cents
+        if (adjustedPrice < 10000 && fairDollars > 1000) {
+          adjustedPrice = adjustedPrice * 100;
+        }
+        adjustedPrice = Math.round(adjustedPrice);
+      }
+
+      return {
+        valid: true,
+        data: {
+          approved: Boolean(p.approved),
+          adjustedFairPrice: adjustedPrice,
+          flags: Array.isArray(p.flags) ? (p.flags as string[]).map(String) : [],
+          coherenceScore: Math.max(0, Math.min(1, cs)),
+          reasoning: String(p.reasoning),
+        },
+      };
+    },
+
+    buildFollowUp: (partial, errors) => {
+      return `Your response had issues: ${errors.join("; ")}. Return corrected JSON: { "approved": boolean, "adjustedFairPrice": number|null (in CENTS, required if not approved), "flags": string[], "coherenceScore": 0-1, "reasoning": string }. JSON only.`;
+    },
+
+    simplified: {
+      model: "gpt-4o",
+      buildPrompt: () => {
+        return `Quick audit: A ${vehicleDesc} priced at $${fairDollars.toLocaleString()} fair purchase price. Consensus $${input.consensusValue.toLocaleString()}, config ${input.configMultiplier.toFixed(2)}x, condition ${input.conditionScore}/100 (${input.conditionMultiplier.toFixed(2)}x), history ${input.historyMultiplier.toFixed(2)}x, -$${reconDollars.toLocaleString()} recon. Does this make sense? Return JSON: { "approved": boolean, "adjustedFairPrice": number|null (cents, if not approved), "flags": string[], "coherenceScore": 0-1, "reasoning": string }`;
+      },
+    },
+
+    emergencyFallback: () => {
+      // If auditor fails, approve by default (don't block the pipeline)
+      return {
+        approved: true,
+        adjustedFairPrice: null,
+        flags: ["Price auditor unavailable — auto-approved"],
+        coherenceScore: 0.5,
+        reasoning: "Emergency fallback — auditor AI unavailable, auto-approved",
+      };
+    },
+  });
+}
