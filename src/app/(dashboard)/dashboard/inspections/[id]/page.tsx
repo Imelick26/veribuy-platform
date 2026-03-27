@@ -577,6 +577,53 @@ export default function InspectionDetailPage({
         </div>
       )}
 
+      {/* Completion Panel — shown when inspection is done */}
+      {isCompleted && (
+        <Card className="border-green-200 bg-green-50/30">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle className="h-6 w-6 text-green-700" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-green-800">Inspection Complete</h3>
+              <p className="text-sm text-green-700">
+                All {inspection.steps.length} steps finished
+                {inspection.report ? ` · Report ${inspection.report.number}` : ""}
+              </p>
+            </div>
+          </div>
+
+          {inspection.report ? (
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-brand-gradient text-white hover:opacity-90"
+                onClick={() => setShowReportModal(true)}
+              >
+                <FileText className="h-4 w-4" /> View Report
+              </Button>
+              {inspection.report.pdfUrl && (
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => window.open(inspection.report!.pdfUrl!, "_blank")}
+                >
+                  <ArrowLeft className="h-4 w-4 rotate-[135deg]" /> Download PDF
+                </Button>
+              )}
+            </div>
+          ) : (
+            <Button
+              onClick={() => generateReport.mutate({ inspectionId: id })}
+              loading={generateReport.isPending}
+              className="w-full bg-brand-gradient text-white hover:opacity-90"
+            >
+              <FileText className="h-4 w-4" />
+              {generateReport.isPending ? "Generating..." : "Generate Report"}
+            </Button>
+          )}
+        </Card>
+      )}
+
       {/* Active Step Panel */}
       {!isCompleted && !isCancelled && (
         <StepPanel
