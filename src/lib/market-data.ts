@@ -1,14 +1,16 @@
 /**
- * Market Data Orchestrator (v2 — Multi-Source Consensus)
+ * Market Data Orchestrator (v3 — 6-Source Consensus)
  *
- * Fetches vehicle market value from up to 3 API sources in parallel,
+ * Fetches vehicle market value from up to 5 API sources in parallel,
  * then combines them using a weighted consensus algorithm.
  *
  * Sources (parallel fan-out via Promise.allSettled):
- *   1. VehicleDatabases.com — condition-tiered pricing (primary)
- *   2. VinAudit — VIN-based market value
- *   3. MarketCheck — real dealer inventory
- *   4. Category-aware fallback curves (always available, lowest weight)
+ *   1. Black Book — wholesale + retail (condition-tiered)
+ *   2. VehicleDatabases.com — condition-tiered retail pricing
+ *   3. NADA Guides — dealer/lender standard with loan value
+ *   4. VinAudit — VIN-based market value
+ *   5. MarketCheck — real dealer inventory
+ *   6. Category-aware fallback curves (always available, lowest weight)
  *
  * After consensus, configuration premiums are applied with a mode
  * determined by the consensus engine (full/partial/none).
@@ -16,13 +18,17 @@
 
 import { fetchVehicleDatabasesData } from "./vehicledatabases";
 import { fetchMarketValue as fetchVinAuditValue } from "./vinaudit";
+import { reportSuccess, reportFailure, reportMissingKey } from "./api-health";
 import { fetchMarketCheckData } from "./marketcheck";
+import { fetchNADAValuation, fetchNADAByYMM } from "./nada-guides";
+import { fetchBlackBookValuation, fetchBlackBookByYMM, mapScoreToBBCondition } from "./blackbook";
 import {
   calculateConfigPremiums,
   classifyBody,
   type ConfigPremium,
   type VehicleConfig,
 } from "./config-premiums";
+import { zipToState, getRegionalMultiplier } from "./geo-pricing";
 import {
   calculateConsensus,
   selectTierPrices,
@@ -58,10 +64,12 @@ export interface MarketDataResult {
   /** Combined config premium multiplier */
   configMultiplier: number;
 
-  /** Three-perspective pricing (dollars) */
+  /** Five-perspective pricing (dollars) */
   tradeInValue: number;
   privatePartyValue: number;
   dealerRetailValue: number;
+  wholesaleValue: number;
+  loanValue: number;
 
   /** VDB condition tier used (if applicable) */
   vdbConditionTier: string | null;
@@ -74,6 +82,8 @@ export interface MarketDataResult {
   configPremiumMode: "full" | "partial" | "none";
   /** Condition attenuation factor applied */
   conditionAttenuation: number;
+  /** Number of sources that contributed */
+  sourceCount: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -113,18 +123,59 @@ function getAgeBracket(age: number): string {
   return "30+";
 }
 
-function getFallbackEstimate(vehicle: VehicleConfig): SourceEstimate {
+/**
+ * Average annual mileage by vehicle category (industry data).
+ * Used for mileage adjustment on sources that don't account for mileage.
+ */
+const AVG_ANNUAL_MILES: Record<string, number> = {
+  truck: 13500,   // trucks driven more (towing, rural)
+  suv: 12500,
+  sedan: 12000,
+  sports: 8000,   // sports cars driven less (weekend cars)
+  other: 12000,
+};
+
+/**
+ * Per-mile adjustment rate by price tier.
+ * Higher-value vehicles lose more per excess mile.
+ * Expressed as dollars per mile of deviation from expected.
+ */
+function getMileageAdjustmentRate(baseValue: number): number {
+  if (baseValue >= 50000) return 0.15;   // $0.15/mi for expensive vehicles
+  if (baseValue >= 30000) return 0.12;
+  if (baseValue >= 15000) return 0.08;
+  if (baseValue >= 8000) return 0.05;
+  return 0.03;                           // cheap cars: mileage matters less
+}
+
+function getFallbackEstimate(vehicle: VehicleConfig, mileage?: number): SourceEstimate {
   const bodyType = classifyBody(vehicle);
   const age = new Date().getFullYear() - vehicle.year;
   const bracket = getAgeBracket(age);
   const curve = FALLBACK_CURVES[bodyType] || FALLBACK_CURVES.other;
-  const estimated = curve[bracket] || 5000;
+  let estimated = curve[bracket] || 5000;
+
+  // Apply mileage adjustment — compare actual to expected
+  if (mileage && age > 0) {
+    const avgAnnual = AVG_ANNUAL_MILES[bodyType] || 12000;
+    const expectedMiles = avgAnnual * age;
+    const milesDelta = mileage - expectedMiles; // positive = over-mileage
+    const rate = getMileageAdjustmentRate(estimated);
+    const adjustment = Math.round(milesDelta * rate);
+
+    // Cap adjustment at ±30% of base value
+    const maxAdj = Math.round(estimated * 0.30);
+    const clampedAdj = Math.max(-maxAdj, Math.min(maxAdj, adjustment));
+    estimated = Math.max(1000, estimated - clampedAdj);
+  }
 
   return {
     source: "fallback",
     estimatedValue: estimated,
     tradeInValue: Math.round(estimated * 0.75),
     dealerRetailValue: Math.round(estimated * 1.25),
+    wholesaleValue: Math.round(estimated * 0.65),
+    loanValue: Math.round(estimated * 0.80),
     confidence: 0.25,
     isConditionTiered: false,
   };
@@ -133,6 +184,46 @@ function getFallbackEstimate(vehicle: VehicleConfig): SourceEstimate {
 /* ------------------------------------------------------------------ */
 /*  Source Fetchers (return SourceEstimate | null)                      */
 /* ------------------------------------------------------------------ */
+
+async function fetchBlackBookSource(
+  vin: string,
+  vehicle: VehicleConfig,
+  mileage: number | undefined,
+  state: string,
+  conditionScore: number,
+): Promise<SourceEstimate | null> {
+  // Try VIN first, fallback to YMM
+  let result = await fetchBlackBookValuation(vin, mileage, state);
+  if (!result) {
+    result = await fetchBlackBookByYMM(vehicle.year, vehicle.make, vehicle.model, mileage, state);
+  }
+  if (!result) return null;
+
+  // Pick condition-appropriate values
+  const condition = mapScoreToBBCondition(conditionScore);
+
+  const wholesaleVal = result.adjustedWholesale[condition] || result.wholesale[condition] || 0;
+  const retailVal = result.adjustedRetail[condition] || result.retail[condition] || 0;
+  const tradeInVal = condition === "extra_clean"
+    ? result.tradeIn.clean // no extra_clean for trade-in, use clean
+    : (result.tradeIn as Record<string, number>)[condition] || 0;
+
+  // Private party estimate = midpoint of wholesale and retail
+  const estimatedValue = Math.round((wholesaleVal + retailVal) / 2) || retailVal || wholesaleVal;
+  if (estimatedValue <= 0) return null;
+
+  return {
+    source: "blackbook",
+    estimatedValue,
+    tradeInValue: tradeInVal || Math.round(estimatedValue * 0.85),
+    dealerRetailValue: retailVal || Math.round(estimatedValue * 1.15),
+    wholesaleValue: wholesaleVal || Math.round(estimatedValue * 0.78),
+    loanValue: 0, // Black Book doesn't provide loan value
+    confidence: 0.90,
+    isConditionTiered: true,
+    raw: { condition, wholesale: wholesaleVal, retail: retailVal, tradeIn: tradeInVal },
+  };
+}
 
 async function fetchVDBSource(
   vin: string,
@@ -155,11 +246,58 @@ async function fetchVDBSource(
       estimatedValue,
       tradeInValue: prices.tradeIn,
       dealerRetailValue: prices.dealerRetail,
+      wholesaleValue: Math.round(prices.tradeIn * 0.90), // estimate wholesale from trade-in
+      loanValue: 0,
       confidence: 0.90,
       isConditionTiered: true,
       raw: { tier, allTiers: result.tiers },
     },
     tier,
+  };
+}
+
+async function fetchNADASource(
+  vin: string,
+  vehicle: VehicleConfig,
+  mileage: number | undefined,
+  conditionScore: number,
+): Promise<SourceEstimate | null> {
+  // Try VIN first (pass year to help resolve), fallback to YMM
+  let result = await fetchNADAValuation(vin, mileage, vehicle.year);
+  if (!result) {
+    result = await fetchNADAByYMM(vehicle.year, vehicle.make, vehicle.model, mileage);
+  }
+  if (!result) return null;
+
+  // Pick condition-appropriate values
+  let retailVal: number;
+  let tradeInVal: number;
+
+  if (conditionScore >= 75) {
+    retailVal = result.retailClean;
+    tradeInVal = result.tradeInClean;
+  } else if (conditionScore >= 50) {
+    retailVal = result.retailAverage;
+    tradeInVal = result.tradeInAverage;
+  } else {
+    retailVal = result.retailRough;
+    tradeInVal = result.tradeInRough;
+  }
+
+  // Private party = midpoint of trade-in and retail
+  const estimatedValue = Math.round((tradeInVal + retailVal) / 2) || retailVal || tradeInVal;
+  if (estimatedValue <= 0) return null;
+
+  return {
+    source: "nada",
+    estimatedValue,
+    tradeInValue: tradeInVal || Math.round(estimatedValue * 0.85),
+    dealerRetailValue: retailVal || Math.round(estimatedValue * 1.15),
+    wholesaleValue: 0, // NADA doesn't provide wholesale
+    loanValue: result.loanValue || Math.round(tradeInVal * 1.05),
+    confidence: 0.85,
+    isConditionTiered: true,
+    raw: result,
   };
 }
 
@@ -175,6 +313,8 @@ async function fetchVinAuditSource(
     estimatedValue: result.estimatedValue,
     tradeInValue: Math.round(result.estimatedValue * 0.82),
     dealerRetailValue: result.valueHigh || Math.round(result.estimatedValue * 1.2),
+    wholesaleValue: 0,
+    loanValue: 0,
     confidence: 0.80,
     isConditionTiered: false,
     raw: result,
@@ -187,13 +327,25 @@ async function fetchMarketCheckSource(
   mileage: number | undefined,
 ): Promise<{ estimate: SourceEstimate; listings: NormalizedListing[] } | null> {
   const result = await fetchMarketCheckData(
-    vehicle.year,
-    vehicle.make,
-    vehicle.model,
+    {
+      year: vehicle.year,
+      make: vehicle.make,
+      model: vehicle.model,
+      trim: vehicle.trim,
+      drivetrain: vehicle.drivetrain,
+      transmission: vehicle.transmission,
+      bodyStyle: vehicle.bodyStyle,
+    },
     zip,
     mileage,
   );
   if (!result) return null;
+
+  // Scale confidence based on listing count
+  const listingConfidence = result.nearbyListings.length >= 10 ? 0.85
+    : result.nearbyListings.length >= 5 ? 0.75
+    : result.nearbyListings.length >= 2 ? 0.65
+    : 0.50;
 
   return {
     estimate: {
@@ -201,9 +353,16 @@ async function fetchMarketCheckSource(
       estimatedValue: result.estimatedValue,
       tradeInValue: Math.round(result.estimatedValue * 0.85),
       dealerRetailValue: result.valueHigh || Math.round(result.estimatedValue * 1.15),
-      confidence: result.nearbyListings.length >= 5 ? 0.80 : 0.60,
+      wholesaleValue: 0,
+      loanValue: 0,
+      confidence: listingConfidence,
       isConditionTiered: false,
-      raw: { stats: { low: result.valueLow, high: result.valueHigh }, listingCount: result.nearbyListings.length },
+      raw: {
+        stats: { low: result.valueLow, high: result.valueHigh },
+        listingCount: result.nearbyListings.length,
+        totalFound: result.totalFound,
+        avgDaysOnMarket: result.avgDaysOnMarket,
+      },
     },
     listings: result.nearbyListings,
   };
@@ -227,31 +386,80 @@ export async function fetchMarketData(
   mileage?: number,
   conditionScore: number = 70,
 ): Promise<MarketDataResult> {
-  // Extract state from ZIP (rough mapping) or default to OR
-  const state = "OR"; // TODO: derive from zip
+  // Derive state from ZIP for regional pricing + API calls that need it
+  const state = zipToState(zip);
 
   const sourceEstimates: SourceEstimate[] = [];
   let allListings: NormalizedListing[] = [];
   let vdbConditionTier: string | null = null;
   let mileageAdjustment = 0;
 
+  // ── Check for missing API keys (report once per hour) ────────────
+  if (!process.env.BLACKBOOK_USERNAME) reportMissingKey("BlackBook", "BLACKBOOK_USERNAME").catch(() => {});
+  if (!process.env.VEHICLEDATABASES_API_KEY) reportMissingKey("VehicleDatabases", "VEHICLEDATABASES_API_KEY").catch(() => {});
+  if (!process.env.NADA_RAPIDAPI_KEY) reportMissingKey("NADA", "NADA_RAPIDAPI_KEY").catch(() => {});
+  if (!process.env.VINAUDIT_API_KEY) reportMissingKey("VinAudit", "VINAUDIT_API_KEY").catch(() => {});
+  if (!process.env.MARKETCHECK_API_KEY) reportMissingKey("MarketCheck", "MARKETCHECK_API_KEY").catch(() => {});
+
   // ── Parallel fan-out: fire all API calls simultaneously ─────────
-  const [vdbResult, vinAuditResult, marketCheckResult] = await Promise.allSettled([
-    fetchVDBSource(vehicle.vin, mileage, state, conditionScore).catch((err) => {
-      console.warn(`[MarketData] VehicleDatabases failed: ${err instanceof Error ? err.message : err}`);
+  const [bbResult, vdbResult, nadaResult, vinAuditResult, marketCheckResult] = await Promise.allSettled([
+    // Black Book
+    fetchBlackBookSource(vehicle.vin, vehicle, mileage, state, conditionScore).then((r) => {
+      if (r) reportSuccess("BlackBook");
+      return r;
+    }).catch((err) => {
+      const statusMatch = String(err).match(/\((\d{3})\)/);
+      reportFailure("BlackBook", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
       return null;
     }),
-    fetchVinAuditSource(vehicle.vin, mileage).catch((err) => {
-      console.warn(`[MarketData] VinAudit failed: ${err instanceof Error ? err.message : err}`);
+    // VehicleDatabases
+    fetchVDBSource(vehicle.vin, mileage, state, conditionScore).then((r) => {
+      if (r) reportSuccess("VehicleDatabases");
+      return r;
+    }).catch((err) => {
+      const statusMatch = String(err).match(/\((\d{3})\)/);
+      reportFailure("VehicleDatabases", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
       return null;
     }),
-    fetchMarketCheckSource(vehicle, zip, mileage).catch((err) => {
-      console.warn(`[MarketData] MarketCheck failed: ${err instanceof Error ? err.message : err}`);
+    // NADA Guides
+    fetchNADASource(vehicle.vin, vehicle, mileage, conditionScore).then((r) => {
+      if (r) reportSuccess("NADA");
+      return r;
+    }).catch((err) => {
+      const statusMatch = String(err).match(/\((\d{3})\)/);
+      reportFailure("NADA", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
+      return null;
+    }),
+    // VinAudit
+    fetchVinAuditSource(vehicle.vin, mileage).then((r) => {
+      if (r) reportSuccess("VinAudit");
+      return r;
+    }).catch((err) => {
+      const statusMatch = String(err).match(/\((\d{3})\)/);
+      reportFailure("VinAudit", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
+      return null;
+    }),
+    // MarketCheck
+    fetchMarketCheckSource(vehicle, zip, mileage).then((r) => {
+      if (r) reportSuccess("MarketCheck");
+      return r;
+    }).catch((err) => {
+      const statusMatch = String(err).match(/\((\d{3})\)/);
+      reportFailure("MarketCheck", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
       return null;
     }),
   ]);
 
   // ── Collect results ──────────────────────────────────────────────
+
+  // Black Book
+  const bb = bbResult.status === "fulfilled" ? bbResult.value : null;
+  if (bb) {
+    sourceEstimates.push(bb);
+    console.log(
+      `[MarketData] BlackBook: $${bb.estimatedValue} PP / $${bb.wholesaleValue} WS / $${bb.dealerRetailValue} DR`,
+    );
+  }
 
   // VehicleDatabases
   const vdb = vdbResult.status === "fulfilled" ? vdbResult.value : null;
@@ -260,6 +468,15 @@ export async function fetchMarketData(
     vdbConditionTier = vdb.tier;
     console.log(
       `[MarketData] VehicleDatabases (${vdb.tier}): $${vdb.estimate.estimatedValue} PP / $${vdb.estimate.tradeInValue} TI / $${vdb.estimate.dealerRetailValue} DR`,
+    );
+  }
+
+  // NADA Guides
+  const nada = nadaResult.status === "fulfilled" ? nadaResult.value : null;
+  if (nada) {
+    sourceEstimates.push(nada);
+    console.log(
+      `[MarketData] NADA: $${nada.estimatedValue} PP / $${nada.tradeInValue} TI / $${nada.loanValue} Loan`,
     );
   }
 
@@ -280,16 +497,36 @@ export async function fetchMarketData(
     );
   }
 
-  // Always add fallback as lowest-weight option
-  const fallback = getFallbackEstimate(vehicle);
+  // Always add fallback as lowest-weight option (now mileage-aware)
+  const fallback = getFallbackEstimate(vehicle, mileage);
   sourceEstimates.push(fallback);
-  console.log(`[MarketData] Fallback (${classifyBody(vehicle)}): $${fallback.estimatedValue}`);
+  console.log(`[MarketData] Fallback (${classifyBody(vehicle)}, ${mileage || "?"} mi): $${fallback.estimatedValue}`);
+
+  // ── Mileage cross-check from comparable listings ────────────────
+  if (mileage && allListings.length >= 3) {
+    const listingsWithMiles = allListings.filter((l) => l.mileage && l.mileage > 0);
+    if (listingsWithMiles.length >= 3) {
+      const avgCompMiles = Math.round(
+        listingsWithMiles.reduce((sum, l) => sum + l.mileage, 0) / listingsWithMiles.length,
+      );
+      const mileageRatio = mileage / avgCompMiles;
+      if (mileageRatio > 1.5 || mileageRatio < 0.5) {
+        console.warn(
+          `[MarketData] Mileage outlier: vehicle ${mileage} mi vs comparable avg ${avgCompMiles} mi (${(mileageRatio * 100).toFixed(0)}%)`,
+        );
+      }
+      mileageAdjustment = Math.round((avgCompMiles - mileage) * getMileageAdjustmentRate(
+        sourceEstimates[0]?.estimatedValue || 20000,
+      ));
+    }
+  }
 
   // ── Calculate consensus ──────────────────────────────────────────
   const consensus: ConsensusResult = calculateConsensus(sourceEstimates);
 
   console.log(
-    `[MarketData] Consensus (${consensus.consensusMethod}): $${consensus.estimatedValue} PP | ` +
+    `[MarketData] Consensus (${consensus.consensusMethod}, ${consensus.sourceCount} sources): ` +
+    `$${consensus.estimatedValue} PP | $${consensus.wholesaleValue} WS | $${consensus.loanValue} Loan | ` +
     `Primary: ${consensus.primarySource} | Confidence: ${(consensus.confidence * 100).toFixed(0)}%`,
   );
 
@@ -299,17 +536,31 @@ export async function fetchMarketData(
     consensus.configPremiumMode,
   );
 
-  const adjustedEstimated = Math.round(consensus.estimatedValue * combinedMultiplier);
-  const adjustedTradeIn = Math.round(consensus.tradeInValue * combinedMultiplier);
-  const adjustedRetail = Math.round(consensus.dealerRetailValue * combinedMultiplier);
+  // ── Apply regional pricing multiplier ──────────────────────────
+  const bodyCategory = classifyBody(vehicle);
+  const regionalMultiplier = getRegionalMultiplier(state, bodyCategory);
 
-  if (premiums.length > 0) {
+  // Combined adjustment = config premiums × regional multiplier
+  const totalMultiplier = combinedMultiplier * regionalMultiplier;
+
+  const adjustedEstimated = Math.round(consensus.estimatedValue * totalMultiplier);
+  const adjustedTradeIn = Math.round(consensus.tradeInValue * totalMultiplier);
+  const adjustedRetail = Math.round(consensus.dealerRetailValue * totalMultiplier);
+  const adjustedWholesale = Math.round(consensus.wholesaleValue * totalMultiplier);
+  const adjustedLoan = Math.round(consensus.loanValue * totalMultiplier);
+
+  if (premiums.length > 0 || regionalMultiplier !== 1.0) {
     console.log(
       `[MarketData] Config premiums (${consensus.configPremiumMode} mode, ${combinedMultiplier.toFixed(2)}x): ` +
-      `${premiums.map((p) => p.factor).join(", ")}`,
+      `${premiums.map((p) => p.factor).join(", ") || "none"}`,
     );
+    if (regionalMultiplier !== 1.0) {
+      console.log(
+        `[MarketData] Regional: ${state} ${bodyCategory} → ${regionalMultiplier.toFixed(2)}x`,
+      );
+    }
     console.log(
-      `[MarketData] $${consensus.estimatedValue} x ${combinedMultiplier.toFixed(2)} = $${adjustedEstimated}`,
+      `[MarketData] $${consensus.estimatedValue} x ${totalMultiplier.toFixed(3)} = $${adjustedEstimated}`,
     );
   }
 
@@ -329,6 +580,8 @@ export async function fetchMarketData(
     tradeInValue: adjustedTradeIn,
     privatePartyValue: adjustedEstimated,
     dealerRetailValue: adjustedRetail,
+    wholesaleValue: adjustedWholesale,
+    loanValue: adjustedLoan,
 
     vdbConditionTier,
 
@@ -336,5 +589,6 @@ export async function fetchMarketData(
     consensusMethod: consensus.consensusMethod,
     configPremiumMode: consensus.configPremiumMode,
     conditionAttenuation: consensus.conditionAttenuation,
+    sourceCount: consensus.sourceCount,
   };
 }

@@ -60,10 +60,12 @@ export interface MarketAnalysisData {
   configMultiplier?: number | null;
   baseValuePreConfig?: number | null;      // cents
 
-  // Three-perspective pricing (cents)
+  // Five-perspective pricing (cents)
   tradeInValue?: number | null;
   privatePartyValue?: number | null;
   dealerRetailValue?: number | null;
+  wholesaleValue?: number | null;
+  loanValue?: number | null;
 
   // Condition tier + consensus metadata
   vdbConditionTier?: string | null;
@@ -72,10 +74,13 @@ export interface MarketAnalysisData {
     estimatedValue: number;
     confidence: number;
     isConditionTiered: boolean;
+    wholesaleValue?: number;
+    loanValue?: number;
   }> | null;
   consensusMethod?: string | null;
   configPremiumMode?: string | null;
   conditionAttenuation?: number | null;
+  sourceCount?: number | null;
 }
 
 interface MarketAnalysisSectionProps {
@@ -129,31 +134,56 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
 
   return (
     <div className={cn("space-y-5", compact && "space-y-3")}>
-      {/* ── Three-Perspective Pricing Header ── */}
+      {/* ── Five-Perspective Pricing Header ── */}
       {(data.tradeInValue || data.privatePartyValue || data.dealerRetailValue) && (
-        <div className="grid grid-cols-3 gap-2">
-          <PerspectiveCard
-            label="Trade-In"
-            value={data.tradeInValue}
-            color="text-amber-700"
-            bgColor="bg-amber-50"
-            borderColor="border-amber-200"
-          />
-          <PerspectiveCard
-            label="Private Party"
-            value={data.privatePartyValue}
-            color="text-brand-700"
-            bgColor="bg-brand-50"
-            borderColor="border-brand-200"
-            highlight
-          />
-          <PerspectiveCard
-            label="Dealer Retail"
-            value={data.dealerRetailValue}
-            color="text-green-700"
-            bgColor="bg-green-50"
-            borderColor="border-green-200"
-          />
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <PerspectiveCard
+              label="Trade-In"
+              value={data.tradeInValue}
+              color="text-amber-700"
+              bgColor="bg-amber-50"
+              borderColor="border-amber-200"
+            />
+            <PerspectiveCard
+              label="Private Party"
+              value={data.privatePartyValue}
+              color="text-brand-700"
+              bgColor="bg-brand-50"
+              borderColor="border-brand-200"
+              highlight
+            />
+            <PerspectiveCard
+              label="Dealer Retail"
+              value={data.dealerRetailValue}
+              color="text-green-700"
+              bgColor="bg-green-50"
+              borderColor="border-green-200"
+            />
+          </div>
+          {/* Wholesale + Loan row (shown when available) */}
+          {(data.wholesaleValue || data.loanValue) && (
+            <div className="grid grid-cols-2 gap-2">
+              {data.wholesaleValue ? (
+                <PerspectiveCard
+                  label="Wholesale"
+                  value={data.wholesaleValue}
+                  color="text-purple-700"
+                  bgColor="bg-purple-50"
+                  borderColor="border-purple-200"
+                />
+              ) : <div />}
+              {data.loanValue ? (
+                <PerspectiveCard
+                  label="Loan Value"
+                  value={data.loanValue}
+                  color="text-blue-700"
+                  bgColor="bg-blue-50"
+                  borderColor="border-blue-200"
+                />
+              ) : <div />}
+            </div>
+          )}
         </div>
       )}
 
@@ -164,19 +194,27 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
           {data.sourceResults && data.sourceResults.length > 0 ? (
             data.sourceResults
               .filter((s) => s.source !== "fallback" && s.estimatedValue > 0)
-              .map((s) => (
-                <Badge key={s.source} variant={
-                  s.source === "vehicledatabases" ? "info" as const :
-                  s.source === "vinaudit" ? "info" as const :
-                  s.source === "marketcheck" ? "success" as const :
-                  "warning" as const
-                }>
-                  {s.source === "vehicledatabases" ? "VehicleDatabases" :
-                   s.source === "vinaudit" ? "VinAudit" :
-                   s.source === "marketcheck" ? "MarketCheck" :
-                   s.source}
-                </Badge>
-              ))
+              .map((s) => {
+                const sourceLabels: Record<string, string> = {
+                  blackbook: "Black Book",
+                  vehicledatabases: "VehicleDatabases",
+                  nada: "NADA Guides",
+                  vinaudit: "VinAudit",
+                  marketcheck: "MarketCheck",
+                };
+                const sourceVariants: Record<string, "info" | "success" | "warning" | "default"> = {
+                  blackbook: "default",
+                  vehicledatabases: "info",
+                  nada: "info",
+                  vinaudit: "info",
+                  marketcheck: "success",
+                };
+                return (
+                  <Badge key={s.source} variant={sourceVariants[s.source] ?? "warning"}>
+                    {sourceLabels[s.source] ?? s.source}
+                  </Badge>
+                );
+              })
           ) : (
             <Badge variant={
               data.dataSource === "vinaudit" ? "info" as const :
@@ -186,12 +224,14 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
               {data.dataSource === "vinaudit" ? "VinAudit" :
                data.dataSource === "marketcheck" ? "MarketCheck" :
                data.dataSource === "vehicledatabases" ? "VehicleDatabases" :
+               data.dataSource === "blackbook" ? "Black Book" :
+               data.dataSource === "nada" ? "NADA Guides" :
                "Estimated"}
             </Badge>
           )}
           {data.consensusMethod === "weighted-median" && (
             <span className="text-[10px] text-text-tertiary font-medium">
-              Consensus
+              {data.sourceCount ? `${data.sourceCount}-Source Consensus` : "Consensus"}
             </span>
           )}
           {data.vdbConditionTier && (

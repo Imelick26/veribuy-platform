@@ -460,11 +460,16 @@ model MarketAnalysis {
   // Condition tier used for VehicleDatabases lookup
   vdbConditionTier      String?   // "Outstanding" | "Clean" | "Average" | "Rough"
 
+  // Wholesale + loan values (cents) — from BlackBook/NADA
+  wholesaleValue        Int?
+  loanValue             Int?
+
   // Multi-source consensus metadata
   sourceResults         Json?     // [{ source, estimatedValue, confidence, ... }]
   consensusMethod       String?   // "single" | "weighted-median" | "fallback"
   configPremiumMode     String?   // "full" | "partial" | "none"
   conditionAttenuation  Float?    // 0-1, how much condition multiplier applies
+  sourceCount           Int?      // Number of pricing sources that contributed data
 
   inspectionId String     @unique
   inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)

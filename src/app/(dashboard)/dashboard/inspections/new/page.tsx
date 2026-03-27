@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Ca
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { trpc } from "@/lib/trpc";
-import { ArrowRight, Camera, MapPin } from "lucide-react";
+import { ArrowRight, Camera } from "lucide-react";
 
 export default function NewInspectionPage() {
   const router = useRouter();
@@ -52,10 +52,16 @@ export default function NewInspectionPage() {
         <div className="space-y-4">
           <Input
             id="location"
-            label="Inspection Location (optional)"
-            placeholder="e.g. Portland, OR"
+            label="ZIP Code"
+            placeholder="e.g. 97201"
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            onChange={(e) => {
+              // Only allow digits, max 5
+              const val = e.target.value.replace(/\D/g, "").slice(0, 5);
+              setLocation(val);
+            }}
+            inputMode="numeric"
+            required
           />
         </div>
 
@@ -65,6 +71,7 @@ export default function NewInspectionPage() {
             className="w-full"
             onClick={handleBeginInspection}
             loading={createMutation.isPending}
+            disabled={location.length !== 5}
           >
             Begin Inspection
             <ArrowRight className="h-4 w-4" />

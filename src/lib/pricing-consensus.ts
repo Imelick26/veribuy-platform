@@ -1,14 +1,16 @@
 /**
- * Pricing Consensus Engine
+ * Pricing Consensus Engine (v2 — 6-Source)
  *
- * Combines estimates from multiple pricing sources (VehicleDatabases, NADA,
- * VinAudit, MarketCheck) into a single consensus value using weighted median.
+ * Combines estimates from multiple pricing sources into a single
+ * consensus value using weighted median with outlier rejection.
  *
  * Source weights (tunable):
- *   VehicleDatabases: 0.40 — condition-tiered, largest dataset
- *   VinAudit:         0.30 — VIN-specific with mileage adjustment
- *   MarketCheck:      0.20 — real dealer inventory (recency)
- *   Fallback:         0.10 — category curves (last resort)
+ *   BlackBook:          0.25 — wholesale gold standard, condition-tiered
+ *   VehicleDatabases:   0.25 — condition-tiered retail, 12 price points
+ *   NADA:               0.20 — dealer/lender standard, loan value
+ *   VinAudit:           0.15 — VIN-specific with mileage adjustment
+ *   MarketCheck:        0.10 — real dealer inventory (recency signal)
+ *   Fallback:           0.05 — category curves (last resort)
  *
  * Consensus methods:
  *   "single"          — Only one source returned data
@@ -23,7 +25,9 @@ import type { VDBConditionTier, VDBTierPrices } from "./vehicledatabases";
 /* ------------------------------------------------------------------ */
 
 export type PricingSourceName =
+  | "blackbook"
   | "vehicledatabases"
+  | "nada"
   | "vinaudit"
   | "marketcheck"
   | "fallback";
@@ -36,6 +40,10 @@ export interface SourceEstimate {
   tradeInValue: number;
   /** Dealer retail value in dollars (may be 0 if source doesn't provide) */
   dealerRetailValue: number;
+  /** Wholesale value in dollars (0 if source doesn't provide) */
+  wholesaleValue: number;
+  /** Loan value in dollars (0 if source doesn't provide — NADA-specific) */
+  loanValue: number;
   /** Source-level confidence (0-1) */
   confidence: number;
   /** Whether this source provides condition-tiered pricing */
@@ -51,6 +59,10 @@ export interface ConsensusResult {
   tradeInValue: number;
   /** Consensus dealer retail value (dollars) */
   dealerRetailValue: number;
+  /** Consensus wholesale value (dollars) */
+  wholesaleValue: number;
+  /** Consensus loan value (dollars) — from NADA or estimated */
+  loanValue: number;
   /** Overall confidence (0-1) */
   confidence: number;
   /** Primary data source name */
@@ -63,18 +75,22 @@ export interface ConsensusResult {
   configPremiumMode: "full" | "partial" | "none";
   /** Condition attenuation factor (0-1) */
   conditionAttenuation: number;
+  /** Number of sources that contributed data */
+  sourceCount: number;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Default weights per source */
+/** Default weights per source — total = 1.0 */
 const SOURCE_WEIGHTS: Record<PricingSourceName, number> = {
-  vehicledatabases: 0.40,
-  vinaudit: 0.30,
-  marketcheck: 0.20,
-  fallback: 0.10,
+  blackbook: 0.25,
+  vehicledatabases: 0.25,
+  nada: 0.20,
+  vinaudit: 0.15,
+  marketcheck: 0.10,
+  fallback: 0.05,
 };
 
 /**
@@ -181,12 +197,15 @@ export function calculateConsensus(sources: SourceEstimate[]): ConsensusResult {
       estimatedValue: 0,
       tradeInValue: 0,
       dealerRetailValue: 0,
+      wholesaleValue: 0,
+      loanValue: 0,
       confidence: 0,
       primarySource: "fallback",
       consensusMethod: "fallback",
       sourceResults: sources,
       configPremiumMode: "full",
       conditionAttenuation: 1.0,
+      sourceCount: 0,
     };
   }
 
@@ -199,12 +218,15 @@ export function calculateConsensus(sources: SourceEstimate[]): ConsensusResult {
       estimatedValue: s.estimatedValue,
       tradeInValue: s.tradeInValue || Math.round(s.estimatedValue * 0.82),
       dealerRetailValue: s.dealerRetailValue || Math.round(s.estimatedValue * 1.18),
+      wholesaleValue: s.wholesaleValue || Math.round(s.estimatedValue * 0.72),
+      loanValue: s.loanValue || Math.round(s.estimatedValue * 0.85),
       confidence: s.confidence,
       primarySource: s.source,
       consensusMethod: "single",
       sourceResults: sources,
       configPremiumMode: hasConditionTiered ? "partial" : "full",
       conditionAttenuation: hasConditionTiered ? 0.4 : 1.0,
+      sourceCount: 1,
     };
   }
 
@@ -229,7 +251,7 @@ export function calculateConsensus(sources: SourceEstimate[]): ConsensusResult {
     return w;
   });
 
-  // Step 4: Final weighted median for all three perspectives
+  // Step 4: Final weighted median for all perspectives
   const estimatedValue = weightedMedian(ppValues, adjustedWeights);
   const tradeInValue = weightedMedian(
     validSources.map((s) => s.tradeInValue || Math.round(s.estimatedValue * 0.82)),
@@ -239,6 +261,14 @@ export function calculateConsensus(sources: SourceEstimate[]): ConsensusResult {
     validSources.map((s) => s.dealerRetailValue || Math.round(s.estimatedValue * 1.18)),
     adjustedWeights,
   );
+
+  // Wholesale: only sources that provide it (BlackBook primarily)
+  const wholesaleValues = validSources.map((s) => s.wholesaleValue || Math.round(s.estimatedValue * 0.72));
+  const wholesaleValue = weightedMedian(wholesaleValues, adjustedWeights);
+
+  // Loan value: prefer NADA's explicit loan value, otherwise estimate
+  const loanValues = validSources.map((s) => s.loanValue || Math.round(s.estimatedValue * 0.85));
+  const loanValue = weightedMedian(loanValues, adjustedWeights);
 
   // Step 5: Calculate overall confidence
   let confidence = validSources.reduce(
@@ -250,8 +280,15 @@ export function calculateConsensus(sources: SourceEstimate[]): ConsensusResult {
   const agreeing = validSources.filter(
     (s) => Math.abs(s.estimatedValue - estimatedValue) / estimatedValue < 0.15,
   );
-  if (agreeing.length >= 2) {
+  if (agreeing.length >= 3) {
+    confidence = Math.min(0.98, confidence + AGREEMENT_CONFIDENCE_BOOST * 1.5);
+  } else if (agreeing.length >= 2) {
     confidence = Math.min(0.98, confidence + AGREEMENT_CONFIDENCE_BOOST);
+  }
+
+  // Extra boost for having many sources (more sources = more confidence)
+  if (validSources.length >= 4) {
+    confidence = Math.min(0.98, confidence + 0.05);
   }
 
   // Step 6: Determine primary source (highest weight after adjustment)
@@ -263,19 +300,25 @@ export function calculateConsensus(sources: SourceEstimate[]): ConsensusResult {
 
   // Step 7: Config premium mode — if primary source is condition-tiered,
   // use partial mode to avoid double-counting
+  const conditionTieredCount = validSources.filter((s) => s.isConditionTiered).length;
   const primaryIsConditionTiered = validSources[primaryIdx].isConditionTiered;
-  const configPremiumMode = primaryIsConditionTiered ? "partial" : "full";
-  const conditionAttenuation = primaryIsConditionTiered ? 0.4 : 1.0;
+
+  // If majority of sources are condition-tiered, attenuate more
+  const configPremiumMode = conditionTieredCount >= 2 ? "partial" : primaryIsConditionTiered ? "partial" : "full";
+  const conditionAttenuation = conditionTieredCount >= 2 ? 0.3 : primaryIsConditionTiered ? 0.4 : 1.0;
 
   return {
     estimatedValue,
     tradeInValue,
     dealerRetailValue,
+    wholesaleValue,
+    loanValue,
     confidence,
     primarySource,
     consensusMethod: "weighted-median",
     sourceResults: sources,
     configPremiumMode,
     conditionAttenuation,
+    sourceCount: validSources.length,
   };
 }

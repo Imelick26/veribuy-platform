@@ -63,39 +63,51 @@ const SUV_BODIES = ["suv", "sport utility", "utility"];
 /** Body types classified as sports/performance cars */
 const SPORTS_BODIES = ["coupe", "convertible", "roadster", "sports car", "hatchback"];
 
-/** Known performance trims and their premium multipliers */
+/**
+ * Known performance trims and their premium multipliers.
+ *
+ * IMPORTANT: These premiums are calibrated against the reality that VIN-based
+ * pricing APIs (VDB, VinAudit) often can't distinguish performance trims from
+ * base models. For example, a 2020 Raptor VIN decodes as an F-150 XL (~$20K)
+ * when it should be ~$50K. The multiplier must bridge this gap.
+ *
+ * Multipliers are applied AFTER consensus pricing, so they correct for
+ * trim-blind VIN decoding. When sources DO correctly identify the trim
+ * (e.g., MarketCheck matching "Raptor" in dealer listings), the consensus
+ * will already be higher, and "partial" premium mode halves the premium.
+ */
 const PERFORMANCE_TRIMS: Record<string, { multiplier: number; explanation: string }> = {
-  // Ford
-  raptor:      { multiplier: 1.25, explanation: "Raptor is a premium off-road performance trim" },
-  "lightning": { multiplier: 1.20, explanation: "Lightning is a performance/electric truck trim" },
-  shelby:      { multiplier: 1.30, explanation: "Shelby is a high-performance variant" },
-  gt350:       { multiplier: 1.25, explanation: "GT350 is a track-focused Mustang variant" },
-  gt500:       { multiplier: 1.35, explanation: "GT500 is the top-tier Mustang performance variant" },
+  // Ford — Raptor is the extreme case: VIN decodes as base F-150
+  raptor:      { multiplier: 2.00, explanation: "Raptor commands ~2x base F-150 pricing; VIN often decodes as XL/XLT" },
+  "lightning": { multiplier: 1.35, explanation: "Lightning is the electric F-150; distinct pricing from gas models" },
+  shelby:      { multiplier: 1.50, explanation: "Shelby variants command 50%+ over base Mustang pricing" },
+  gt350:       { multiplier: 1.40, explanation: "GT350 is a track-focused Mustang, ~40% above base GT" },
+  gt500:       { multiplier: 1.60, explanation: "GT500 is the flagship Mustang, ~60% above base GT" },
   // Chevy/GMC
-  zr2:         { multiplier: 1.20, explanation: "ZR2 is a premium off-road performance trim" },
-  "trail boss": { multiplier: 1.10, explanation: "Trail Boss is an off-road oriented trim" },
-  ss:          { multiplier: 1.15, explanation: "SS is a performance-oriented trim" },
-  zl1:         { multiplier: 1.25, explanation: "ZL1 is the top-tier Camaro performance variant" },
-  denali:      { multiplier: 1.15, explanation: "Denali is a premium luxury trim" },
-  "at4":       { multiplier: 1.10, explanation: "AT4 is an off-road premium trim" },
+  zr2:         { multiplier: 1.40, explanation: "ZR2 is a premium off-road trim, ~40% above base Colorado/ZR1" },
+  "trail boss": { multiplier: 1.15, explanation: "Trail Boss adds moderate off-road premium" },
+  ss:          { multiplier: 1.20, explanation: "SS is a performance-oriented trim" },
+  zl1:         { multiplier: 1.40, explanation: "ZL1 is the top-tier Camaro, ~40% above base SS" },
+  denali:      { multiplier: 1.25, explanation: "Denali is GMC's top luxury trim, ~25% premium" },
+  "at4":       { multiplier: 1.15, explanation: "AT4 is an off-road premium trim" },
   // Ram
-  "trx":       { multiplier: 1.30, explanation: "TRX is a high-performance off-road truck" },
-  "power wagon": { multiplier: 1.20, explanation: "Power Wagon is a premium off-road truck trim" },
+  "trx":       { multiplier: 1.80, explanation: "TRX is the supercharged Ram 1500, ~80% above base" },
+  "power wagon": { multiplier: 1.35, explanation: "Power Wagon is a premium off-road Ram 2500" },
   // Toyota
-  "trd pro":   { multiplier: 1.20, explanation: "TRD Pro is Toyota's premium off-road trim" },
-  "trd off-road": { multiplier: 1.10, explanation: "TRD Off-Road is a rugged capability trim" },
+  "trd pro":   { multiplier: 1.35, explanation: "TRD Pro is Toyota's top off-road trim, ~35% premium" },
+  "trd off-road": { multiplier: 1.12, explanation: "TRD Off-Road adds moderate capability premium" },
   // Jeep
-  rubicon:     { multiplier: 1.20, explanation: "Rubicon is the top off-road Wrangler trim" },
-  "392":       { multiplier: 1.25, explanation: "392 is the V8 performance Wrangler variant" },
-  trackhawk:   { multiplier: 1.25, explanation: "Trackhawk is a supercharged performance SUV" },
+  rubicon:     { multiplier: 1.35, explanation: "Rubicon is the top off-road Wrangler, ~35% above Sport" },
+  "392":       { multiplier: 1.50, explanation: "392 is the V8 Wrangler, ~50% above V6 models" },
+  trackhawk:   { multiplier: 1.50, explanation: "Trackhawk is a supercharged performance SUV" },
   // BMW
-  "m3":        { multiplier: 1.20, explanation: "M3 is BMW's performance sedan" },
-  "m4":        { multiplier: 1.20, explanation: "M4 is BMW's performance coupe" },
-  "m5":        { multiplier: 1.20, explanation: "M5 is BMW's high-performance sedan" },
+  "m3":        { multiplier: 1.30, explanation: "M3 is ~30% above equivalent 3-series" },
+  "m4":        { multiplier: 1.30, explanation: "M4 is ~30% above equivalent 4-series" },
+  "m5":        { multiplier: 1.35, explanation: "M5 is ~35% above equivalent 5-series" },
   // Mercedes
-  amg:         { multiplier: 1.20, explanation: "AMG is Mercedes' performance division" },
+  amg:         { multiplier: 1.35, explanation: "AMG variants are ~35% above equivalent Mercedes models" },
   // Subaru
-  sti:         { multiplier: 1.15, explanation: "STI is Subaru's top performance variant" },
+  sti:         { multiplier: 1.25, explanation: "STI is ~25% above equivalent WRX" },
 };
 
 /* ------------------------------------------------------------------ */

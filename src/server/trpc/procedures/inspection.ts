@@ -4,6 +4,8 @@ import { router, protectedProcedure } from "../init";
 import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, extractVinFromPhoto } from "@/lib/ai/media-analyzer";
 import { fetchMarketData } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
+import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
+import { reportSuccess, reportFailure } from "@/lib/api-health";
 import { calculateFairPrice, calculateDealEconomics, type HistoryData } from "@/lib/market-valuation";
 import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult, ConditionAssessment } from "@/types/risk";
 import { persistConditionScores } from "@/lib/scoring";
@@ -665,9 +667,8 @@ export const inspectionRouter = router({
       };
     }),
 
-  // Fetch vehicle history using NHTSA (free) for recalls
-  // Title status, accidents, owners are entered by the inspector or
-  // can be upgraded to a paid provider (VinAudit/Carfax) later.
+  // Fetch vehicle history using VinAudit (paid, ~$5) + NHTSA recalls (free).
+  // Falls back to NHTSA-only defaults if VinAudit key is missing or API fails.
   fetchHistory: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -680,35 +681,68 @@ export const inspectionRouter = router({
       const vehicle = inspection.vehicle;
       if (!vehicle) throw new Error("No vehicle linked — confirm VIN first");
 
-      // Fetch recalls from NHTSA (free, no API key needed)
+      // Always fetch NHTSA recalls (free)
       const nhtsaRecalls = await fetchRecalls(
         vehicle.make,
         vehicle.model,
         vehicle.year,
       );
 
-      // Count open recalls (all NHTSA recalls are considered open unless completed)
-      const openRecallCount = nhtsaRecalls.length;
+      // Try VinAudit paid history if API key is configured
+      let vinAuditHistory: Awaited<ReturnType<typeof fetchVinAuditHistory>> | null = null;
+      if (process.env.VINAUDIT_API_KEY) {
+        try {
+          vinAuditHistory = await fetchVinAuditHistory(vehicle.vin);
+          reportSuccess("VinAudit-History");
+          console.log(`[History] VinAudit: title=${vinAuditHistory.titleStatus}, accidents=${vinAuditHistory.accidentCount}, owners=${vinAuditHistory.ownerCount}`);
+        } catch (err) {
+          const statusMatch = String(err).match(/\((\d{3})\)/);
+          reportFailure("VinAudit-History", err instanceof Error ? err : String(err), statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
+          console.warn(`[History] VinAudit failed, using NHTSA defaults: ${err instanceof Error ? err.message : err}`);
+        }
+      } else {
+        console.warn("[History] VINAUDIT_API_KEY not set — using NHTSA defaults for title/accidents/owners");
+      }
 
-      const historyRecord = {
-        provider: "NHTSA",
-        titleStatus: "CLEAN",        // Default — inspector can override
-        accidentCount: 0,            // Default — inspector can override
-        ownerCount: 1,               // Default — inspector can override
-        serviceRecords: 0,
-        structuralDamage: false,     // Default — inspector can override
-        floodDamage: false,          // Default — inspector can override
-        openRecallCount,
-        recalls: JSON.parse(JSON.stringify(
-          nhtsaRecalls.map((r) => ({
+      // Merge: VinAudit data takes priority, NHTSA recalls always included
+      const allRecalls = vinAuditHistory?.recalls?.length
+        ? vinAuditHistory.recalls.map((r) => ({
             campaignNumber: r.campaignNumber,
             component: r.component,
             summary: r.summary,
             consequence: r.consequence,
             remedy: r.remedy,
           }))
-        )),
-        rawData: JSON.parse(JSON.stringify({ nhtsaRecalls })),
+        : nhtsaRecalls.map((r) => ({
+            campaignNumber: r.campaignNumber,
+            component: r.component,
+            summary: r.summary,
+            consequence: r.consequence,
+            remedy: r.remedy,
+          }));
+
+      // Use the larger recall count (NHTSA may know about recalls VinAudit doesn't and vice versa)
+      const openRecallCount = Math.max(
+        nhtsaRecalls.length,
+        vinAuditHistory?.openRecallCount ?? 0,
+      );
+
+      const historyRecord = {
+        provider: vinAuditHistory ? "VinAudit" : "NHTSA",
+        titleStatus: vinAuditHistory?.titleStatus ?? "CLEAN",
+        accidentCount: vinAuditHistory?.accidentCount ?? 0,
+        ownerCount: vinAuditHistory?.ownerCount ?? 1,
+        serviceRecords: vinAuditHistory?.serviceRecords ?? 0,
+        structuralDamage: vinAuditHistory?.structuralDamage ?? false,
+        floodDamage: vinAuditHistory?.floodDamage ?? false,
+        openRecallCount,
+        recalls: JSON.parse(JSON.stringify(allRecalls)),
+        rawData: JSON.parse(JSON.stringify({
+          nhtsaRecalls,
+          vinAuditHistory: vinAuditHistory?.rawData ?? null,
+          vinAuditTitleRecords: vinAuditHistory?.titleRecords ?? null,
+          vinAuditOdometer: vinAuditHistory?.odometerReadings ?? null,
+        })),
       };
 
       // Create or update VehicleHistory record
@@ -752,9 +786,10 @@ export const inspectionRouter = router({
       const vehicle = inspection.vehicle;
       if (!vehicle) throw new Error("No vehicle linked — confirm VIN first");
 
-      // Extract ZIP code from location string, or default
-      const zipMatch = (inspection.location || "").match(/\b(\d{5})\b/);
-      const zip = zipMatch ? zipMatch[1] : "97201"; // default Portland, OR
+      // Use location field as ZIP code (or extract ZIP from legacy city strings)
+      const locStr = (inspection.location || "").trim();
+      const zip = /^\d{5}$/.test(locStr) ? locStr
+        : (locStr.match(/\b(\d{5})\b/)?.[1] || "97201");
 
       // Fetch market value from multi-source consensus engine
       const conditionScore = inspection.overallScore || 70;
@@ -890,10 +925,12 @@ export const inspectionRouter = router({
           ? Math.round(marketData.baseValuePreConfig * 100)
           : undefined,
 
-        // Three-perspective pricing (cents)
+        // Five-perspective pricing (cents)
         tradeInValue: Math.round(marketData.tradeInValue * 100),
         privatePartyValue: Math.round(marketData.privatePartyValue * 100),
         dealerRetailValue: Math.round(marketData.dealerRetailValue * 100),
+        wholesaleValue: Math.round((marketData.wholesaleValue || 0) * 100) || undefined,
+        loanValue: Math.round((marketData.loanValue || 0) * 100) || undefined,
 
         // Condition tier + consensus metadata
         vdbConditionTier: marketData.vdbConditionTier,
@@ -903,6 +940,8 @@ export const inspectionRouter = router({
             estimatedValue: s.estimatedValue,
             tradeInValue: s.tradeInValue,
             dealerRetailValue: s.dealerRetailValue,
+            wholesaleValue: s.wholesaleValue || 0,
+            loanValue: s.loanValue || 0,
             confidence: s.confidence,
             isConditionTiered: s.isConditionTiered,
           })),
@@ -910,6 +949,7 @@ export const inspectionRouter = router({
         consensusMethod: marketData.consensusMethod,
         configPremiumMode: marketData.configPremiumMode,
         conditionAttenuation: marketData.conditionAttenuation,
+        sourceCount: marketData.sourceCount,
       };
 
       // Create or update MarketAnalysis record
