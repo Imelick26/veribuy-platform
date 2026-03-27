@@ -185,11 +185,25 @@ function is4wd(vehicle: VehicleConfig): boolean {
  *
  * Returns an array of applicable premiums and the combined multiplier.
  * Premiums are multiplicative (stacked) but capped at MAX_COMBINED_PREMIUM.
+ *
+ * @param vehicle - Vehicle configuration data
+ * @param mode    - Premium application mode:
+ *   "full"    — Apply full premiums (fallback sources that don't account for config)
+ *   "partial" — Apply 50% of premiums (VDB primary, already partially config-aware)
+ *   "none"    — No premiums applied (source fully accounts for config, e.g., exact VIN match)
  */
-export function calculateConfigPremiums(vehicle: VehicleConfig): {
+export function calculateConfigPremiums(
+  vehicle: VehicleConfig,
+  mode: "full" | "partial" | "none" = "full",
+): {
   premiums: ConfigPremium[];
   combinedMultiplier: number;
 } {
+  // If mode is "none", skip all premium calculations
+  if (mode === "none") {
+    return { premiums: [], combinedMultiplier: 1.0 };
+  }
+
   const premiums: ConfigPremium[] = [];
   const bodyType = classifyBody(vehicle);
   const vehicleAge = new Date().getFullYear() - vehicle.year;
@@ -257,6 +271,12 @@ export function calculateConfigPremiums(vehicle: VehicleConfig): {
   let combinedMultiplier = 1.0;
   for (const p of premiums) {
     combinedMultiplier *= p.multiplier;
+  }
+
+  // In "partial" mode, apply only 50% of the premium above 1.0
+  // e.g., 1.30 → 1.0 + (0.30 * 0.5) = 1.15
+  if (mode === "partial" && combinedMultiplier > 1.0) {
+    combinedMultiplier = 1.0 + (combinedMultiplier - 1.0) * 0.5;
   }
 
   // Cap at maximum

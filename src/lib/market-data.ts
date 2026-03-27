@@ -1,18 +1,20 @@
 /**
- * Market Data Orchestrator
+ * Market Data Orchestrator (v2 — Multi-Source Consensus)
  *
- * Central module that fetches vehicle market value from multiple sources
- * in a waterfall pattern, then applies configuration premiums.
+ * Fetches vehicle market value from up to 3 API sources in parallel,
+ * then combines them using a weighted consensus algorithm.
  *
- * Waterfall order:
- *   1. VinAudit Market Value API (VIN-based, inherently trim-aware)
- *   2. MarketCheck (year/make/model, good for newer vehicles with dealer inventory)
- *   3. Category-aware fallback (trucks vs sedans vs SUVs)
+ * Sources (parallel fan-out via Promise.allSettled):
+ *   1. VehicleDatabases.com — condition-tiered pricing (primary)
+ *   2. VinAudit — VIN-based market value
+ *   3. MarketCheck — real dealer inventory
+ *   4. Category-aware fallback curves (always available, lowest weight)
  *
- * After obtaining a base value, configuration premiums are applied on top
- * (diesel, manual, 4x4, performance trims).
+ * After consensus, configuration premiums are applied with a mode
+ * determined by the consensus engine (full/partial/none).
  */
 
+import { fetchVehicleDatabasesData } from "./vehicledatabases";
 import { fetchMarketValue as fetchVinAuditValue } from "./vinaudit";
 import { fetchMarketCheckData } from "./marketcheck";
 import {
@@ -21,6 +23,12 @@ import {
   type ConfigPremium,
   type VehicleConfig,
 } from "./config-premiums";
+import {
+  calculateConsensus,
+  selectTierPrices,
+  type SourceEstimate,
+  type ConsensusResult,
+} from "./pricing-consensus";
 import type { NormalizedListing } from "./marketcheck";
 
 /* ------------------------------------------------------------------ */
@@ -28,20 +36,20 @@ import type { NormalizedListing } from "./marketcheck";
 /* ------------------------------------------------------------------ */
 
 export interface MarketDataResult {
-  /** Estimated market value in dollars (after config premiums) */
+  /** Consensus estimated value in dollars (private party, after config premiums) */
   estimatedValue: number;
-  /** Low end of range in dollars */
+  /** Low end of range in dollars (trade-in based) */
   valueLow: number;
-  /** High end of range in dollars */
+  /** High end of range in dollars (dealer retail based) */
   valueHigh: number;
-  /** Mileage adjustment in dollars (negative = over average miles) */
+  /** Mileage adjustment in dollars */
   mileageAdjustment: number;
-  /** Comparable listings from all sources (deduplicated) */
+  /** Comparable listings from all sources */
   nearbyListings: NormalizedListing[];
 
-  /** Which data source provided the base value */
-  dataSource: "vinaudit" | "marketcheck" | "fallback";
-  /** Confidence in the base price (0-1) */
+  /** Primary data source */
+  dataSource: string;
+  /** Confidence in the consensus price (0-1) */
   confidence: number;
   /** Base value BEFORE config premiums (dollars) */
   baseValuePreConfig: number;
@@ -49,62 +57,49 @@ export interface MarketDataResult {
   configPremiums: ConfigPremium[];
   /** Combined config premium multiplier */
   configMultiplier: number;
+
+  /** Three-perspective pricing (dollars) */
+  tradeInValue: number;
+  privatePartyValue: number;
+  dealerRetailValue: number;
+
+  /** VDB condition tier used (if applicable) */
+  vdbConditionTier: string | null;
+
+  /** All individual source results for transparency */
+  sourceResults: SourceEstimate[];
+  /** Consensus method used */
+  consensusMethod: string;
+  /** Config premium mode used */
+  configPremiumMode: "full" | "partial" | "none";
+  /** Condition attenuation factor applied */
+  conditionAttenuation: number;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Category-Aware Fallback Curves                                     */
 /* ------------------------------------------------------------------ */
 
-/**
- * Fallback base values by vehicle category and age bracket.
- * Trucks hold value much better than sedans, especially with
- * desirable configurations (premiums applied separately).
- */
 const FALLBACK_CURVES: Record<string, Record<string, number>> = {
   truck: {
-    "0-5": 38000,
-    "5-10": 28000,
-    "10-15": 20000,
-    "15-20": 16000,
-    "20-25": 12000,
-    "25-30": 9000,
-    "30+": 7000,
+    "0-5": 38000, "5-10": 28000, "10-15": 20000, "15-20": 16000,
+    "20-25": 12000, "25-30": 9000, "30+": 7000,
   },
   suv: {
-    "0-5": 32000,
-    "5-10": 24000,
-    "10-15": 16000,
-    "15-20": 12000,
-    "20-25": 9000,
-    "25-30": 7000,
-    "30+": 5000,
+    "0-5": 32000, "5-10": 24000, "10-15": 16000, "15-20": 12000,
+    "20-25": 9000, "25-30": 7000, "30+": 5000,
   },
   sports: {
-    "0-5": 30000,
-    "5-10": 22000,
-    "10-15": 15000,
-    "15-20": 11000,
-    "20-25": 8000,
-    "25-30": 6000,
-    "30+": 5000,
+    "0-5": 30000, "5-10": 22000, "10-15": 15000, "15-20": 11000,
+    "20-25": 8000, "25-30": 6000, "30+": 5000,
   },
   sedan: {
-    "0-5": 24000,
-    "5-10": 16000,
-    "10-15": 10000,
-    "15-20": 6000,
-    "20-25": 4000,
-    "25-30": 3000,
-    "30+": 2500,
+    "0-5": 24000, "5-10": 16000, "10-15": 10000, "15-20": 6000,
+    "20-25": 4000, "25-30": 3000, "30+": 2500,
   },
   other: {
-    "0-5": 28000,
-    "5-10": 20000,
-    "10-15": 12000,
-    "15-20": 8000,
-    "20-25": 6000,
-    "25-30": 4500,
-    "30+": 3500,
+    "0-5": 28000, "5-10": 20000, "10-15": 12000, "15-20": 8000,
+    "20-25": 6000, "25-30": 4500, "30+": 3500,
   },
 };
 
@@ -118,11 +113,7 @@ function getAgeBracket(age: number): string {
   return "30+";
 }
 
-function getFallbackValue(vehicle: VehicleConfig): {
-  estimated: number;
-  low: number;
-  high: number;
-} {
+function getFallbackEstimate(vehicle: VehicleConfig): SourceEstimate {
   const bodyType = classifyBody(vehicle);
   const age = new Date().getFullYear() - vehicle.year;
   const bracket = getAgeBracket(age);
@@ -130,9 +121,91 @@ function getFallbackValue(vehicle: VehicleConfig): {
   const estimated = curve[bracket] || 5000;
 
   return {
-    estimated,
-    low: Math.round(estimated * 0.6),
-    high: Math.round(estimated * 1.5),
+    source: "fallback",
+    estimatedValue: estimated,
+    tradeInValue: Math.round(estimated * 0.75),
+    dealerRetailValue: Math.round(estimated * 1.25),
+    confidence: 0.25,
+    isConditionTiered: false,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Source Fetchers (return SourceEstimate | null)                      */
+/* ------------------------------------------------------------------ */
+
+async function fetchVDBSource(
+  vin: string,
+  mileage: number | undefined,
+  state: string,
+  conditionScore: number,
+): Promise<{ estimate: SourceEstimate; tier: string } | null> {
+  const result = await fetchVehicleDatabasesData(vin, mileage, state);
+  if (!result) return null;
+
+  const { tier, prices } = selectTierPrices(result.tiers, conditionScore);
+
+  // Use private party as the primary comparison value
+  const estimatedValue = prices.privateParty || prices.dealerRetail || prices.tradeIn;
+  if (estimatedValue <= 0) return null;
+
+  return {
+    estimate: {
+      source: "vehicledatabases",
+      estimatedValue,
+      tradeInValue: prices.tradeIn,
+      dealerRetailValue: prices.dealerRetail,
+      confidence: 0.90,
+      isConditionTiered: true,
+      raw: { tier, allTiers: result.tiers },
+    },
+    tier,
+  };
+}
+
+async function fetchVinAuditSource(
+  vin: string,
+  mileage: number | undefined,
+): Promise<SourceEstimate | null> {
+  const result = await fetchVinAuditValue(vin, mileage);
+  if (!result || result.estimatedValue <= 1000) return null;
+
+  return {
+    source: "vinaudit",
+    estimatedValue: result.estimatedValue,
+    tradeInValue: Math.round(result.estimatedValue * 0.82),
+    dealerRetailValue: result.valueHigh || Math.round(result.estimatedValue * 1.2),
+    confidence: 0.80,
+    isConditionTiered: false,
+    raw: result,
+  };
+}
+
+async function fetchMarketCheckSource(
+  vehicle: VehicleConfig,
+  zip: string,
+  mileage: number | undefined,
+): Promise<{ estimate: SourceEstimate; listings: NormalizedListing[] } | null> {
+  const result = await fetchMarketCheckData(
+    vehicle.year,
+    vehicle.make,
+    vehicle.model,
+    zip,
+    mileage,
+  );
+  if (!result) return null;
+
+  return {
+    estimate: {
+      source: "marketcheck",
+      estimatedValue: result.estimatedValue,
+      tradeInValue: Math.round(result.estimatedValue * 0.85),
+      dealerRetailValue: result.valueHigh || Math.round(result.estimatedValue * 1.15),
+      confidence: result.nearbyListings.length >= 5 ? 0.80 : 0.60,
+      isConditionTiered: false,
+      raw: { stats: { low: result.valueLow, high: result.valueHigh }, listingCount: result.nearbyListings.length },
+    },
+    listings: result.nearbyListings,
   };
 }
 
@@ -141,120 +214,127 @@ function getFallbackValue(vehicle: VehicleConfig): {
 /* ------------------------------------------------------------------ */
 
 /**
- * Fetch market data from multiple sources with config premium overlay.
+ * Fetch market data from all sources in parallel, apply consensus, then config premiums.
  *
- * @param vehicle - Vehicle object with VIN, year, make, model, and NHTSA fields
- * @param zip     - ZIP code for nearby search
- * @param mileage - Current odometer reading
+ * @param vehicle        - Vehicle with VIN and decoded specs
+ * @param zip            - ZIP code for nearby search
+ * @param mileage        - Current odometer reading
+ * @param conditionScore - AI condition score (0-100), defaults to 70
  */
 export async function fetchMarketData(
   vehicle: VehicleConfig & { vin: string },
   zip: string = "97201",
   mileage?: number,
+  conditionScore: number = 70,
 ): Promise<MarketDataResult> {
-  let baseEstimated = 0;
-  let baseLow = 0;
-  let baseHigh = 0;
-  let mileageAdjustment = 0;
+  // Extract state from ZIP (rough mapping) or default to OR
+  const state = "OR"; // TODO: derive from zip
+
+  const sourceEstimates: SourceEstimate[] = [];
   let allListings: NormalizedListing[] = [];
-  let dataSource: MarketDataResult["dataSource"] = "fallback";
-  let confidence = 0;
+  let vdbConditionTier: string | null = null;
+  let mileageAdjustment = 0;
 
-  // ── Source 1: VinAudit (VIN-based, most accurate) ──────────────
-  try {
-    const vinAuditResult = await fetchVinAuditValue(vehicle.vin, mileage);
+  // ── Parallel fan-out: fire all API calls simultaneously ─────────
+  const [vdbResult, vinAuditResult, marketCheckResult] = await Promise.allSettled([
+    fetchVDBSource(vehicle.vin, mileage, state, conditionScore).catch((err) => {
+      console.warn(`[MarketData] VehicleDatabases failed: ${err instanceof Error ? err.message : err}`);
+      return null;
+    }),
+    fetchVinAuditSource(vehicle.vin, mileage).catch((err) => {
+      console.warn(`[MarketData] VinAudit failed: ${err instanceof Error ? err.message : err}`);
+      return null;
+    }),
+    fetchMarketCheckSource(vehicle, zip, mileage).catch((err) => {
+      console.warn(`[MarketData] MarketCheck failed: ${err instanceof Error ? err.message : err}`);
+      return null;
+    }),
+  ]);
 
-    if (vinAuditResult && vinAuditResult.estimatedValue > 1000) {
-      baseEstimated = vinAuditResult.estimatedValue;
-      baseLow = vinAuditResult.valueLow || Math.round(baseEstimated * 0.8);
-      baseHigh = vinAuditResult.valueHigh || Math.round(baseEstimated * 1.2);
-      mileageAdjustment = vinAuditResult.mileageAdjustment || 0;
-      allListings = vinAuditResult.nearbyListings || [];
-      dataSource = "vinaudit";
-      confidence = 0.85;
-      console.log(`[MarketData] VinAudit: $${baseEstimated} (${allListings.length} comps)`);
-    } else {
-      console.warn(`[MarketData] VinAudit returned low/no value for ${vehicle.vin}`);
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[MarketData] VinAudit failed: ${msg}`);
-  }
+  // ── Collect results ──────────────────────────────────────────────
 
-  // ── Source 2: MarketCheck (year/make/model dealer inventory) ───
-  // Always try MarketCheck for comparable listings, even if VinAudit succeeded
-  try {
-    const mcResult = await fetchMarketCheckData(
-      vehicle.year,
-      vehicle.make,
-      vehicle.model,
-      zip,
-      mileage,
-    );
-
-    if (mcResult) {
-      // Merge comparable listings (deduplicate by price+mileage proximity)
-      const existingPrices = new Set(allListings.map((l) => `${l.price}-${l.mileage}`));
-      const newListings = mcResult.nearbyListings.filter(
-        (l) => !existingPrices.has(`${l.price}-${l.mileage}`),
-      );
-      allListings = [...allListings, ...newListings];
-
-      // If VinAudit didn't provide a base value, use MarketCheck
-      if (dataSource === "fallback") {
-        baseEstimated = mcResult.estimatedValue;
-        baseLow = mcResult.valueLow;
-        baseHigh = mcResult.valueHigh;
-        mileageAdjustment = mcResult.mileageAdjustment;
-        dataSource = "marketcheck";
-        confidence = 0.75;
-        console.log(`[MarketData] MarketCheck: $${baseEstimated} (${mcResult.nearbyListings.length} comps)`);
-      }
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[MarketData] MarketCheck failed: ${msg}`);
-  }
-
-  // ── Source 3: Category-aware fallback ──────────────────────────
-  if (dataSource === "fallback") {
-    const fb = getFallbackValue(vehicle);
-    baseEstimated = fb.estimated;
-    baseLow = fb.low;
-    baseHigh = fb.high;
-    confidence = 0.3;
-    const bodyType = classifyBody(vehicle);
-    console.warn(
-      `[MarketData] Using ${bodyType} fallback for ${vehicle.year} ${vehicle.make} ${vehicle.model}: $${baseEstimated}`,
+  // VehicleDatabases
+  const vdb = vdbResult.status === "fulfilled" ? vdbResult.value : null;
+  if (vdb) {
+    sourceEstimates.push(vdb.estimate);
+    vdbConditionTier = vdb.tier;
+    console.log(
+      `[MarketData] VehicleDatabases (${vdb.tier}): $${vdb.estimate.estimatedValue} PP / $${vdb.estimate.tradeInValue} TI / $${vdb.estimate.dealerRetailValue} DR`,
     );
   }
 
-  // ── Apply configuration premiums ───────────────────────────────
-  const { premiums, combinedMultiplier } = calculateConfigPremiums(vehicle);
+  // VinAudit
+  const vinAudit = vinAuditResult.status === "fulfilled" ? vinAuditResult.value : null;
+  if (vinAudit) {
+    sourceEstimates.push(vinAudit);
+    console.log(`[MarketData] VinAudit: $${vinAudit.estimatedValue}`);
+  }
 
-  const adjustedEstimated = Math.round(baseEstimated * combinedMultiplier);
-  const adjustedLow = Math.round(baseLow * combinedMultiplier);
-  const adjustedHigh = Math.round(baseHigh * combinedMultiplier);
+  // MarketCheck
+  const mc = marketCheckResult.status === "fulfilled" ? marketCheckResult.value : null;
+  if (mc) {
+    sourceEstimates.push(mc.estimate);
+    allListings = mc.listings;
+    console.log(
+      `[MarketData] MarketCheck: $${mc.estimate.estimatedValue} (${mc.listings.length} comps)`,
+    );
+  }
+
+  // Always add fallback as lowest-weight option
+  const fallback = getFallbackEstimate(vehicle);
+  sourceEstimates.push(fallback);
+  console.log(`[MarketData] Fallback (${classifyBody(vehicle)}): $${fallback.estimatedValue}`);
+
+  // ── Calculate consensus ──────────────────────────────────────────
+  const consensus: ConsensusResult = calculateConsensus(sourceEstimates);
+
+  console.log(
+    `[MarketData] Consensus (${consensus.consensusMethod}): $${consensus.estimatedValue} PP | ` +
+    `Primary: ${consensus.primarySource} | Confidence: ${(consensus.confidence * 100).toFixed(0)}%`,
+  );
+
+  // ── Apply configuration premiums ─────────────────────────────────
+  const { premiums, combinedMultiplier } = calculateConfigPremiums(
+    vehicle,
+    consensus.configPremiumMode,
+  );
+
+  const adjustedEstimated = Math.round(consensus.estimatedValue * combinedMultiplier);
+  const adjustedTradeIn = Math.round(consensus.tradeInValue * combinedMultiplier);
+  const adjustedRetail = Math.round(consensus.dealerRetailValue * combinedMultiplier);
 
   if (premiums.length > 0) {
     console.log(
-      `[MarketData] Config premiums (${combinedMultiplier.toFixed(2)}x): ${premiums.map((p) => p.factor).join(", ")}`,
+      `[MarketData] Config premiums (${consensus.configPremiumMode} mode, ${combinedMultiplier.toFixed(2)}x): ` +
+      `${premiums.map((p) => p.factor).join(", ")}`,
     );
     console.log(
-      `[MarketData] $${baseEstimated} × ${combinedMultiplier.toFixed(2)} = $${adjustedEstimated}`,
+      `[MarketData] $${consensus.estimatedValue} x ${combinedMultiplier.toFixed(2)} = $${adjustedEstimated}`,
     );
   }
 
   return {
     estimatedValue: adjustedEstimated,
-    valueLow: adjustedLow,
-    valueHigh: adjustedHigh,
+    valueLow: adjustedTradeIn,
+    valueHigh: adjustedRetail,
     mileageAdjustment,
     nearbyListings: allListings,
-    dataSource,
-    confidence,
-    baseValuePreConfig: baseEstimated,
+
+    dataSource: consensus.primarySource,
+    confidence: consensus.confidence,
+    baseValuePreConfig: consensus.estimatedValue,
     configPremiums: premiums,
     configMultiplier: combinedMultiplier,
+
+    tradeInValue: adjustedTradeIn,
+    privatePartyValue: adjustedEstimated,
+    dealerRetailValue: adjustedRetail,
+
+    vdbConditionTier,
+
+    sourceResults: consensus.sourceResults,
+    consensusMethod: consensus.consensusMethod,
+    configPremiumMode: consensus.configPremiumMode,
+    conditionAttenuation: consensus.conditionAttenuation,
   };
 }

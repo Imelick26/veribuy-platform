@@ -756,7 +756,8 @@ export const inspectionRouter = router({
       const zipMatch = (inspection.location || "").match(/\b(\d{5})\b/);
       const zip = zipMatch ? zipMatch[1] : "97201"; // default Portland, OR
 
-      // Fetch market value from multi-source orchestrator (VinAudit → MarketCheck → fallback)
+      // Fetch market value from multi-source consensus engine
+      const conditionScore = inspection.overallScore || 70;
       const marketData = await fetchMarketData(
         {
           vin: vehicle.vin,
@@ -772,6 +773,7 @@ export const inspectionRouter = router({
         },
         zip,
         inspection.odometer || undefined,
+        conditionScore,
       );
 
       // Build comparables from nearby listings
@@ -814,13 +816,11 @@ export const inspectionRouter = router({
       const totalRepairHigh = inspection.findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
       const reconCostCents = Math.round((totalRepairLow + totalRepairHigh) / 2);
 
-      const conditionScore = inspection.overallScore || 70;
-
       // Fair value at baseline (score 85 = good condition, no recon) — the reference point
-      const baselineResult = calculateFairPrice(basePriceCents, 85, historyData, 0);
+      const baselineResult = calculateFairPrice(basePriceCents, 85, historyData, 0, marketData.conditionAttenuation);
 
       // Actual fair value for THIS specific car
-      const fairResult = calculateFairPrice(basePriceCents, conditionScore, historyData, reconCostCents);
+      const fairResult = calculateFairPrice(basePriceCents, conditionScore, historyData, reconCostCents, marketData.conditionAttenuation);
 
       // Price bands around the fair value
       const dealEcon = calculateDealEconomics(
@@ -889,6 +889,27 @@ export const inspectionRouter = router({
         baseValuePreConfig: marketData.baseValuePreConfig !== marketData.estimatedValue
           ? Math.round(marketData.baseValuePreConfig * 100)
           : undefined,
+
+        // Three-perspective pricing (cents)
+        tradeInValue: Math.round(marketData.tradeInValue * 100),
+        privatePartyValue: Math.round(marketData.privatePartyValue * 100),
+        dealerRetailValue: Math.round(marketData.dealerRetailValue * 100),
+
+        // Condition tier + consensus metadata
+        vdbConditionTier: marketData.vdbConditionTier,
+        sourceResults: JSON.parse(JSON.stringify(
+          marketData.sourceResults.map((s) => ({
+            source: s.source,
+            estimatedValue: s.estimatedValue,
+            tradeInValue: s.tradeInValue,
+            dealerRetailValue: s.dealerRetailValue,
+            confidence: s.confidence,
+            isConditionTiered: s.isConditionTiered,
+          })),
+        )),
+        consensusMethod: marketData.consensusMethod,
+        configPremiumMode: marketData.configPremiumMode,
+        conditionAttenuation: marketData.conditionAttenuation,
       };
 
       // Create or update MarketAnalysis record

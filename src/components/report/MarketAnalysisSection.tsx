@@ -50,7 +50,7 @@ export interface MarketAnalysisData {
   }> | null;
 
   // Multi-source pricing metadata
-  dataSource?: string | null;              // "vinaudit" | "marketcheck" | "fallback"
+  dataSource?: string | null;              // "vehicledatabases" | "vinaudit" | "marketcheck" | "fallback" | "consensus"
   dataSourceConfidence?: number | null;    // 0-1
   configPremiums?: Array<{
     factor: string;
@@ -59,6 +59,23 @@ export interface MarketAnalysisData {
   }> | null;
   configMultiplier?: number | null;
   baseValuePreConfig?: number | null;      // cents
+
+  // Three-perspective pricing (cents)
+  tradeInValue?: number | null;
+  privatePartyValue?: number | null;
+  dealerRetailValue?: number | null;
+
+  // Condition tier + consensus metadata
+  vdbConditionTier?: string | null;
+  sourceResults?: Array<{
+    source: string;
+    estimatedValue: number;
+    confidence: number;
+    isConditionTiered: boolean;
+  }> | null;
+  consensusMethod?: string | null;
+  configPremiumMode?: string | null;
+  conditionAttenuation?: number | null;
 }
 
 interface MarketAnalysisSectionProps {
@@ -112,24 +129,82 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
 
   return (
     <div className={cn("space-y-5", compact && "space-y-3")}>
-      {/* ── Data Source + Confidence ── */}
+      {/* ── Three-Perspective Pricing Header ── */}
+      {(data.tradeInValue || data.privatePartyValue || data.dealerRetailValue) && (
+        <div className="grid grid-cols-3 gap-2">
+          <PerspectiveCard
+            label="Trade-In"
+            value={data.tradeInValue}
+            color="text-amber-700"
+            bgColor="bg-amber-50"
+            borderColor="border-amber-200"
+          />
+          <PerspectiveCard
+            label="Private Party"
+            value={data.privatePartyValue}
+            color="text-brand-700"
+            bgColor="bg-brand-50"
+            borderColor="border-brand-200"
+            highlight
+          />
+          <PerspectiveCard
+            label="Dealer Retail"
+            value={data.dealerRetailValue}
+            color="text-green-700"
+            bgColor="bg-green-50"
+            borderColor="border-green-200"
+          />
+        </div>
+      )}
+
+      {/* ── Data Sources + Confidence ── */}
       {data.dataSource && (
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant={
-            data.dataSource === "vinaudit" ? "info" as const :
-            data.dataSource === "marketcheck" ? "success" as const :
-            "warning" as const
-          }>
-            {data.dataSource === "vinaudit" ? "VinAudit" :
-             data.dataSource === "marketcheck" ? "MarketCheck" :
-             "Estimated"}
-          </Badge>
+          {/* Show all contributing sources as badges */}
+          {data.sourceResults && data.sourceResults.length > 0 ? (
+            data.sourceResults
+              .filter((s) => s.source !== "fallback" && s.estimatedValue > 0)
+              .map((s) => (
+                <Badge key={s.source} variant={
+                  s.source === "vehicledatabases" ? "info" as const :
+                  s.source === "vinaudit" ? "info" as const :
+                  s.source === "marketcheck" ? "success" as const :
+                  "warning" as const
+                }>
+                  {s.source === "vehicledatabases" ? "VehicleDatabases" :
+                   s.source === "vinaudit" ? "VinAudit" :
+                   s.source === "marketcheck" ? "MarketCheck" :
+                   s.source}
+                </Badge>
+              ))
+          ) : (
+            <Badge variant={
+              data.dataSource === "vinaudit" ? "info" as const :
+              data.dataSource === "marketcheck" ? "success" as const :
+              "warning" as const
+            }>
+              {data.dataSource === "vinaudit" ? "VinAudit" :
+               data.dataSource === "marketcheck" ? "MarketCheck" :
+               data.dataSource === "vehicledatabases" ? "VehicleDatabases" :
+               "Estimated"}
+            </Badge>
+          )}
+          {data.consensusMethod === "weighted-median" && (
+            <span className="text-[10px] text-text-tertiary font-medium">
+              Consensus
+            </span>
+          )}
+          {data.vdbConditionTier && (
+            <Badge variant="default">
+              {data.vdbConditionTier}
+            </Badge>
+          )}
           {data.dataSourceConfidence != null && (
             <span className="text-[10px] text-text-tertiary">
               {Math.round(data.dataSourceConfidence * 100)}% confidence
             </span>
           )}
-          {data.dataSource === "fallback" && (
+          {data.dataSource === "fallback" && !data.sourceResults?.some((s) => s.source !== "fallback" && s.estimatedValue > 0) && (
             <span className="text-[10px] text-amber-600">
               No live market data available — using category estimate + config premiums
             </span>
@@ -241,6 +316,8 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
             {/* Market Baseline */}
             <WaterfallRow
               label={`Market Baseline (${
+                data.consensusMethod === "weighted-median" ? "Consensus" :
+                data.dataSource === "vehicledatabases" ? "VehicleDatabases" :
                 data.dataSource === "vinaudit" ? "VinAudit" :
                 data.dataSource === "marketcheck" ? "MarketCheck" :
                 "Estimate"
@@ -426,6 +503,37 @@ function OfferGuide({ bands }: { bands: NonNullable<MarketAnalysisData["priceBan
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function PerspectiveCard({
+  label,
+  value,
+  color,
+  bgColor,
+  borderColor,
+  highlight = false,
+}: {
+  label: string;
+  value?: number | null;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  highlight?: boolean;
+}) {
+  if (!value) return null;
+  return (
+    <div className={cn(
+      "p-2.5 rounded-lg border text-center",
+      bgColor,
+      borderColor,
+      highlight && "ring-1 ring-brand-400",
+    )}>
+      <p className="text-[10px] text-text-tertiary font-medium uppercase tracking-wide">{label}</p>
+      <p className={cn("text-lg font-bold mt-0.5", color)}>
+        {formatCurrency(value)}
+      </p>
     </div>
   );
 }

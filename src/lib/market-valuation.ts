@@ -219,19 +219,28 @@ function getRecallFactor(openRecalls: number): number {
 /**
  * Calculate the fair purchase price for a vehicle.
  *
- * @param basePriceCents - VinAudit estimated value in cents (already mileage-adjusted)
- * @param conditionScore - Overall condition score 0-100
- * @param history - Vehicle history data (title, accidents, owners, damage)
- * @param reconCostCents - Estimated reconditioning cost in cents (avg of low/high)
+ * @param basePriceCents      - Market value in cents (already mileage-adjusted)
+ * @param conditionScore      - Overall condition score 0-100
+ * @param history             - Vehicle history data (title, accidents, owners, damage)
+ * @param reconCostCents      - Estimated reconditioning cost in cents (avg of low/high)
+ * @param conditionAttenuation - How much of the condition multiplier to apply (0-1).
+ *                               Use 0.4 when the base price already comes from a
+ *                               condition-tiered source (VehicleDatabases) to avoid
+ *                               double-counting condition adjustments.
+ *                               Use 1.0 for sources that don't account for condition.
  */
 export function calculateFairPrice(
   basePriceCents: number,
   conditionScore: number,
   history: HistoryData,
   reconCostCents: number = 0,
+  conditionAttenuation: number = 1.0,
 ): FairPriceResult {
-  // Condition multiplier (smooth curve)
-  const conditionMultiplier = interpolateConditionMultiplier(conditionScore);
+  // Condition multiplier (smooth curve), attenuated if source already accounts for condition
+  const rawConditionMultiplier = interpolateConditionMultiplier(conditionScore);
+  // Attenuate: blend between 1.0 (no adjustment) and raw multiplier
+  // attenuation=1.0 → full multiplier, attenuation=0.0 → always 1.0
+  const conditionMultiplier = 1.0 + (rawConditionMultiplier - 1.0) * conditionAttenuation;
 
   // History factors
   const titleFactor = getTitleFactor(history.titleStatus);

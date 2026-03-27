@@ -446,11 +446,25 @@ model MarketAnalysis {
   priceBands               Json?     // [{ label, maxPriceCents, marginPercent }]
 
   // Data source + configuration premiums (multi-source pricing)
-  dataSource            String?   // "vinaudit" | "marketcheck" | "fallback"
+  dataSource            String?   // "nada" | "vehicledatabases" | "vinaudit" | "marketcheck" | "fallback" | "consensus"
   dataSourceConfidence  Float?    // 0.0-1.0 confidence in the base price
   configPremiums        Json?     // [{ factor, multiplier, explanation }]
   configMultiplier      Float?    // Combined config premium multiplier
   baseValuePreConfig    Int?      // Base value before config premiums applied (cents)
+
+  // Three-perspective pricing (cents) — from VehicleDatabases/NADA or derived
+  tradeInValue          Int?
+  privatePartyValue     Int?
+  dealerRetailValue     Int?
+
+  // Condition tier used for VehicleDatabases lookup
+  vdbConditionTier      String?   // "Outstanding" | "Clean" | "Average" | "Rough"
+
+  // Multi-source consensus metadata
+  sourceResults         Json?     // [{ source, estimatedValue, confidence, ... }]
+  consensusMethod       String?   // "single" | "weighted-median" | "fallback"
+  configPremiumMode     String?   // "full" | "partial" | "none"
+  conditionAttenuation  Float?    // 0-1, how much condition multiplier applies
 
   inspectionId String     @unique
   inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
