@@ -240,24 +240,28 @@ async function searchComparables(
 
 /**
  * Execute a MarketCheck search (active or sold inventory).
+ * Sold listings use the same /search/car/active endpoint with sold=true parameter.
  * Automatically catches 422 radius errors and retries without radius.
  */
 async function doSearch(
   type: "active" | "sold",
   params: Record<string, string>,
 ): Promise<MarketCheckSearchResponse> {
-  const endpoint = type === "sold" ? "search/car/sold" : "search/car/active";
-  const url = `${MARKETCHECK_BASE}/${endpoint}?${new URLSearchParams(params)}`;
+  const searchParams = { ...params };
+  if (type === "sold") {
+    searchParams.sold = "true";
+  }
+  const url = `${MARKETCHECK_BASE}/search/car/active?${new URLSearchParams(searchParams)}`;
 
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
   });
 
   // Handle 422 radius limit error — retry without radius
-  if (res.status === 422 && params.radius) {
+  if (res.status === 422 && searchParams.radius) {
     console.log(`[MarketCheck] 422 radius limit — retrying without radius (nationwide)`);
-    const { radius: _, zip: __, ...noRadiusParams } = params;
-    const retryUrl = `${MARKETCHECK_BASE}/${endpoint}?${new URLSearchParams(noRadiusParams)}`;
+    const { radius: _, zip: __, ...noRadiusParams } = searchParams;
+    const retryUrl = `${MARKETCHECK_BASE}/search/car/active?${new URLSearchParams(noRadiusParams)}`;
     const retryRes = await fetch(retryUrl, {
       headers: { Accept: "application/json" },
     });
