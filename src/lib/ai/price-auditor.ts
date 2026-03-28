@@ -68,6 +68,16 @@ export interface PriceAuditInput {
   /** Deal rating */
   dealRating: string;
   dealReasoning: string;
+
+  /** Full vehicle context for informed auditing */
+  transmission?: string | null;
+  drivetrain?: string | null;
+  bodyCategory?: string;
+  conditionSummary?: string | null;
+  areaScores?: { exteriorBody?: number; interior?: number; mechanicalVisual?: number; underbodyFrame?: number };
+  confirmedFindings?: { title: string; severity: string }[];
+  comparableListings?: { title: string; price: number; mileage: number; source: string }[];
+  nearbyListingCount?: number;
 }
 
 export interface PriceAuditResult {
@@ -86,12 +96,29 @@ export async function auditPrice(
   input: PriceAuditInput,
 ): Promise<AIResult<PriceAuditResult>> {
   const { vehicle, mileage } = input;
-  const vehicleDesc = `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""}${vehicle.engine ? `, ${vehicle.engine}` : ""}`;
+  const vehicleDesc = [
+    `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+    vehicle.trim, vehicle.engine, input.transmission, input.drivetrain,
+  ].filter(Boolean).join(", ");
   const fairDollars = Math.round(input.fairPurchasePrice / 100);
   const baseDollars = Math.round(input.adjustedBaseValueCents / 100);
   const reconDollars = Math.round(input.reconCostCents / 100);
 
   const sourceSummary = input.sourcePrices.map((s) => `${s.source}: $${s.value.toLocaleString()}`).join(", ");
+
+  // Build full context sections
+  const conditionContext = input.conditionSummary
+    ? `\nCONDITION SUMMARY: ${input.conditionSummary}`
+    : "";
+  const areaScoreContext = input.areaScores
+    ? `\nAREA SCORES: Exterior ${input.areaScores.exteriorBody ?? "?"}/10, Interior ${input.areaScores.interior ?? "?"}/10, Mechanical ${input.areaScores.mechanicalVisual ?? "?"}/10, Underbody ${input.areaScores.underbodyFrame ?? "?"}/10`
+    : "";
+  const findingsContext = input.confirmedFindings?.length
+    ? `\nCONFIRMED FINDINGS:\n${input.confirmedFindings.map((f) => `  - ${f.title} (${f.severity})`).join("\n")}`
+    : "\nNO CONFIRMED FINDINGS";
+  const compsContext = input.comparableListings?.length
+    ? `\nCOMPARABLE LISTINGS (${input.nearbyListingCount || input.comparableListings.length} total):\n${input.comparableListings.slice(0, 8).map((c) => `  ${c.title} — $${c.price.toLocaleString()} — ${c.mileage.toLocaleString()} mi — ${c.source}`).join("\n")}`
+    : "\nNO COMPARABLE LISTINGS FOUND";
 
   return validatedAICall<PriceAuditResult>({
     label: "[PriceAuditor]",
@@ -100,17 +127,29 @@ export async function auditPrice(
       model: "gpt-4o",
       systemPrompt: `You are a pricing quality auditor for a vehicle valuation platform. Your job is to review a fully assembled pricing result and check for coherence issues.
 
+CRITICAL KNOWLEDGE — ENTHUSIAST PLATFORMS:
+- 7.3L Powerstroke diesels (1994-2003 Ford F-250/F-350): Worth $12K-30K+. Manual trans adds 20-40%. These are NOT cheap old trucks.
+- 5.9L/6.7L Cummins (Dodge/Ram 2500/3500): $15K-35K+. Manual premium applies.
+- Duramax diesels (Chevy/GMC 2500/3500): $15K-35K+.
+- Toyota Land Cruiser (all years): Holds value extremely well.
+- Jeep Wrangler: Minimal depreciation regardless of age.
+- Manual transmission trucks: 20-40% premium, increasingly rare.
+- Diesel + manual + 4WD on a heavy-duty truck is the trifecta — VERY valuable.
+- 200K miles on a diesel truck is MID-LIFE, not high mileage. These run 400K+.
+
 You should flag issues like:
 - Config premium misapplied (e.g., Lariat/XLT treated like a performance trim)
+- Enthusiast platform UNDERPRICED (e.g., a clean manual Powerstroke priced at $9K is wrong)
 - History multiplier inconsistent with title status severity
 - Condition multiplier doesn't match the condition score magnitude
 - Recon cost inconsistent with condition findings
-- Final price outside plausible range for this year/make/model/trim
+- Final price outside plausible range for this specific vehicle configuration
 - Individual reasoning contradicts the numbers
 - Double-counting (condition penalized twice, etc.)
 
 ONLY flag real issues. Don't flag things that are correct but unusual.
-If everything looks reasonable, approve with high coherence score.`,
+If everything looks reasonable, approve with high coherence score.
+If the price is clearly wrong for this platform/config, provide an adjusted price.`,
       userPrompt: `Audit this pricing result for coherence:
 
 VEHICLE: ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} miles` : ""}
@@ -127,6 +166,9 @@ PRICING CHAIN:
 7. Recon: -$${reconDollars.toLocaleString()} — "${input.reconReasoning}"
 8. FAIR PURCHASE PRICE: $${fairDollars.toLocaleString()}
 9. Deal rating: ${input.dealRating} — "${input.dealReasoning}"
+
+FULL VEHICLE CONTEXT:
+Category: ${input.bodyCategory || "unknown"}${conditionContext}${areaScoreContext}${findingsContext}${compsContext}
 
 Return JSON:
 {

@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
-import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, extractVinFromPhoto } from "@/lib/ai/media-analyzer";
+import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
 import { fetchMarketData } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
@@ -317,14 +317,30 @@ export const inspectionRouter = router({
         mileage: inspection.odometer,
       };
 
-      // Run condition assessment + unexpected issues in parallel
-      const [conditionAssessment, unexpectedResult] = await Promise.all([
+      // Run condition assessment + unexpected issues + odometer OCR in parallel
+      const odometerPhoto = mediaForAnalysis.find((m) => m.captureType === "ODOMETER");
+
+      const [conditionAssessment, unexpectedResult, odometerResult] = await Promise.all([
         analyzeVehicleCondition(vehicleInfo, mediaForAnalysis),
         scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis),
+        odometerPhoto && !inspection.odometer
+          ? extractOdometerFromPhoto(odometerPhoto.url)
+          : Promise.resolve(null),
       ]);
 
       // Persist condition scores to Inspection record
       await persistConditionScores(ctx.db, input.inspectionId, conditionAssessment);
+
+      // Persist odometer reading if extracted and not already set
+      if (odometerResult?.mileage && odometerResult.confidence >= 0.5 && !inspection.odometer) {
+        await ctx.db.inspection.update({
+          where: { id: input.inspectionId },
+          data: { odometer: odometerResult.mileage },
+        });
+        console.log(
+          `[Inspection] Odometer extracted from photo: ${odometerResult.mileage.toLocaleString()} miles (${(odometerResult.confidence * 100).toFixed(0)}% confidence)`,
+        );
+      }
 
       // Store results in step data (including photo-discovered risks)
       await ctx.db.inspectionStep.update({
@@ -341,6 +357,10 @@ export const inspectionRouter = router({
             conditionAssessment,
             unexpectedFindings: unexpectedResult.unexpectedFindings,
             unexpectedSummary: unexpectedResult.summary,
+            odometerOCR: odometerResult ? {
+              mileage: odometerResult.mileage,
+              confidence: odometerResult.confidence,
+            } : null,
           })),
         },
       });
@@ -348,6 +368,10 @@ export const inspectionRouter = router({
       return {
         conditionAssessment,
         unexpectedFindings: unexpectedResult.unexpectedFindings,
+        odometerOCR: odometerResult ? {
+          mileage: odometerResult.mileage,
+          confidence: odometerResult.confidence,
+        } : null,
       };
     }),
 
@@ -983,6 +1007,24 @@ export const inspectionRouter = router({
         fairPurchasePrice,
         dealRating: aiDealResult.result.rating,
         dealReasoning: aiDealResult.result.reasoning,
+        // Full vehicle context
+        transmission: vehicle.transmission,
+        drivetrain: vehicle.drivetrain,
+        bodyCategory,
+        conditionSummary: inspection.conditionSummary || undefined,
+        areaScores: {
+          exteriorBody: inspection.exteriorBodyScore ?? undefined,
+          interior: inspection.interiorScore ?? undefined,
+          mechanicalVisual: inspection.mechanicalVisualScore ?? undefined,
+          underbodyFrame: inspection.underbodyFrameScore ?? undefined,
+        },
+        confirmedFindings: inspection.findings
+          .filter((f) => f.repairCostLow || f.repairCostHigh)
+          .map((f) => ({ title: f.title, severity: f.severity })),
+        comparableListings: marketData.nearbyListings.slice(0, 10).map((l) => ({
+          title: l.title, price: l.price, mileage: l.mileage, source: l.source,
+        })),
+        nearbyListingCount: marketData.nearbyListings.length,
       });
 
       // Apply auditor correction if not approved
@@ -1075,6 +1117,14 @@ export const inspectionRouter = router({
         configPremiumMode: marketData.configPremiumMode,
         conditionAttenuation: marketData.conditionAttenuation,
         sourceCount: marketData.sourceCount,
+
+        // AI auditor result
+        aiAuditorApproved: aiAuditResult.result.approved,
+        aiAuditorCoherence: aiAuditResult.result.coherenceScore,
+        aiAuditorFlags: aiAuditResult.result.flags.length > 0
+          ? JSON.parse(JSON.stringify(aiAuditResult.result.flags))
+          : undefined,
+        aiAuditorReasoning: aiAuditResult.result.reasoning || undefined,
       };
 
       // Create or update MarketAnalysis record
@@ -1086,6 +1136,36 @@ export const inspectionRouter = router({
         },
         update: marketAnalysisData,
       });
+
+      // ── Log AI valuation calls for training data ──────────────────
+      const aiLogs = [
+        { module: "consensus", model: "gpt-4o", fallbackTier: marketData.aiMetadata?.consensusTier ?? 1, retried: false, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim }, sourceCount: marketData.sourceCount }, output: { consensusValue: marketData.baseValuePreConfig, confidence: marketData.confidence }, reasoning: marketData.aiMetadata?.consensusReasoning },
+        { module: "config_premium", model: "gpt-4o", fallbackTier: marketData.aiMetadata?.configPremiumTier ?? 1, retried: false, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim }, bodyCategory, baseConsensusValue: marketData.baseValuePreConfig }, output: { configMultiplier: marketData.configMultiplier }, reasoning: marketData.aiMetadata?.configReasoning },
+        { module: "geo_pricing", model: "gpt-4o-mini", fallbackTier: marketData.aiMetadata?.geoPricingTier ?? 1, retried: false, input: { bodyCategory, zip }, output: { regionalMultiplier: marketData.configMultiplier > 0 ? marketData.estimatedValue / (marketData.baseValuePreConfig * marketData.configMultiplier) : 1.0 }, reasoning: marketData.aiMetadata?.geoReasoning },
+        { module: "history", model: aiHistoryResult.model, fallbackTier: aiHistoryResult.fallbackTier, retried: aiHistoryResult.retried, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model }, history: historyData, conditionScore }, output: aiHistoryResult.result, reasoning: aiHistoryResult.reasoning },
+        { module: "condition", model: aiConditionResult.model, fallbackTier: aiConditionResult.fallbackTier, retried: aiConditionResult.retried, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model }, conditionScore, mileage: inspection.odometer }, output: aiConditionResult.result, reasoning: aiConditionResult.reasoning },
+        { module: "recon", model: aiReconResult.model, fallbackTier: aiReconResult.fallbackTier, retried: aiReconResult.retried, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model }, findingCount: inspection.findings.length, zip }, output: aiReconResult.result, reasoning: aiReconResult.reasoning },
+        { module: "deal_rating", model: aiDealResult.model, fallbackTier: aiDealResult.fallbackTier, retried: aiDealResult.retried, input: { fairPurchasePrice: finalFairPurchasePrice, baseMarketValue: basePriceCents, conditionScore }, output: aiDealResult.result, reasoning: aiDealResult.reasoning },
+        { module: "auditor", model: aiAuditResult.model, fallbackTier: aiAuditResult.fallbackTier, retried: aiAuditResult.retried, input: { fairPurchasePrice: finalFairPurchasePrice, consensusValue: marketData.baseValuePreConfig }, output: aiAuditResult.result, reasoning: aiAuditResult.reasoning, auditorApproved: aiAuditResult.result.approved, auditorCoherence: aiAuditResult.result.coherenceScore, auditorFlags: aiAuditResult.result.flags, auditorAdjustment: aiAuditResult.result.adjustedFairPrice ? (aiAuditResult.result.adjustedFairPrice - fairPurchasePrice) : undefined },
+      ];
+
+      // Fire-and-forget: don't block the response for logging
+      ctx.db.valuationLog.createMany({
+        data: aiLogs.map((log) => ({
+          inspectionId: input.inspectionId,
+          module: log.module,
+          model: log.model || "unknown",
+          fallbackTier: log.fallbackTier,
+          retried: log.retried || false,
+          input: JSON.parse(JSON.stringify(log.input || {})),
+          output: JSON.parse(JSON.stringify(log.output || {})),
+          reasoning: log.reasoning || null,
+          auditorApproved: log.auditorApproved ?? null,
+          auditorCoherence: log.auditorCoherence ?? null,
+          auditorFlags: log.auditorFlags ? JSON.parse(JSON.stringify(log.auditorFlags)) : null,
+          auditorAdjustment: log.auditorAdjustment ?? null,
+        })),
+      }).catch((err: unknown) => console.error("[ValuationLog] Failed to save logs:", err));
 
       // Mark step as completed
       await ctx.db.inspectionStep.update({
@@ -1103,6 +1183,53 @@ export const inspectionRouter = router({
       });
 
       return marketAnalysis;
+    }),
+
+  // Confirm odometer reading (from AI OCR or manual entry)
+  confirmOdometer: protectedProcedure
+    .input(z.object({
+      inspectionId: z.string(),
+      odometer: z.number().int().positive(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        data: { odometer: input.odometer },
+      });
+      return { success: true, odometer: input.odometer };
+    }),
+
+  // Record purchase outcome (training data for AI accuracy)
+  recordOutcome: protectedProcedure
+    .input(z.object({
+      inspectionId: z.string(),
+      outcome: z.enum(["PURCHASED", "PASSED"]),
+      purchasePrice: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        data: {
+          purchaseOutcome: input.outcome,
+          purchasePrice: input.outcome === "PURCHASED" ? (input.purchasePrice ?? null) : null,
+          outcomeRecordedAt: new Date(),
+        },
+      });
+      return { success: true };
+    }),
+
+  // Count inspections awaiting outcome (for dashboard nudge)
+  pendingOutcomes: protectedProcedure
+    .query(async ({ ctx }) => {
+      const count = await ctx.db.inspection.count({
+        where: {
+          orgId: ctx.orgId,
+          status: "COMPLETED",
+          purchaseOutcome: null,
+          completedAt: { not: null },
+        },
+      });
+      return { count };
     }),
 
   // Record risk check status during physical inspection

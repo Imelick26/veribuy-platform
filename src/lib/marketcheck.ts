@@ -121,89 +121,156 @@ function normalizeTransmission(transmission: string | null | undefined): string 
 }
 
 /**
- * Search for active comparable listings with enhanced filters.
- * Uses a tiered strategy: exact match → relaxed → broad to ensure results.
+ * Search for comparable listings using a tiered strategy that NEVER drops
+ * trim/config specificity. Instead, expands geography and time range.
+ *
+ * Tier 1: Local active, exact config (100mi)
+ * Tier 2: Nationwide active, exact config (no radius)
+ * Tier 3: Nationwide recently sold, exact config (last 12 months)
+ * Tier 4: Nationwide sold, year-range expansion (±3 years, same engine/drivetrain)
+ *
+ * Key rule: A gas F-250 is NOT a comp for a Powerstroke. Never drop engine/drivetrain.
  */
-async function searchActiveListings(
+async function searchComparables(
   vehicle: MarketCheckVehicleConfig,
   zip: string,
   mileage?: number,
-  radius: number = 150,
   rows: number = 50,
-): Promise<MarketCheckSearchResponse> {
+): Promise<{ active: MarketCheckSearchResponse; sold: MarketCheckSearchResponse }> {
   const apiKey = getApiKey();
-
-  // Build base params
-  const baseParams: Record<string, string> = {
-    api_key: apiKey,
-    year: String(vehicle.year),
-    make: vehicle.make,
-    model: vehicle.model,
-    zip,
-    radius: String(radius),
-    rows: String(rows),
-    car_type: "used",
-    seller_type: "dealer",
-    sort_by: "distance",
-    sort_order: "asc",
-  };
-
-  // Add mileage range filter (±30% of actual mileage, or ±50K if unknown)
-  if (mileage && mileage > 0) {
-    const mileageLow = Math.max(0, Math.round(mileage * 0.7));
-    const mileageHigh = Math.round(mileage * 1.3);
-    baseParams.miles_range = `${mileageLow}-${mileageHigh}`;
-  }
-
-  // Tier 1: Exact match with trim + drivetrain + transmission
-  const exactParams = { ...baseParams };
   const drivetrain = normalizeDrivetrain(vehicle.drivetrain);
   const transmission = normalizeTransmission(vehicle.transmission);
 
-  if (vehicle.trim) exactParams.trim = vehicle.trim;
-  if (drivetrain) exactParams.drivetrain = drivetrain;
-  if (transmission) exactParams.transmission = transmission;
+  /** Build config-specific params (trim/drivetrain/trans always included) */
+  function buildConfigParams(overrides?: Record<string, string>): Record<string, string> {
+    const params: Record<string, string> = {
+      api_key: apiKey,
+      year: String(vehicle.year),
+      make: vehicle.make,
+      model: vehicle.model,
+      rows: String(rows),
+      car_type: "used",
+      ...overrides,
+    };
+    if (vehicle.trim) params.trim = vehicle.trim;
+    if (drivetrain) params.drivetrain = drivetrain;
+    if (transmission) params.transmission = transmission;
+    return params;
+  }
 
-  let result = await doSearch(exactParams);
+  let activeResult: MarketCheckSearchResponse = { num_found: 0, listings: [] };
+  let soldResult: MarketCheckSearchResponse = { num_found: 0, listings: [] };
 
-  // Tier 2: Relax trim but keep drivetrain (if exact match had < 5 results)
-  if (result.num_found < 5 && vehicle.trim) {
-    console.log(`[MarketCheck] Exact match found ${result.num_found}, relaxing trim filter`);
-    const relaxedParams = { ...baseParams };
-    if (drivetrain) relaxedParams.drivetrain = drivetrain;
-    if (transmission) relaxedParams.transmission = transmission;
+  // ── Tier 1: Local active, exact config (100mi) ──────────────────
+  const tier1Params = buildConfigParams({
+    zip,
+    radius: "100",
+    seller_type: "dealer",
+    sort_by: "distance",
+    sort_order: "asc",
+  });
+  if (mileage && mileage > 0) {
+    tier1Params.miles_range = `${Math.max(0, Math.round(mileage * 0.7))}-${Math.round(mileage * 1.3)}`;
+  }
 
-    const relaxed = await doSearch(relaxedParams);
-    if (relaxed.num_found > result.num_found) {
-      result = relaxed;
+  activeResult = await doSearch("active", tier1Params);
+  console.log(`[MarketCheck] Tier 1 (local active, exact config): ${activeResult.num_found} found`);
+
+  // ── Tier 2: Nationwide active, exact config (no radius) ─────────
+  if (activeResult.num_found < 5) {
+    const tier2Params = buildConfigParams({
+      seller_type: "dealer",
+      sort_by: "price",
+      sort_order: "asc",
+    });
+    // No zip/radius = nationwide
+    // Drop mileage filter for wider net
+    const nationwide = await doSearch("active", tier2Params);
+    console.log(`[MarketCheck] Tier 2 (nationwide active, exact config): ${nationwide.num_found} found`);
+    if (nationwide.num_found > activeResult.num_found) {
+      activeResult = nationwide;
     }
   }
 
-  // Tier 3: Broad — just year/make/model with wider radius (if still < 3 results)
-  if (result.num_found < 3) {
-    console.log(`[MarketCheck] Relaxed match found ${result.num_found}, going broad with 300mi radius`);
-    const { miles_range: _, ...broadBase } = baseParams;
-    const broadParams = { ...broadBase, radius: "300" };
-
-    const broad = await doSearch(broadParams);
-    if (broad.num_found > result.num_found) {
-      result = broad;
-    }
+  // ── Tier 3: Nationwide recently sold, exact config ──────────────
+  if (activeResult.num_found < 5) {
+    const tier3Params = buildConfigParams({
+      sort_by: "sold_date",
+      sort_order: "desc",
+    });
+    const sold = await doSearch("sold", tier3Params);
+    console.log(`[MarketCheck] Tier 3 (nationwide sold, exact config): ${sold.num_found} found`);
+    soldResult = sold;
   }
 
-  return result;
+  // ── Tier 4: Nationwide sold, year-range expansion (±3 years) ────
+  const vehicleAge = new Date().getFullYear() - vehicle.year;
+  if (activeResult.num_found + soldResult.num_found < 5 && vehicleAge >= 15) {
+    const yearLow = vehicle.year - 3;
+    const yearHigh = vehicle.year + 3;
+    const tier4Params: Record<string, string> = {
+      api_key: apiKey,
+      make: vehicle.make,
+      model: vehicle.model,
+      year: `${yearLow}-${yearHigh}`,
+      rows: String(rows),
+      car_type: "used",
+      sort_by: "sold_date",
+      sort_order: "desc",
+    };
+    // Keep drivetrain/transmission (engine/config matters) but drop trim
+    // since trim names may differ across years on the same platform
+    if (drivetrain) tier4Params.drivetrain = drivetrain;
+    if (transmission) tier4Params.transmission = transmission;
+
+    const yearRange = await doSearch("sold", tier4Params);
+    console.log(`[MarketCheck] Tier 4 (nationwide sold, ${yearLow}-${yearHigh}, same config): ${yearRange.num_found} found`);
+
+    // Merge with existing sold results (deduplicate by ID)
+    const existingIds = new Set(soldResult.listings.map((l) => l.id));
+    const newListings = yearRange.listings.filter((l) => !existingIds.has(l.id));
+    soldResult = {
+      num_found: soldResult.num_found + newListings.length,
+      listings: [...soldResult.listings, ...newListings],
+    };
+  }
+
+  return { active: activeResult, sold: soldResult };
 }
 
-async function doSearch(params: Record<string, string>): Promise<MarketCheckSearchResponse> {
-  const url = `${MARKETCHECK_BASE}/search/car/active?${new URLSearchParams(params)}`;
+/**
+ * Execute a MarketCheck search (active or sold inventory).
+ * Automatically catches 422 radius errors and retries without radius.
+ */
+async function doSearch(
+  type: "active" | "sold",
+  params: Record<string, string>,
+): Promise<MarketCheckSearchResponse> {
+  const endpoint = type === "sold" ? "search/car/sold" : "search/car/active";
+  const url = `${MARKETCHECK_BASE}/${endpoint}?${new URLSearchParams(params)}`;
 
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
   });
 
+  // Handle 422 radius limit error — retry without radius
+  if (res.status === 422 && params.radius) {
+    console.log(`[MarketCheck] 422 radius limit — retrying without radius (nationwide)`);
+    const { radius: _, zip: __, ...noRadiusParams } = params;
+    const retryUrl = `${MARKETCHECK_BASE}/${endpoint}?${new URLSearchParams(noRadiusParams)}`;
+    const retryRes = await fetch(retryUrl, {
+      headers: { Accept: "application/json" },
+    });
+    if (!retryRes.ok) {
+      const text = await retryRes.text();
+      throw new Error(`MarketCheck ${type} search error (${retryRes.status}): ${text}`);
+    }
+    return retryRes.json();
+  }
+
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`MarketCheck search error (${res.status}): ${text}`);
+    throw new Error(`MarketCheck ${type} search error (${res.status}): ${text}`);
   }
 
   return res.json();
@@ -261,17 +328,20 @@ export async function fetchMarketCheckData(
   zip: string = "97201",
   mileage?: number,
 ): Promise<MarketValueResult | null> {
-  // Fire both requests in parallel — catch both so we can fallback gracefully
-  const [searchResult, stats] = await Promise.all([
-    searchActiveListings(vehicle, zip, mileage).catch((err) => {
+  // Fire comps search + stats in parallel
+  const [searchResults, stats] = await Promise.all([
+    searchComparables(vehicle, zip, mileage).catch((err) => {
       console.warn(`[MarketCheck] Search failed: ${err.message}`);
-      return { num_found: 0, listings: [] } as MarketCheckSearchResponse;
+      return {
+        active: { num_found: 0, listings: [] } as MarketCheckSearchResponse,
+        sold: { num_found: 0, listings: [] } as MarketCheckSearchResponse,
+      };
     }),
     getMarketStats(vehicle.year, vehicle.make, vehicle.model).catch(() => null),
   ]);
 
-  // Normalize listings
-  const nearbyListings: NormalizedListing[] = searchResult.listings
+  // Normalize active listings
+  const activeListings: NormalizedListing[] = searchResults.active.listings
     .filter((l) => l.price > 0)
     .map((l) => ({
       title: l.heading || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
@@ -282,6 +352,25 @@ export async function fetchMarketCheckData(
       url: l.vdp_url || undefined,
       daysOnMarket: l.dom || undefined,
     }));
+
+  // Normalize sold listings (labeled distinctly)
+  const soldListings: NormalizedListing[] = searchResults.sold.listings
+    .filter((l) => l.price > 0)
+    .map((l) => ({
+      title: l.heading || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      price: l.price,
+      mileage: l.miles || 0,
+      location: [l.city, l.state].filter(Boolean).join(", "),
+      source: `${l.seller_name || "Dealer"} (Sold)`,
+      url: l.vdp_url || undefined,
+    }));
+
+  // Merge: active listings first, then sold listings
+  const nearbyListings: NormalizedListing[] = [...activeListings, ...soldListings];
+
+  if (soldListings.length > 0) {
+    console.log(`[MarketCheck] ${activeListings.length} active + ${soldListings.length} sold = ${nearbyListings.length} total comps`);
+  }
 
   // Calculate average days on market
   const listingsWithDom = nearbyListings.filter((l) => l.daysOnMarket && l.daysOnMarket > 0);
@@ -385,7 +474,7 @@ export async function fetchMarketCheckData(
     mileageAdjustment,
     nearbyListings,
     avgDaysOnMarket,
-    totalFound: searchResult.num_found,
+    totalFound: searchResults.active.num_found + searchResults.sold.num_found,
     mileageAnalysis,
   };
 }

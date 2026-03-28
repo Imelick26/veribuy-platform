@@ -176,6 +176,11 @@ export default function InspectionDetailPage({
     },
   });
 
+  // Odometer confirm
+  const confirmOdometer = trpc.inspection.confirmOdometer.useMutation({
+    onSuccess: () => utils.inspection.get.invalidate({ id }),
+  });
+
   const { data: aiAnalysisData } = trpc.inspection.getAIAnalysisResults.useQuery(
     { inspectionId: id },
     { enabled: !!inspection }
@@ -621,6 +626,13 @@ export default function InspectionDetailPage({
               {generateReport.isPending ? "Generating..." : "Generate Report"}
             </Button>
           )}
+
+          {/* Outcome capture — non-intrusive card below report buttons */}
+          <OutcomeCapture
+            inspectionId={id}
+            currentOutcome={inspection.purchaseOutcome as string | null}
+            currentPrice={inspection.purchasePrice as number | null}
+          />
         </Card>
       )}
 
@@ -668,6 +680,8 @@ export default function InspectionDetailPage({
           isConfirmingVin={confirmVin.isPending}
           detectedVin={detectedVin}
           isDetectingVin={isDetectingVin}
+          onConfirmOdometer={(mileage) => confirmOdometer.mutate({ inspectionId: id, odometer: mileage })}
+          isConfirmingOdometer={confirmOdometer.isPending}
           onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
           isFetchingHistory={fetchHistory.isPending}
           onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}
@@ -713,6 +727,106 @@ export default function InspectionDetailPage({
           onClose={() => setShowReportModal(false)}
         />
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  OutcomeCapture — inline card for "did you buy it?" feedback        */
+/* ------------------------------------------------------------------ */
+
+function OutcomeCapture({
+  inspectionId,
+  currentOutcome,
+  currentPrice,
+}: {
+  inspectionId: string;
+  currentOutcome: string | null;
+  currentPrice: number | null;
+}) {
+  const utils = trpc.useUtils();
+  const recordOutcome = trpc.inspection.recordOutcome.useMutation({
+    onSuccess: () => utils.inspection.get.invalidate({ id: inspectionId }),
+  });
+
+  const [showPriceInput, setShowPriceInput] = useState(false);
+  const [price, setPrice] = useState("");
+
+  // Already answered
+  if (currentOutcome) {
+    return (
+      <div className="mt-4 p-3 rounded-lg bg-surface-overlay border border-border-default">
+        <div className="flex items-center gap-2 text-sm">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <span className="text-text-secondary">
+            {currentOutcome === "PURCHASED"
+              ? `Purchased${currentPrice ? ` for $${(currentPrice / 100).toLocaleString()}` : ""}`
+              : "Passed on this vehicle"}
+          </span>
+          <span className="text-xs text-text-tertiary ml-auto">Thanks for the feedback!</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (showPriceInput) {
+    return (
+      <div className="mt-4 p-4 rounded-lg bg-green-50 border border-green-200">
+        <p className="text-sm font-semibold text-green-800 mb-2">What did you pay?</p>
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold text-text-tertiary">$</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="e.g. 18,500"
+            value={price}
+            onChange={(e) => setPrice(e.target.value.replace(/[^0-9]/g, ""))}
+            className="flex-1 px-3 py-2 text-sm font-medium border border-green-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-green-500"
+            autoFocus
+          />
+          <Button
+            size="sm"
+            disabled={recordOutcome.isPending}
+            onClick={() => {
+              const cents = price ? parseInt(price) * 100 : undefined;
+              recordOutcome.mutate({ inspectionId, outcome: "PURCHASED", purchasePrice: cents });
+            }}
+            className="bg-green-600 text-white text-xs px-4 hover:bg-green-700"
+          >
+            {recordOutcome.isPending ? "..." : "Save"}
+          </Button>
+        </div>
+        <button
+          onClick={() => recordOutcome.mutate({ inspectionId, outcome: "PURCHASED" })}
+          className="text-xs text-text-tertiary mt-2 hover:underline"
+        >
+          Skip — I'd rather not say
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 p-4 rounded-lg bg-surface-overlay border border-border-default">
+      <p className="text-sm font-medium text-text-primary mb-3">Did you purchase this vehicle?</p>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => setShowPriceInput(true)}
+          className="flex-1 bg-green-600 text-white text-xs hover:bg-green-700"
+        >
+          Yes, I bought it
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={recordOutcome.isPending}
+          onClick={() => recordOutcome.mutate({ inspectionId, outcome: "PASSED" })}
+          className="flex-1 text-xs"
+        >
+          {recordOutcome.isPending ? "..." : "No, I passed"}
+        </Button>
+      </div>
     </div>
   );
 }

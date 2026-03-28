@@ -79,14 +79,21 @@ Deal rating tiers:
 - OVERPAYING: Above market — thin or no margin, may still be acceptable for specific needs
 - PASS: Walk away — deal-breakers present, excessive price, or unacceptable risk
 
+ENTHUSIAST PLATFORMS (high demand, sell fast):
+- Diesel trucks (Powerstroke, Cummins, Duramax): Always in demand, especially manual trans + 4WD
+- Toyota Land Cruiser: Cult following, minimal depreciation
+- Jeep Wrangler: Strong resale regardless of age
+- Manual transmission trucks: Increasingly rare, premium pricing
+- 200K miles on a diesel is MID-LIFE, not high-mileage
+
 Consider:
 1. Price relative to fair market value and retail potential
 2. Reconditioning cost as % of purchase — cheap fixes = opportunity
-3. Market velocity — high demand vehicles sell faster
+3. Market velocity — high demand vehicles sell faster, enthusiast platforms especially
 4. Condition + history interplay — a high-condition rebuilt truck is different from low-condition rebuilt sedan
 5. Deal-breakers: flood damage is almost always PASS. Salvage title requires very low price. Condition <35 is typically PASS.
 
-Set price bands realistically — they should reflect what a savvy buyer would pay.`,
+Set price bands as FULL DOLLAR AMOUNTS (e.g., 8500 = $8,500, NOT 8.5).`,
       userPrompt: `Rate this deal:
 
 VEHICLE: ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} miles` : ""}
@@ -103,15 +110,17 @@ Return JSON:
   "rating": "STRONG_BUY" | "FAIR_BUY" | "OVERPAYING" | "PASS",
   "confidence": number (0.0-1.0),
   "priceBands": {
-    "strongBuyMax": number (dollars — max price for strong buy),
-    "fairBuyMax": number (dollars — max price for fair buy),
-    "overpayingMax": number (dollars — above this = PASS)
+    "strongBuyMax": number (full dollar amount, e.g., 8500 means $8,500 — NOT 8.5 or 8500.00),
+    "fairBuyMax": number (full dollar amount, must be HIGHER than strongBuyMax),
+    "overpayingMax": number (full dollar amount, must be HIGHER than fairBuyMax)
   },
   "dealBreakers": ["list of any deal-breaking issues"],
   "positives": ["list of positive factors"],
   "concerns": ["list of concerns"],
   "reasoning": "2-3 sentences explaining the rating"
-}`,
+}
+
+IMPORTANT: Price bands must be full dollar amounts. For a $10,500 fair price, strongBuyMax might be $8,925 (85%), fairBuyMax $9,975 (95%), overpayingMax $11,025 (105%). Never return single-digit or double-digit prices.`,
       temperature: 0.1,
       maxTokens: 800,
     },
@@ -152,10 +161,21 @@ Return JSON:
         return { valid: false, partial: p, errors };
       }
 
-      // Convert price bands to cents
-      const sbMax = Math.round(Number(bands!.strongBuyMax) * 100);
-      const fbMax = Math.round(Number(bands!.fairBuyMax) * 100);
-      const opMax = Math.round(Number(bands!.overpayingMax) * 100);
+      // Convert price bands to cents — detect if AI returned wrong scale
+      let sbRaw = Number(bands!.strongBuyMax);
+      let fbRaw = Number(bands!.fairBuyMax);
+      let opRaw = Number(bands!.overpayingMax);
+
+      // If all bands are < 100, AI likely returned thousands (e.g., 9 = $9K)
+      if (sbRaw < 100 && fbRaw < 100 && opRaw < 100) {
+        sbRaw *= 1000;
+        fbRaw *= 1000;
+        opRaw *= 1000;
+      }
+
+      const sbMax = Math.round(sbRaw * 100);
+      const fbMax = Math.round(fbRaw * 100);
+      const opMax = Math.round(opRaw * 100);
 
       return {
         valid: true,

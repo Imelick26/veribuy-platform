@@ -81,6 +81,12 @@ export interface MarketAnalysisData {
   configPremiumMode?: string | null;
   conditionAttenuation?: number | null;
   sourceCount?: number | null;
+
+  // AI auditor result
+  aiAuditorApproved?: boolean | null;
+  aiAuditorCoherence?: number | null;
+  aiAuditorFlags?: string[] | null;
+  aiAuditorReasoning?: string | null;
 }
 
 interface MarketAnalysisSectionProps {
@@ -465,6 +471,46 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
         </p>
         <p className="text-xs text-text-secondary">Fair Market Value (This Vehicle)</p>
       </div>
+
+      {/* ── AI Auditor Badge ── */}
+      {data.aiAuditorApproved != null && (
+        <div className={cn(
+          "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs",
+          data.aiAuditorApproved
+            ? "bg-green-50 border-green-200"
+            : "bg-amber-50 border-amber-200"
+        )}>
+          <div className={cn(
+            "w-2 h-2 rounded-full shrink-0",
+            data.aiAuditorApproved ? "bg-green-500" : "bg-amber-500"
+          )} />
+          <div className="flex-1">
+            <span className={cn(
+              "font-semibold",
+              data.aiAuditorApproved ? "text-green-700" : "text-amber-700"
+            )}>
+              {data.aiAuditorApproved ? "AI Auditor Verified" : "AI Auditor Adjusted"}
+            </span>
+            {data.aiAuditorCoherence != null && (
+              <span className="text-text-tertiary ml-1.5">
+                ({Math.round(data.aiAuditorCoherence * 100)}% coherence)
+              </span>
+            )}
+            {data.aiAuditorReasoning && (
+              <p className="text-text-tertiary mt-0.5 leading-tight">
+                {data.aiAuditorReasoning}
+              </p>
+            )}
+            {data.aiAuditorFlags && data.aiAuditorFlags.length > 0 && (
+              <ul className="text-amber-600 mt-1 space-y-0.5">
+                {data.aiAuditorFlags.map((flag, i) => (
+                  <li key={i}>• {flag}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

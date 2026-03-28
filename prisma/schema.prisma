@@ -215,9 +215,16 @@ model Inspection {
   steps          InspectionStep[]
   findings       Finding[]
   media          MediaItem[]
-  marketAnalysis MarketAnalysis?
-  vehicleHistory VehicleHistory?
-  report         Report?
+  marketAnalysis  MarketAnalysis?
+  vehicleHistory  VehicleHistory?
+  report          Report?
+  aiValuationLogs ValuationLog[]
+
+  // Outcome tracking (training data for AI accuracy)
+  purchaseOutcome     String?     // "PURCHASED" | "PASSED" | null (not yet answered)
+  purchasePrice       Int?        // cents — what they actually paid
+  outcomeRecordedAt   DateTime?   // when they logged the outcome
+  outcomeEmailSent    Boolean     @default(false) // prevent duplicate follow-up emails
 
   startedAt   DateTime  @default(now())
   completedAt DateTime?
@@ -471,6 +478,12 @@ model MarketAnalysis {
   conditionAttenuation  Float?    // 0-1, how much condition multiplier applies
   sourceCount           Int?      // Number of pricing sources that contributed data
 
+  // AI auditor result
+  aiAuditorApproved     Boolean?  // true = coherent, false = adjusted
+  aiAuditorCoherence    Float?    // 0-1 coherence score
+  aiAuditorFlags        Json?     // string[] of issues found
+  aiAuditorReasoning    String?   @db.Text
+
   inspectionId String     @unique
   inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
 
@@ -484,6 +497,47 @@ enum BuyRecommendation {
   FAIR_BUY
   OVERPAYING
   PASS
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AI Valuation Log — training data for continuous improvement
+// ═══════════════════════════════════════════════════════════════
+
+model ValuationLog {
+  id String @id @default(cuid())
+
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+
+  // Which AI module produced this result
+  module    String  // "consensus" | "config_premium" | "geo_pricing" | "history" | "condition" | "recon" | "deal_rating" | "auditor"
+  model     String  // "gpt-4o" | "gpt-4o-mini" | "heuristic"
+
+  // Reliability tier: 1=primary, 2=simplified AI fallback, 3=emergency heuristic
+  fallbackTier Int
+  retried      Boolean @default(false)
+
+  // The full input context sent to the AI
+  input  Json
+  // The full output received from the AI
+  output Json
+  // AI reasoning text
+  reasoning String? @db.Text
+
+  // For the auditor specifically
+  auditorApproved    Boolean?
+  auditorCoherence   Float?
+  auditorFlags       Json?     // string[]
+  auditorAdjustment  Int?      // cents — how much the price was adjusted
+
+  // Timing
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([inspectionId])
+  @@index([module])
+  @@index([fallbackTier])
+  @@index([createdAt])
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const recentInspections = inspections?.inspections || [];
   const recentReports = reports?.reports || [];
+  const { data: pendingOutcomes } = trpc.inspection.pendingOutcomes.useQuery();
 
   function handleNewInspection(e: React.MouseEvent) {
     e.preventDefault();
@@ -100,6 +101,30 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      {/* Pending outcomes nudge */}
+      {pendingOutcomes && pendingOutcomes.count > 0 && (
+        <Card className="border-amber-200 bg-amber-50/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center">
+                <TrendingUp className="h-4 w-4 text-amber-700" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  {pendingOutcomes.count} inspection{pendingOutcomes.count !== 1 ? "s" : ""} awaiting outcome
+                </p>
+                <p className="text-xs text-amber-600">
+                  Did you buy these vehicles? Your feedback improves pricing accuracy.
+                </p>
+              </div>
+            </div>
+            <Link href="/dashboard/inspections" className="text-xs text-amber-700 font-semibold hover:underline">
+              Review
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {/* Recent activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

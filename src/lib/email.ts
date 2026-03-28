@@ -41,6 +41,39 @@ export async function sendWelcomeEmail(opts: {
   });
 }
 
+export async function sendOutcomeEmail(opts: {
+  to: string;
+  inspectorName: string;
+  vehicleDesc: string;
+  inspectionNumber: string;
+  purchasedUrl: string;
+  passedUrl: string;
+}) {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — skipping outcome email");
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: opts.to,
+    subject: `Did you buy the ${opts.vehicleDesc}?`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
+        <h2 style="margin: 0 0 8px;">Quick follow-up</h2>
+        <p style="color: #555; margin: 0 0 24px;">Hi ${opts.inspectorName}, you inspected a <strong>${opts.vehicleDesc}</strong> (${opts.inspectionNumber}) recently. Did you end up purchasing it?</p>
+        <p style="color: #777; font-size: 13px; margin: 0 0 20px;">Your feedback helps us improve pricing accuracy for everyone.</p>
+        <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+          <a href="${opts.purchasedUrl}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">Yes, I bought it</a>
+          <a href="${opts.passedUrl}" style="display: inline-block; background: #f5f5f5; color: #555; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; border: 1px solid #ddd;">No, I passed</a>
+        </div>
+        <p style="color: #999; font-size: 12px; margin: 24px 0 0;">&mdash; VeriBuy Vehicle Inspection Intelligence</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendUpgradeRequestEmail(opts: {
   orgName: string;
   orgId: string;

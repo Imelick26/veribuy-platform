@@ -40,6 +40,7 @@ import type { NormalizedListing } from "./marketcheck";
 import { analyzeConsensusWeights } from "./ai/consensus-weighter";
 import { analyzeConfigPremiums } from "./ai/config-premium-analyzer";
 import { analyzeRegionalPricing } from "./ai/geo-pricing-analyzer";
+import { estimateMarketValue, toSourceEstimate } from "./ai/market-value-estimator";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -511,10 +512,30 @@ export async function fetchMarketData(
     );
   }
 
-  // Always add fallback as lowest-weight option (now mileage-aware)
-  const fallback = getFallbackEstimate(vehicle, mileage);
+  // AI-powered fallback — understands enthusiast platforms, diesel premiums, etc.
+  const bodyCategory = classifyBody(vehicle);
+  const apiSourceValues = sourceEstimates
+    .filter((s) => s.estimatedValue > 0)
+    .map((s) => ({ source: s.source, value: s.estimatedValue }));
+
+  const aiFallback = await estimateMarketValue({
+    vehicle: {
+      year: vehicle.year, make: vehicle.make, model: vehicle.model,
+      trim: vehicle.trim, engine: vehicle.engine, transmission: vehicle.transmission,
+      drivetrain: vehicle.drivetrain, bodyStyle: vehicle.bodyStyle,
+    },
+    mileage,
+    conditionScore,
+    bodyCategory,
+    otherSourceValues: apiSourceValues.length > 0 ? apiSourceValues : undefined,
+  });
+
+  const fallback = toSourceEstimate(aiFallback.result);
   sourceEstimates.push(fallback);
-  console.log(`[MarketData] Fallback (${classifyBody(vehicle)}, ${mileage || "?"} mi): $${fallback.estimatedValue}`);
+  console.log(
+    `[MarketData] AI Fallback (tier ${aiFallback.fallbackTier}${aiFallback.result.isEnthusiastPlatform ? ", ENTHUSIAST" : ""}): ` +
+    `$${fallback.estimatedValue.toLocaleString()} (conf ${(fallback.confidence * 100).toFixed(0)}%) — ${aiFallback.result.reasoning}`,
+  );
 
   // ── Mileage cross-check from comparable listings ────────────────
   if (mileage && allListings.length >= 3) {
@@ -536,7 +557,6 @@ export async function fetchMarketData(
   }
 
   // ── AI Consensus Weighting ──────────────────────────────────────
-  const bodyCategory = classifyBody(vehicle);
   const conditionTier = mapConditionToTier(conditionScore);
 
   const aiConsensus = await analyzeConsensusWeights({

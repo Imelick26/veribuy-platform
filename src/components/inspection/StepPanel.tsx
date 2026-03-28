@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -29,6 +30,7 @@ interface StepPanelProps {
   riskProfile: AggregatedRiskProfile | null | undefined;
   inspection: {
     id: string;
+    odometer?: number | null;
     media: Array<{ captureType: string | null; url: string | null; thumbnailUrl: string | null }>;
     report?: { id: string; pdfUrl?: string | null; number: string } | null;
     vehicleHistory?: {
@@ -83,6 +85,9 @@ interface StepPanelProps {
   isConfirmingVin?: boolean;
   detectedVin?: string | null;
   isDetectingVin?: boolean;
+  // Odometer confirm
+  onConfirmOdometer?: (mileage: number) => void;
+  isConfirmingOdometer?: boolean;
   // Vehicle History
   onFetchHistory?: () => void;
   isFetchingHistory?: boolean;
@@ -125,6 +130,8 @@ export function StepPanel({
   isConfirmingVin,
   detectedVin,
   isDetectingVin,
+  onConfirmOdometer,
+  isConfirmingOdometer,
   onFetchHistory,
   isFetchingHistory,
   onFetchMarket,
@@ -223,6 +230,13 @@ export function StepPanel({
                   <p className="text-sm text-green-600">4-area photo analysis finished. Scores saved.</p>
                 </div>
               </div>
+
+              {/* Odometer confirmation */}
+              <OdometerConfirmRow
+                currentOdometer={inspection.odometer}
+                onConfirm={onConfirmOdometer}
+                isConfirming={isConfirmingOdometer}
+              />
 
               {/* Unexpected findings preview */}
               {overallConditionResult && overallConditionResult.unexpectedFindings.length > 0 && (
@@ -885,6 +899,90 @@ function VinConfirmPanel({
           </span>
         )}
       </Button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  OdometerConfirmRow — inline odometer verify from AI OCR            */
+/* ------------------------------------------------------------------ */
+
+function OdometerConfirmRow({
+  currentOdometer,
+  onConfirm,
+  isConfirming,
+}: {
+  currentOdometer?: number | null;
+  onConfirm?: (mileage: number) => void;
+  isConfirming?: boolean;
+}) {
+  const [editing, setEditing] = useState(!currentOdometer);
+  const [value, setValue] = useState(currentOdometer ? String(currentOdometer) : "");
+  const [confirmed, setConfirmed] = useState(false);
+
+  // Already confirmed or saved from creation
+  if (currentOdometer && !editing && !confirmed) {
+    return (
+      <div className="flex items-center justify-between p-3 rounded-lg bg-surface-overlay border border-border-default">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <span className="text-sm text-text-primary font-medium">
+            {currentOdometer.toLocaleString()} mi
+          </span>
+          <span className="text-xs text-green-600">Odometer reading detected</span>
+        </div>
+        <button
+          onClick={() => { setEditing(true); setValue(String(currentOdometer)); }}
+          className="text-xs text-brand-600 hover:underline"
+        >
+          Edit
+        </button>
+      </div>
+    );
+  }
+
+  if (confirmed) {
+    return (
+      <div className="flex items-center gap-2 p-3 rounded-lg bg-[#dcfce7] border border-green-200">
+        <CheckCircle className="h-4 w-4 text-green-600" />
+        <span className="text-sm text-green-700 font-medium">
+          Odometer confirmed: {parseInt(value).toLocaleString()} mi
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+      <p className="text-xs font-semibold text-amber-700 mb-2">
+        {currentOdometer ? "Verify Odometer Reading" : "Enter Odometer Reading"}
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="e.g. 198432"
+          value={value}
+          onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
+          className="flex-1 px-3 py-2 text-sm font-medium border border-amber-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <span className="text-xs text-text-tertiary">mi</span>
+        <Button
+          size="sm"
+          disabled={!value || parseInt(value) <= 0 || isConfirming}
+          onClick={() => {
+            const mileage = parseInt(value);
+            if (mileage > 0 && onConfirm) {
+              onConfirm(mileage);
+              setConfirmed(true);
+              setEditing(false);
+            }
+          }}
+          className="bg-brand-gradient text-white text-xs px-4"
+        >
+          {isConfirming ? "..." : "Confirm"}
+        </Button>
+      </div>
     </div>
   );
 }
