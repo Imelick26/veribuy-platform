@@ -16,7 +16,7 @@
  * determined by the consensus engine (full/partial/none).
  */
 
-import { fetchVehicleDatabasesData } from "./vehicledatabases";
+import { fetchVehicleDatabasesData, fetchVDBAuctionHistory } from "./vehicledatabases";
 import { fetchMarketValue as fetchVinAuditValue } from "./vinaudit";
 import { reportSuccess, reportFailure, reportMissingKey } from "./api-health";
 import { fetchMarketCheckData } from "./marketcheck";
@@ -417,7 +417,7 @@ export async function fetchMarketData(
   if (!process.env.MARKETCHECK_API_KEY) reportMissingKey("MarketCheck", "MARKETCHECK_API_KEY").catch(() => {});
 
   // ── Parallel fan-out: fire all API calls simultaneously ─────────
-  const [bbResult, vdbResult, nadaResult, vinAuditResult, marketCheckResult] = await Promise.allSettled([
+  const [bbResult, vdbResult, nadaResult, vinAuditResult, marketCheckResult, vdbAuctionResult] = await Promise.allSettled([
     // Black Book
     fetchBlackBookSource(vehicle.vin, vehicle, mileage, state, conditionScore).then((r) => {
       if (r) reportSuccess("BlackBook");
@@ -461,6 +461,11 @@ export async function fetchMarketData(
     }).catch((err) => {
       const statusMatch = String(err).match(/\((\d{3})\)/);
       reportFailure("MarketCheck", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
+      return null;
+    }),
+    // VDB Auction History (real sold-at-auction prices)
+    fetchVDBAuctionHistory(vehicle.vin).catch((err) => {
+      console.warn(`[VDB Auction] Failed: ${err instanceof Error ? err.message : err}`);
       return null;
     }),
   ]);
@@ -510,6 +515,21 @@ export async function fetchMarketData(
     console.log(
       `[MarketData] MarketCheck: $${mc.estimate.estimatedValue} (${mc.listings.length} comps)`,
     );
+  }
+
+  // VDB Auction History — real sold-at-auction prices as comps
+  const vdbAuction = vdbAuctionResult.status === "fulfilled" ? vdbAuctionResult.value : null;
+  if (vdbAuction && vdbAuction.records.length > 0) {
+    const auctionListings: NormalizedListing[] = vdbAuction.records.map((r) => ({
+      title: r.vehicleName || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      price: r.salePrice,
+      mileage: r.mileage || 0,
+      location: r.location || "Auction",
+      source: `${r.auctionHouse || "Auction"} (Sold${r.saleDate ? ` ${r.saleDate}` : ""})`,
+      url: undefined,
+    }));
+    allListings.push(...auctionListings);
+    console.log(`[MarketData] VDB Auction History: ${auctionListings.length} sold records`);
   }
 
   // AI-powered fallback — understands enthusiast platforms, diesel premiums, etc.

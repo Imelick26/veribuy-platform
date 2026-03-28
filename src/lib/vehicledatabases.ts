@@ -1,17 +1,19 @@
 /**
  * VehicleDatabases.com API Client
  *
- * Primary pricing source providing condition-tiered market values:
- *   4 condition tiers (Outstanding/Clean/Average/Rough) x
- *   3 value perspectives (Trade-In / Private Party / Dealer Retail)
- *   = 12 price points per VIN lookup
+ * Two endpoints:
  *
- * API: GET https://api.vehicledatabases.com/market-value/{vin}
- *      Query: ?mileage={mi}&state={st}
- *      Auth:  x-AuthKey header
+ * 1. Market Value: Condition-tiered pricing (4 tiers × 3 perspectives = 12 price points)
+ *    GET https://api.vehicledatabases.com/market-value/{vin}
+ *    Query: ?mileage={mi}&state={st}
  *
+ * 2. Auction History: Real sold-at-auction prices with condition, photos, damage data
+ *    GET https://api.vehicledatabases.com/auction/{vin}
+ *    Returns array of auction records (Copart, IAAI, etc.)
+ *
+ * Auth:  x-AuthKey header
  * Cost: ~$0.20-0.50/query depending on plan
- * Coverage: US/Canada VINs 1990-present
+ * Coverage: US/Canada VINs, 80M+ auction records
  * Docs: https://vehicledatabases.com/docs/
  */
 
@@ -251,4 +253,100 @@ function extractTiers(
   }
 
   return result;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Auction History API                                                */
+/* ------------------------------------------------------------------ */
+
+/** A single auction record from VehicleDatabases */
+export interface VDBAuctionRecord {
+  vehicleName: string;
+  salePrice: number;
+  saleDate: string;
+  mileage: number;
+  location: string;
+  auctionHouse: string;
+  titleType: string;
+  damageDescription: string;
+  condition: string;
+  imageUrl?: string;
+}
+
+/** Full auction history response */
+export interface VDBAuctionHistoryResult {
+  vin: string;
+  records: VDBAuctionRecord[];
+}
+
+/**
+ * Fetch auction history for a VIN from VehicleDatabases.
+ *
+ * Returns real sold-at-auction prices from Copart, IAAI, and other major
+ * US auction houses. These are actual transaction prices, not estimates.
+ *
+ * Returns null if no auction history found for this VIN.
+ */
+export async function fetchVDBAuctionHistory(
+  vin: string,
+): Promise<VDBAuctionHistoryResult | null> {
+  const apiKey = getApiKey();
+
+  const url = `https://api.vehicledatabases.com/auction/${vin}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "x-AuthKey": apiKey,
+      Accept: "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    if (res.status === 400 || res.status === 404) {
+      // No auction data for this VIN
+      return null;
+    }
+    const text = await res.text();
+    throw new Error(`VDB Auction History error (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+
+  if (data.status === "error" || !data.data) {
+    return null;
+  }
+
+  // Normalize auction records from VDB response
+  const rawRecords = Array.isArray(data.data) ? data.data : [data.data];
+  const records: VDBAuctionRecord[] = rawRecords
+    .filter((r: Record<string, unknown>) => r && typeof r === "object")
+    .map((r: Record<string, unknown>) => {
+      // Extract from nested objects matching VDB response shape
+      const titleAndCondition = (r["title-and-condition"] || {}) as Record<string, unknown>;
+      const saleDateLocation = (r["sale-date-location"] || {}) as Record<string, unknown>;
+      const specs = (r["technical-specs"] || {}) as Record<string, unknown>;
+      const images = r.images as Record<string, string>[] | undefined;
+
+      return {
+        vehicleName: String(r.vname || r.vehicle_name || ""),
+        salePrice: parsePrice(r.price || r.sale_price || 0),
+        saleDate: String(saleDateLocation.sale_date || saleDateLocation.auction_date || r.sale_date || ""),
+        mileage: Number(titleAndCondition.odometer || r.mileage || r.odometer || 0),
+        location: String(saleDateLocation.location || r.location || ""),
+        auctionHouse: String(saleDateLocation.seller_type || r.auction_house || "Auction"),
+        titleType: String(titleAndCondition.title_type || r.title_type || ""),
+        damageDescription: String(titleAndCondition.primary_damage || r.damage || ""),
+        condition: String(titleAndCondition.condition || r.condition || ""),
+        imageUrl: images?.[0]?.url || undefined,
+      };
+    })
+    .filter((r: VDBAuctionRecord) => r.salePrice > 0);
+
+  if (records.length === 0) {
+    return null;
+  }
+
+  console.log(`[VDB Auction] Found ${records.length} auction records for ${vin}`);
+
+  return { vin, records };
 }
