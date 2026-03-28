@@ -15,6 +15,7 @@ import { analyzeConditionValue } from "@/lib/ai/condition-adjuster";
 import { estimateReconCosts } from "@/lib/ai/recon-estimator";
 import { rateDeal } from "@/lib/ai/deal-rater";
 import { auditPrice } from "@/lib/ai/price-auditor";
+import { analyzeAcquisitionCost } from "@/lib/ai/acquisition-adjuster";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -851,11 +852,36 @@ export const inspectionRouter = router({
         url: l.url,
       }));
 
-      // Convert dollar values → cents (DB stores cents)
-      const basePriceCents = Math.round(marketData.estimatedValue * 100);
-      const retailPriceCents = Math.round(
-        (marketData.valueHigh || marketData.estimatedValue * 1.1) * 100
+      // ── Acquisition cost adjustment (strip dealer markup from comps) ──
+      const compBreakdown = {
+        activeDealer: marketData.nearbyListings.filter((l) => !l.source.includes("Sold") && !l.source.includes("Auction")).length,
+        soldDealer: marketData.nearbyListings.filter((l) => l.source.includes("Sold") && !l.source.includes("Auction")).length,
+        auction: marketData.nearbyListings.filter((l) => l.source.includes("Auction")).length,
+        total: marketData.nearbyListings.length,
+      };
+
+      const aiAcquisition = await analyzeAcquisitionCost({
+        vehicle: {
+          year: vehicle.year, make: vehicle.make, model: vehicle.model,
+          trim: vehicle.trim, engine: vehicle.engine,
+          transmission: vehicle.transmission, drivetrain: vehicle.drivetrain,
+        },
+        consensusValue: marketData.estimatedValue,
+        comps: comparables.map((c) => ({ title: c.title, price: c.price, source: c.source })),
+        compBreakdown,
+        bodyCategory: classifyBody(vehicle as VehicleConfig),
+        conditionScore,
+        isEnthusiastPlatform: marketData.aiMetadata?.consensusReasoning?.toLowerCase().includes("enthusiast") || false,
+      });
+
+      console.log(
+        `[Inspection] Acquisition: ${aiAcquisition.result.acquisitionMultiplier.toFixed(2)}x → $${aiAcquisition.result.acquisitionCost.toLocaleString()} ` +
+        `(tier ${aiAcquisition.fallbackTier}) — ${aiAcquisition.reasoning || ""}`,
       );
+
+      // Use acquisition cost as the base (what dealer should pay), not retail consensus
+      const basePriceCents = Math.round(aiAcquisition.result.acquisitionCost * 100);
+      const retailPriceCents = Math.round(aiAcquisition.result.estimatedRetail * 100);
 
       // Build history data from vehicleHistory (safe defaults if skipped)
       const historyData: HistoryData = inspection.vehicleHistory
@@ -1139,6 +1165,7 @@ export const inspectionRouter = router({
 
       // ── Log AI valuation calls for training data ──────────────────
       const aiLogs = [
+        { module: "acquisition", model: aiAcquisition.model, fallbackTier: aiAcquisition.fallbackTier, retried: aiAcquisition.retried, input: { consensusValue: marketData.estimatedValue, compBreakdown }, output: aiAcquisition.result, reasoning: aiAcquisition.reasoning },
         { module: "consensus", model: "gpt-4o", fallbackTier: marketData.aiMetadata?.consensusTier ?? 1, retried: false, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim }, sourceCount: marketData.sourceCount }, output: { consensusValue: marketData.baseValuePreConfig, confidence: marketData.confidence }, reasoning: marketData.aiMetadata?.consensusReasoning },
         { module: "config_premium", model: "gpt-4o", fallbackTier: marketData.aiMetadata?.configPremiumTier ?? 1, retried: false, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim }, bodyCategory, baseConsensusValue: marketData.baseValuePreConfig }, output: { configMultiplier: marketData.configMultiplier }, reasoning: marketData.aiMetadata?.configReasoning },
         { module: "geo_pricing", model: "gpt-4o-mini", fallbackTier: marketData.aiMetadata?.geoPricingTier ?? 1, retried: false, input: { bodyCategory, zip }, output: { regionalMultiplier: marketData.configMultiplier > 0 ? marketData.estimatedValue / (marketData.baseValuePreConfig * marketData.configMultiplier) : 1.0 }, reasoning: marketData.aiMetadata?.geoReasoning },
