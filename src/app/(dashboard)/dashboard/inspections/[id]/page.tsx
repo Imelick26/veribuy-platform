@@ -26,7 +26,7 @@ import { RiskChecklist } from "@/components/inspection/RiskChecklist";
 import { FindingFromRisk } from "@/components/inspection/FindingFromRisk";
 import { ReportModal } from "@/components/inspection/ReportModal";
 import { GuidedCapture } from "@/components/inspection/GuidedCapture";
-import { detectVinFromImage } from "@/lib/vin-ocr";
+// VIN detection now uses server-side GPT-4o Vision (via tRPC detectVin mutation)
 
 // Dynamic import to avoid SSR issues with Three.js
 const VehicleViewer = dynamic(
@@ -198,11 +198,12 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
-  // VIN Detection (client-side Tesseract.js OCR)
+  // VIN Detection (server-side GPT-4o Vision OCR)
   const [detectedVin, setDetectedVin] = useState<string | null>(null);
   const [isDetectingVin, setIsDetectingVin] = useState(false);
+  const detectVinMutation = trpc.inspection.detectVin.useMutation();
 
-  // Auto-trigger client-side VIN OCR when entering VIN_CONFIRM step
+  // Auto-trigger server-side VIN detection when entering VIN_CONFIRM step
   const vinDetectTriggeredRef = useRef(false);
   useEffect(() => {
     if (!inspection || vinDetectTriggeredRef.current) return;
@@ -212,34 +213,31 @@ export default function InspectionDetailPage({
     if (!mediaStep || mediaStep.status !== "COMPLETED") return;
     if (inspection.vehicle) return;
 
-    // Find door jamb or VIN plate photo
-    const vinPhotos = (inspection.media || []).filter(
+    // Check we have a door jamb or VIN plate photo
+    const hasVinPhoto = (inspection.media || []).some(
       (m) => m.captureType && ["DOOR_JAMB_DRIVER", "VIN_PLATE", "UNDER_HOOD_LABEL"].includes(m.captureType) && m.url
     );
-    if (vinPhotos.length === 0) return;
+    if (!hasVinPhoto) return;
 
     vinDetectTriggeredRef.current = true;
     setIsDetectingVin(true);
 
-    // Try each VIN photo in priority order
-    const tryPhotos = async () => {
-      for (const photo of vinPhotos) {
-        if (!photo.url) continue;
-        console.log(`[VIN-OCR] Trying ${photo.captureType}...`);
-        const result = await detectVinFromImage(photo.url);
+    detectVinMutation.mutate({ inspectionId: id }, {
+      onSuccess: (result) => {
         if (result.vin) {
           console.log(`[VIN-OCR] Found VIN: ${result.vin} (confidence: ${result.confidence})`);
           setDetectedVin(result.vin);
-          setIsDetectingVin(false);
-          return;
+        } else {
+          console.log("[VIN-OCR] No VIN detected in photos");
         }
-      }
-      console.log("[VIN-OCR] No VIN detected in any photo");
-      setIsDetectingVin(false);
-    };
-
-    tryPhotos();
-  }, [inspection]);
+        setIsDetectingVin(false);
+      },
+      onError: (err) => {
+        console.error("[VIN-OCR] Detection failed:", err.message);
+        setIsDetectingVin(false);
+      },
+    });
+  }, [inspection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-trigger condition scan when entering AI_CONDITION_SCAN step
   const conditionScanTriggeredRef = useRef(false);
