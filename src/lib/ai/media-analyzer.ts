@@ -700,15 +700,40 @@ async function assessArea(
     };
   }
 
-  // Use all photos on primary attempt — reduce only on retry if it fails
-  const cappedPhotos = photos;
+  // Validate photo URLs are accessible before sending to OpenAI
+  // Dead URLs cause the entire API call to fail with a 400 error
+  const validPhotos: typeof photos = [];
+  await Promise.all(photos.map(async (m) => {
+    try {
+      const res = await fetch(m.url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+      if (res.ok) validPhotos.push(m);
+      else console.warn(`[media-analyzer] ${areaName}: skipping broken URL (${res.status}) for ${m.captureType}`);
+    } catch {
+      console.warn(`[media-analyzer] ${areaName}: skipping unreachable URL for ${m.captureType}`);
+    }
+  }));
 
-  const imageBlocks = cappedPhotos.map((m) => ({
+  if (validPhotos.length === 0) {
+    console.error(`[media-analyzer] ${areaName}: ALL ${photos.length} photo URLs are broken`);
+    return {
+      score: 5,
+      confidence: 0.1,
+      keyObservations: ["No accessible photos for this area"],
+      concerns: ["Unable to assess — photo URLs are inaccessible"],
+      summary: `${areaName} could not be assessed — photos unavailable.`,
+    };
+  }
+
+  if (validPhotos.length < photos.length) {
+    console.log(`[media-analyzer] ${areaName}: ${validPhotos.length}/${photos.length} photos accessible`);
+  }
+
+  const imageBlocks = validPhotos.map((m) => ({
     type: "image_url" as const,
     image_url: { url: m.url, detail: "high" as const },
   }));
 
-  const photoLabels = cappedPhotos
+  const photoLabels = validPhotos
     .map((m, i) => `Photo ${i}: ${m.captureType.replace(/_/g, " ")}`)
     .join("\n");
 

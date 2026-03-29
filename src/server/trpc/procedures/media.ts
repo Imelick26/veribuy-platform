@@ -48,7 +48,7 @@ export const mediaRouter = router({
 
       // Build public URL
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const publicUrl = `${supabaseUrl}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
+      const publicUrl = `${(supabaseUrl || "").trim()}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
 
       // Create pending MediaItem record
       // captureType is a free-form string — supports standard shots (FRONT_CENTER)
