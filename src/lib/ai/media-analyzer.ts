@@ -811,15 +811,8 @@ ${photoLabels}`;
     }
   }
 
-  // All 3 attempts failed — return neutral score so other areas still complete
-  console.error(`[media-analyzer] ${areaName}: ALL 3 attempts failed with ${photos.length} photos`);
-  return {
-    score: 7,
-    confidence: 0.2,
-    keyObservations: [`${photos.length} photos provided — assessment completed with limited analysis`],
-    concerns: [],
-    summary: `${areaName} could not be fully assessed — scored conservatively.`,
-  };
+  // All 3 attempts failed — surface the error so the user knows to retry
+  throw new Error(`${areaName} condition assessment failed after 3 attempts with ${photos.length} photos. Please try again.`);
 }
 
 // ---------------------------------------------------------------------------
