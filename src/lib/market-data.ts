@@ -35,12 +35,14 @@ import {
   mapConditionToTier,
   type SourceEstimate,
   type ConsensusResult,
+  type PricingTraceStep,
 } from "./pricing-consensus";
 import type { NormalizedListing } from "./marketcheck";
 import { analyzeConsensusWeights } from "./ai/consensus-weighter";
 import { analyzeConfigPremiums } from "./ai/config-premium-analyzer";
 import { analyzeRegionalPricing } from "./ai/geo-pricing-analyzer";
 import { estimateMarketValue, toSourceEstimate } from "./ai/market-value-estimator";
+import { normalizeSourcesForAcquisition, applyNormalization } from "./ai/source-normalizer";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -91,13 +93,26 @@ export interface MarketDataResult {
   sourceCount: number;
 
   /** AI valuation metadata */
+  /** Step-by-step dollar trace of the pricing chain */
+  pricingTrace: PricingTraceStep[];
+
   aiMetadata?: {
     consensusTier: number;
     configPremiumTier: number;
     geoPricingTier: number;
+    sourceNormTier: number;
     consensusReasoning?: string;
     configReasoning?: string;
     geoReasoning?: string;
+    sourceNormReasoning?: string;
+    /** Per-source normalization details */
+    sourceNormalization?: Array<{
+      source: string;
+      originalValue: number;
+      acquisitionValue: number;
+      multiplier: number;
+      reason: string;
+    }>;
   };
 }
 
@@ -557,6 +572,41 @@ export async function fetchMarketData(
     `$${fallback.estimatedValue.toLocaleString()} (conf ${(fallback.confidence * 100).toFixed(0)}%) — ${aiFallback.result.reasoning}`,
   );
 
+  // ── Normalize all sources to acquisition cost ───────────────────
+  const compBreakdown = {
+    activeDealer: allListings.filter((l) => !l.source.includes("Sold") && !l.source.includes("Auction")).length,
+    soldDealer: allListings.filter((l) => l.source.includes("Sold") && !l.source.includes("Auction")).length,
+    auction: allListings.filter((l) => l.source.includes("Auction")).length,
+    total: allListings.length,
+  };
+  const isEnthusiastPlatform = aiFallback.result.isEnthusiastPlatform || false;
+
+  const aiNormalization = await normalizeSourcesForAcquisition({
+    vehicle: {
+      year: vehicle.year, make: vehicle.make, model: vehicle.model,
+      trim: vehicle.trim, engine: vehicle.engine, drivetrain: vehicle.drivetrain,
+      transmission: vehicle.transmission,
+    },
+    conditionScore,
+    bodyCategory,
+    isEnthusiastPlatform,
+    sourceEstimates,
+    compSummary: compBreakdown,
+  });
+
+  // Log normalization results
+  for (const ns of aiNormalization.result.normalizedSources) {
+    const delta = ns.acquisitionValue - ns.originalValue;
+    const sign = delta >= 0 ? "+" : "";
+    console.log(
+      `[SourceNorm] ${ns.source}: $${ns.originalValue.toLocaleString()} → $${ns.acquisitionValue.toLocaleString()} (${ns.multiplier.toFixed(2)}x, ${sign}$${delta.toLocaleString()}) — ${ns.reason}`,
+    );
+  }
+  console.log(`[SourceNorm] Strategy (tier ${aiNormalization.fallbackTier}): ${aiNormalization.result.reasoning}`);
+
+  // Replace sourceEstimates with acquisition-normalized values
+  const normalizedEstimates = applyNormalization(sourceEstimates, aiNormalization.result);
+
   // ── Mileage cross-check from comparable listings ────────────────
   if (mileage && allListings.length >= 3) {
     const listingsWithMiles = allListings.filter((l) => l.mileage && l.mileage > 0);
@@ -588,7 +638,7 @@ export async function fetchMarketData(
     mileage,
     conditionScore,
     conditionTier,
-    sourceEstimates,
+    sourceEstimates: normalizedEstimates,
   });
 
   // Build a ConsensusResult-shaped object from AI result for downstream compat
@@ -602,10 +652,10 @@ export async function fetchMarketData(
     confidence: cr.confidenceAssessment,
     primarySource: (Object.entries(cr.sourceWeights).sort((a, b) => b[1] - a[1])[0]?.[0] || "fallback") as ConsensusResult["primarySource"],
     consensusMethod: aiConsensus.fallbackTier === 3 ? "weighted-median" : "weighted-median",
-    sourceResults: sourceEstimates,
+    sourceResults: normalizedEstimates,
     configPremiumMode: cr.configPremiumMode,
     conditionAttenuation: cr.conditionAttenuation,
-    sourceCount: sourceEstimates.filter((s) => s.estimatedValue > 0).length,
+    sourceCount: normalizedEstimates.filter((s) => s.estimatedValue > 0).length,
   };
 
   console.log(
@@ -665,6 +715,32 @@ export async function fetchMarketData(
     );
   }
 
+  // ── Build pricing trace ─────────────────────────────────────────
+  const afterConfig = Math.round(consensus.estimatedValue * combinedMultiplier);
+  const pricingTrace: PricingTraceStep[] = [
+    {
+      label: "Acquisition Consensus",
+      inputDollars: consensus.estimatedValue,
+      operation: "starting point",
+      outputDollars: consensus.estimatedValue,
+      explanation: `${consensus.sourceCount} source(s), ${(consensus.confidence * 100).toFixed(0)}% conf`,
+    },
+    {
+      label: "Config Premium",
+      inputDollars: consensus.estimatedValue,
+      operation: `× ${combinedMultiplier.toFixed(3)}`,
+      outputDollars: afterConfig,
+      explanation: `Mode: ${consensus.configPremiumMode}. ${premiums.map((p) => `${p.factor} (${p.multiplier.toFixed(2)}x)`).join(", ") || "none"}`,
+    },
+    {
+      label: "Regional Adjustment",
+      inputDollars: afterConfig,
+      operation: `× ${regionalMultiplier.toFixed(3)}`,
+      outputDollars: adjustedEstimated,
+      explanation: `${state} ${bodyCategory} market`,
+    },
+  ];
+
   return {
     estimatedValue: adjustedEstimated,
     valueLow: adjustedTradeIn,
@@ -692,13 +768,18 @@ export async function fetchMarketData(
     conditionAttenuation: consensus.conditionAttenuation,
     sourceCount: consensus.sourceCount,
 
+    pricingTrace,
+
     aiMetadata: {
       consensusTier: aiConsensus.fallbackTier,
       configPremiumTier: aiConfigResult.fallbackTier,
       geoPricingTier: aiGeoResult.fallbackTier,
+      sourceNormTier: aiNormalization.fallbackTier,
       consensusReasoning: aiConsensus.reasoning,
       configReasoning: aiConfigResult.result.combinedReasoning,
       geoReasoning: aiGeoResult.result.reasoning,
+      sourceNormReasoning: aiNormalization.result.reasoning,
+      sourceNormalization: aiNormalization.result.normalizedSources,
     },
   };
 }

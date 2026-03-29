@@ -192,6 +192,29 @@ async function searchComparables(
     }
   }
 
+  // ── Tier 2.5: Nationwide active, Y/M/M only (drop trim/drivetrain/trans) ──
+  // For common vehicles, MarketCheck may not index trim/drivetrain consistently.
+  // A 2015 CR-V EX AWD returns 0 with exact filters but 1500+ without.
+  if (activeResult.num_found < 5) {
+    const broadParams: Record<string, string> = {
+      api_key: apiKey,
+      year: String(vehicle.year),
+      make: vehicle.make,
+      model: vehicle.model,
+      rows: "50",
+      car_type: "used",
+      // No seller_type filter — include all dealers and private sellers
+      // No mileage filter — any comp for this Y/M/M is useful
+      sort_by: "price",
+      sort_order: "desc", // Descending puts priced listings first
+    };
+    const broad = await doSearch("active", broadParams);
+    console.log(`[MarketCheck] Tier 2.5 (nationwide active, Y/M/M only): ${broad.num_found} found`);
+    if (broad.num_found > activeResult.num_found) {
+      activeResult = broad;
+    }
+  }
+
   // ── Tier 3: Nationwide recently sold, exact config ──────────────
   if (activeResult.num_found < 5) {
     const tier3Params = buildConfigParams({
@@ -201,6 +224,25 @@ async function searchComparables(
     const sold = await doSearch("sold", tier3Params);
     console.log(`[MarketCheck] Tier 3 (nationwide sold, exact config): ${sold.num_found} found`);
     soldResult = sold;
+  }
+
+  // ── Tier 3.5: Nationwide sold, Y/M/M only ──
+  if (activeResult.num_found + soldResult.num_found < 5) {
+    const broadSoldParams: Record<string, string> = {
+      api_key: apiKey,
+      year: String(vehicle.year),
+      make: vehicle.make,
+      model: vehicle.model,
+      rows: String(rows),
+      car_type: "used",
+      sort_by: "sold_date",
+      sort_order: "desc",
+    };
+    const broadSold = await doSearch("sold", broadSoldParams);
+    console.log(`[MarketCheck] Tier 3.5 (nationwide sold, Y/M/M only): ${broadSold.num_found} found`);
+    if (broadSold.num_found > soldResult.num_found) {
+      soldResult = broadSold;
+    }
   }
 
   // ── Tier 4: Nationwide sold, year-range expansion (±3 years) ────
@@ -372,9 +414,10 @@ export async function fetchMarketCheckData(
   // Merge: active listings first, then sold listings
   const nearbyListings: NormalizedListing[] = [...activeListings, ...soldListings];
 
-  if (soldListings.length > 0) {
-    console.log(`[MarketCheck] ${activeListings.length} active + ${soldListings.length} sold = ${nearbyListings.length} total comps`);
-  }
+  console.log(
+    `[MarketCheck] ${activeListings.length} active + ${soldListings.length} sold = ${nearbyListings.length} total comps ` +
+    `(from ${searchResults.active.listings.length} + ${searchResults.sold.listings.length} raw listings)`,
+  );
 
   // Calculate average days on market
   const listingsWithDom = nearbyListings.filter((l) => l.daysOnMarket && l.daysOnMarket > 0);

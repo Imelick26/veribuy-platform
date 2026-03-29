@@ -8,8 +8,8 @@ import { formatCurrency, cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 
 export interface MarketAnalysisData {
-  baselinePrice: number;          // cents — MarketCheck market baseline
-  adjustedPrice: number;          // cents — final fair value for THIS car
+  baselinePrice: number;          // cents — market baseline
+  adjustedPrice: number;          // cents — recommended buy price
   recommendation: string;
   strongBuyMax: number;
   fairBuyMax: number;
@@ -19,7 +19,6 @@ export interface MarketAnalysisData {
   estReconCost?: number | null;
   estGrossProfit?: number | null;
 
-  // Valuation breakdown (new fields)
   conditionScore?: number | null;
   conditionMultiplier?: number | null;
   conditionGrade?: string | null;
@@ -49,25 +48,22 @@ export interface MarketAnalysisData {
     url?: string;
   }> | null;
 
-  // Multi-source pricing metadata
-  dataSource?: string | null;              // "vehicledatabases" | "vinaudit" | "marketcheck" | "fallback" | "consensus"
-  dataSourceConfidence?: number | null;    // 0-1
+  dataSource?: string | null;
+  dataSourceConfidence?: number | null;
   configPremiums?: Array<{
     factor: string;
     multiplier: number;
     explanation: string;
   }> | null;
   configMultiplier?: number | null;
-  baseValuePreConfig?: number | null;      // cents
+  baseValuePreConfig?: number | null;
 
-  // Five-perspective pricing (cents)
   tradeInValue?: number | null;
   privatePartyValue?: number | null;
   dealerRetailValue?: number | null;
   wholesaleValue?: number | null;
   loanValue?: number | null;
 
-  // Condition tier + consensus metadata
   vdbConditionTier?: string | null;
   sourceResults?: Array<{
     source: string;
@@ -82,7 +78,6 @@ export interface MarketAnalysisData {
   conditionAttenuation?: number | null;
   sourceCount?: number | null;
 
-  // AI auditor result
   aiAuditorApproved?: boolean | null;
   aiAuditorCoherence?: number | null;
   aiAuditorFlags?: string[] | null;
@@ -91,7 +86,6 @@ export interface MarketAnalysisData {
 
 interface MarketAnalysisSectionProps {
   data: MarketAnalysisData;
-  /** Compact mode for StepPanel (no card wrapper) */
   compact?: boolean;
 }
 
@@ -100,31 +94,22 @@ interface MarketAnalysisSectionProps {
 /* ------------------------------------------------------------------ */
 
 function formatMileage(miles: number): string {
-  return miles >= 1000
-    ? `${(miles / 1000).toFixed(0)}k mi`
-    : `${miles} mi`;
+  return miles >= 1000 ? `${(miles / 1000).toFixed(0)}k mi` : `${miles} mi`;
 }
 
-function formatMultiplier(value: number): string {
-  return value.toFixed(2) + "x";
-}
-
-function historyFactorLabel(key: string): string {
-  const labels: Record<string, string> = {
-    titleFactor: "Title Status",
-    accidentFactor: "Accidents",
-    ownerFactor: "Owner Count",
-    structuralDamageFactor: "Structural Damage",
-    floodDamageFactor: "Flood Damage",
-    recallFactor: "Open Recalls",
-  };
-  return labels[key] || key;
-}
+const recColor = (rec: string) =>
+  rec === "STRONG_BUY" ? { bg: "bg-green-50", border: "border-green-300", text: "text-green-700" } :
+  rec === "FAIR_BUY" ? { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-700" } :
+  { bg: "bg-red-50", border: "border-red-300", text: "text-red-700" };
 
 const recBadgeVariant = (rec: string) =>
   rec === "STRONG_BUY" ? "success" as const :
-  rec === "FAIR_BUY" ? "info" as const :
-  rec === "OVERPAYING" ? "warning" as const : "danger" as const;
+  rec === "FAIR_BUY" ? "warning" as const : "danger" as const;
+
+const recLabel = (rec: string) =>
+  rec === "STRONG_BUY" ? "Strong Buy" :
+  rec === "FAIR_BUY" ? "Fair Buy" :
+  rec === "OVERPAYING" ? "Overpaying" : "Pass";
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -132,166 +117,188 @@ const recBadgeVariant = (rec: string) =>
 
 export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisSectionProps) {
   const comps = (data.comparables ?? []) as MarketAnalysisData["comparables"] & object[];
-  const hasBreakdown = data.conditionMultiplier != null;
   const bands = data.priceBands as MarketAnalysisData["priceBands"];
 
-  const configPremiums = data.configPremiums as MarketAnalysisData["configPremiums"];
-  const hasConfigPremiums = configPremiums && configPremiums.length > 0;
+  // The recommended buy price is the top of the "Fair Buy" band — always a good deal
+  const recommendedPrice = data.fairBuyMax || data.adjustedPrice;
+  // Color is always green/amber (it's a recommended price, never overpaying)
+  const rc = recColor("FAIR_BUY");
+
+  // Compute avg comp price + mileage
+  const avgCompPrice = comps && comps.length > 0
+    ? Math.round(comps.reduce((s, c) => s + c.price, 0) / comps.length)
+    : null;
+  const compsWithMileage = comps?.filter((c) => c.mileage > 0) ?? [];
+  const avgCompMileage = compsWithMileage.length > 0
+    ? Math.round(compsWithMileage.reduce((s, c) => s + c.mileage, 0) / compsWithMileage.length)
+    : null;
+
+  // Compute waterfall values — start from Est. Retail (what dealer lists it for)
+  const estRetail = data.estRetailPrice || data.baselinePrice;
+  const reconCost = data.estReconCost || 0;
+  const conditionDelta = data.conditionMultiplier != null
+    ? Math.round(estRetail * data.conditionMultiplier) - estRetail
+    : 0;
+  const afterCondition = estRetail + conditionDelta;
+  const historyDelta = data.historyMultiplier != null && data.historyMultiplier !== 1
+    ? Math.round(afterCondition * data.historyMultiplier) - afterCondition
+    : 0;
+  const afterHistory = afterCondition + historyDelta;
+  const fairMarketValue = afterHistory - reconCost;
+  const dealerMargin = fairMarketValue - recommendedPrice;
 
   return (
     <div className={cn("space-y-5", compact && "space-y-3")}>
-      {/* ── Five-Perspective Pricing Header ── */}
-      {(data.tradeInValue || data.privatePartyValue || data.dealerRetailValue) && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            <PerspectiveCard
-              label="Trade-In"
-              value={data.tradeInValue}
-              color="text-amber-700"
-              bgColor="bg-amber-50"
-              borderColor="border-amber-200"
-            />
-            <PerspectiveCard
-              label="Private Party"
-              value={data.privatePartyValue}
-              color="text-brand-700"
-              bgColor="bg-brand-50"
-              borderColor="border-brand-200"
-              highlight
-            />
-            <PerspectiveCard
-              label="Dealer Retail"
-              value={data.dealerRetailValue}
-              color="text-green-700"
-              bgColor="bg-green-50"
-              borderColor="border-green-200"
-            />
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* SECTION 1: THE DECISION                                        */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+
+      {/* ── Hero: Recommended Buy Price ── */}
+      <div className="p-5 rounded-xl border border-border-default bg-surface-overlay">
+        <div>
+          <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
+            Recommended Buy Price
+          </p>
+          <p className="text-2xl font-bold text-text-primary mt-0.5">
+            {formatCurrency(recommendedPrice)}
+          </p>
+        </div>
+        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border-default text-xs">
+          <div>
+            <span className="text-text-tertiary">Est. Retail</span>
+            <span className="font-semibold text-text-primary ml-1.5">
+              {data.estRetailPrice ? formatCurrency(data.estRetailPrice) : "—"}
+            </span>
           </div>
-          {/* Wholesale + Loan row (shown when available) */}
-          {(data.wholesaleValue || data.loanValue) && (
-            <div className="grid grid-cols-2 gap-2">
-              {data.wholesaleValue ? (
-                <PerspectiveCard
-                  label="Wholesale"
-                  value={data.wholesaleValue}
-                  color="text-purple-700"
-                  bgColor="bg-purple-50"
-                  borderColor="border-purple-200"
-                />
-              ) : <div />}
-              {data.loanValue ? (
-                <PerspectiveCard
-                  label="Loan Value"
-                  value={data.loanValue}
-                  color="text-blue-700"
-                  bgColor="bg-blue-50"
-                  borderColor="border-blue-200"
-                />
-              ) : <div />}
+          {data.estGrossProfit != null && (
+            <div>
+              <span className="text-text-tertiary">Est. Margin</span>
+              <span className={cn("font-semibold ml-1.5", data.estGrossProfit > 0 ? "text-green-600" : "text-red-600")}>
+                {formatCurrency(data.estGrossProfit)}
+              </span>
+            </div>
+          )}
+          {reconCost > 0 && (
+            <div>
+              <span className="text-text-tertiary">Est. Recon</span>
+              <span className="font-semibold text-red-600 ml-1.5">-{formatCurrency(reconCost)}</span>
             </div>
           )}
         </div>
+      </div>
+
+      {/* ── Offer Guide ── */}
+      {bands && bands.length > 0 && (
+        <OfferGuide bands={bands} />
       )}
 
-      {/* ── Data Sources + Confidence ── */}
-      {data.dataSource && (
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Show all contributing sources as badges */}
-          {data.sourceResults && data.sourceResults.length > 0 ? (
-            data.sourceResults
-              .filter((s) => s.source !== "fallback" && s.estimatedValue > 0)
-              .map((s) => {
-                const sourceLabels: Record<string, string> = {
-                  blackbook: "Black Book",
-                  vehicledatabases: "VehicleDatabases",
-                  nada: "NADA Guides",
-                  vinaudit: "VinAudit",
-                  marketcheck: "MarketCheck",
-                };
-                const sourceVariants: Record<string, "info" | "success" | "warning" | "default"> = {
-                  blackbook: "default",
-                  vehicledatabases: "info",
-                  nada: "info",
-                  vinaudit: "info",
-                  marketcheck: "success",
-                };
-                return (
-                  <Badge key={s.source} variant={sourceVariants[s.source] ?? "warning"}>
-                    {sourceLabels[s.source] ?? s.source}
-                  </Badge>
-                );
-              })
-          ) : (
-            <Badge variant={
-              data.dataSource === "vinaudit" ? "info" as const :
-              data.dataSource === "marketcheck" ? "success" as const :
-              "warning" as const
-            }>
-              {data.dataSource === "vinaudit" ? "VinAudit" :
-               data.dataSource === "marketcheck" ? "MarketCheck" :
-               data.dataSource === "vehicledatabases" ? "VehicleDatabases" :
-               data.dataSource === "blackbook" ? "Black Book" :
-               data.dataSource === "nada" ? "NADA Guides" :
-               "Estimated"}
-            </Badge>
-          )}
-          {data.consensusMethod === "weighted-median" && (
-            <span className="text-[10px] text-text-tertiary font-medium">
-              {data.sourceCount ? `${data.sourceCount}-Source Consensus` : "Consensus"}
-            </span>
-          )}
-          {data.vdbConditionTier && (
-            <Badge variant="default">
-              {data.vdbConditionTier}
-            </Badge>
-          )}
-          {data.dataSourceConfidence != null && (
-            <span className="text-[10px] text-text-tertiary">
-              {Math.round(data.dataSourceConfidence * 100)}% confidence
-            </span>
-          )}
-          {data.dataSource === "fallback" && !data.sourceResults?.some((s) => s.source !== "fallback" && s.estimatedValue > 0) && (
-            <span className="text-[10px] text-amber-600">
-              No live market data available — using category estimate + config premiums
-            </span>
-          )}
-        </div>
-      )}
+      {/* Deal economics now shown inline in the hero card above */}
 
-      {/* ── Configuration Premiums ── */}
-      {hasConfigPremiums && (
-        <div className="p-3 rounded-lg bg-brand-50/50 border border-brand-200">
-          <h4 className="text-xs font-semibold text-brand-700 mb-1.5">
-            Configuration Premiums Applied
-            {data.configMultiplier != null && (
-              <span className="ml-1 font-bold">({data.configMultiplier.toFixed(2)}x total)</span>
-            )}
-          </h4>
-          <div className="space-y-1">
-            {configPremiums!.map((p, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <span className="text-text-secondary">{p.factor}</span>
-                <span className="font-semibold text-brand-700">+{Math.round((p.multiplier - 1) * 100)}%</span>
-              </div>
-            ))}
-          </div>
-          {data.baseValuePreConfig != null && (
-            <p className="text-[10px] text-text-tertiary mt-1.5 border-t border-brand-200 pt-1">
-              Base value before premiums: {formatCurrency(data.baseValuePreConfig)}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* SECTION 2: HOW WE GOT HERE                                     */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+
+      {/* ── Avg Comparable Price ── */}
+      {avgCompPrice != null && (
+        <div className="p-3 rounded-lg bg-surface-overlay border border-border-default">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-xs font-semibold text-text-primary">Avg. Comparable Price</p>
+              <p className="text-[10px] text-text-tertiary">
+                Based on {comps!.length} similar listings
+                {avgCompMileage != null && ` · Avg. ${avgCompMileage.toLocaleString()} mi`}
+              </p>
+            </div>
+            <p className="text-lg font-bold text-text-primary">
+              ${avgCompPrice.toLocaleString()}
             </p>
-          )}
+          </div>
         </div>
       )}
 
-      {/* ── Comparable Listings ── */}
+      {/* ── Simplified Waterfall ── */}
+      <div>
+        <h4 className="text-sm font-semibold text-text-primary mb-2">
+          Pricing Breakdown
+        </h4>
+        <div className="space-y-1.5 text-sm">
+          {/* Est. Dealer Retail */}
+          <div className="flex justify-between">
+            <span className="text-text-secondary">Est. Dealer Retail</span>
+            <span className="font-medium text-text-primary">{formatCurrency(estRetail)}</span>
+          </div>
+
+          {/* Condition */}
+          {conditionDelta !== 0 && (
+            <div className="flex justify-between">
+              <span className="text-text-secondary">
+                Condition ({data.conditionScore}/100)
+              </span>
+              <span className={cn("font-medium", conditionDelta > 0 ? "text-green-600" : "text-red-600")}>
+                {conditionDelta > 0 ? "+" : ""}{formatCurrency(conditionDelta)}
+              </span>
+            </div>
+          )}
+
+          {/* History */}
+          {historyDelta !== 0 && (
+            <div className="flex justify-between">
+              <span className="text-text-secondary">Vehicle History</span>
+              <span className={cn("font-medium", historyDelta > 0 ? "text-green-600" : "text-red-600")}>
+                {historyDelta > 0 ? "+" : ""}{formatCurrency(historyDelta)}
+              </span>
+            </div>
+          )}
+
+          {/* Recon */}
+          {reconCost > 0 && (
+            <div className="flex justify-between">
+              <span className="text-text-secondary">Est. Reconditioning</span>
+              <span className="font-medium text-red-600">-{formatCurrency(reconCost)}</span>
+            </div>
+          )}
+
+          {/* Fair Market Value line */}
+          <div className="flex justify-between border-t border-border-default pt-1.5">
+            <span className="font-semibold text-text-primary">Fair Market Value</span>
+            <span className="font-bold text-text-primary">{formatCurrency(fairMarketValue)}</span>
+          </div>
+
+          {/* Dealer Margin */}
+          {dealerMargin != null && dealerMargin > 0 && (
+            <div className="flex justify-between">
+              <span className="text-text-secondary">Dealer Margin (25%)</span>
+              <span className="font-medium text-red-600">-{formatCurrency(dealerMargin)}</span>
+            </div>
+          )}
+
+          {/* Recommended Buy Price */}
+          <div className="flex justify-between border-t-2 pt-2 mt-1 border-green-300">
+            <span className="font-bold text-green-700">Recommended Buy Price</span>
+            <span className="font-bold text-lg text-green-700">
+              {formatCurrency(recommendedPrice)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Market Comps count ── */}
+      <div className="flex items-center justify-between px-3 py-2 rounded-lg border bg-surface-overlay border-border-default">
+        <span className="text-xs font-semibold text-text-secondary">Market Comps</span>
+        <span className="text-xs font-bold text-text-primary">{comps?.length ?? 0} comparable{(comps?.length ?? 0) === 1 ? "" : "s"} pulled</span>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* SECTION 3: MARKET DATA (evidence)                              */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+
+      {/* ── Comparable Listings Table ── */}
       {comps && comps.length > 0 && (
         <div>
           <h4 className="text-sm font-semibold text-text-primary mb-2">
             Comparable Listings
           </h4>
-          <p className="text-xs text-text-tertiary mb-2">
-            Based on {comps.length} similar vehicles for sale nearby
-          </p>
           <div className="overflow-x-auto rounded-lg border border-border-default">
             <table className="w-full text-xs">
               <thead>
@@ -326,191 +333,10 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
               </tbody>
             </table>
           </div>
-          {/* Average comp price */}
-          {comps.length > 0 && (
-            <p className="text-xs text-text-tertiary mt-1.5 text-right">
-              Avg. comp price: <span className="font-medium text-text-secondary">
-                ${Math.round(comps.reduce((s, c) => s + c.price, 0) / comps.length).toLocaleString()}
-              </span>
-            </p>
-          )}
         </div>
       )}
 
-      {/* ── Fair Value at Baseline ── */}
-      {data.fairValueAtBaseline != null && (
-        <div className="p-3 rounded-lg bg-surface-overlay border border-border-default">
-          <div className="flex justify-between items-center">
-            <div>
-              <p className="text-xs text-text-tertiary">Fair Market Value (Good Condition)</p>
-              <p className="text-xs text-text-tertiary">Score 85 baseline, no recon</p>
-            </div>
-            <p className="text-lg font-bold text-text-primary">
-              {formatCurrency(data.fairValueAtBaseline)}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Valuation Waterfall ── */}
-      {hasBreakdown && (
-        <div>
-          <h4 className="text-sm font-semibold text-text-primary mb-2">
-            Valuation Breakdown
-          </h4>
-          <div className="space-y-1.5">
-            {/* Market Baseline */}
-            <WaterfallRow
-              label={`Market Baseline (${
-                data.consensusMethod === "weighted-median" ? "Consensus" :
-                data.dataSource === "vehicledatabases" ? "VehicleDatabases" :
-                data.dataSource === "vinaudit" ? "VinAudit" :
-                data.dataSource === "marketcheck" ? "MarketCheck" :
-                "Estimate"
-              })`}
-              value={data.baselinePrice}
-            />
-
-            {/* Condition Adjustment */}
-            {data.conditionMultiplier != null && data.adjustedValueBeforeRecon != null && (
-              <WaterfallRow
-                label={`Condition (Score ${data.conditionScore} / ${data.conditionGrade?.replace(/_/g, " ")} / ${formatMultiplier(data.conditionMultiplier)})`}
-                value={Math.round(data.baselinePrice * data.conditionMultiplier) - data.baselinePrice}
-                isDelta
-              />
-            )}
-
-            {/* History Adjustments */}
-            {data.historyMultiplier != null && data.historyMultiplier !== 1 && data.historyBreakdown && (
-              <div className="pl-3 border-l-2 border-border-default space-y-1">
-                {Object.entries(data.historyBreakdown)
-                  .filter(([, v]) => v !== 1)
-                  .map(([key, value]) => (
-                    <div key={key} className="flex justify-between text-xs">
-                      <span className="text-text-tertiary">{historyFactorLabel(key)}</span>
-                      <span className={cn(
-                        "font-medium",
-                        value < 1 ? "text-red-600" : "text-green-600"
-                      )}>
-                        {formatMultiplier(value)}
-                      </span>
-                    </div>
-                  ))
-                }
-                <div className="flex justify-between text-xs border-t border-border-default pt-1">
-                  <span className="text-text-secondary font-medium">Combined History</span>
-                  <span className="font-medium text-text-primary">{formatMultiplier(data.historyMultiplier)}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Adjusted before recon */}
-            {data.adjustedValueBeforeRecon != null && (
-              <WaterfallRow label="Adjusted Value (before recon)" value={data.adjustedValueBeforeRecon} />
-            )}
-
-            {/* Recon cost */}
-            {data.estReconCost != null && data.estReconCost > 0 && (
-              <WaterfallRow label="Est. Reconditioning Cost" value={-data.estReconCost} isDelta />
-            )}
-
-            {/* Final value */}
-            <div className="flex justify-between text-sm border-t-2 border-border-strong pt-2 mt-2">
-              <span className="font-bold text-text-primary">Final Adjusted Value</span>
-              <span className="font-bold text-lg text-text-primary">
-                {formatCurrency(data.adjustedPrice)}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Price Band Guide ── */}
-      {bands && bands.length > 0 && (
-        <OfferGuide bands={bands} />
-      )}
-
-      {/* ── Deal Economics ── */}
-      <div className="space-y-2 pt-2 border-t border-border-default">
-        <div className="flex justify-between text-sm">
-          <span className="text-text-secondary">Est. Retail / Resale</span>
-          <span className="font-medium">{data.estRetailPrice ? formatCurrency(data.estRetailPrice) : "—"}</span>
-        </div>
-        {data.estReconCost != null && data.estReconCost > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-text-secondary">Est. Recon Cost</span>
-            <span className="font-medium text-red-700">-{formatCurrency(data.estReconCost)}</span>
-          </div>
-        )}
-        {data.estGrossProfit != null && (
-          <div className="flex justify-between text-sm border-t border-border-default pt-2">
-            <span className="text-text-secondary font-semibold">Est. Gross Profit</span>
-            <span className={cn(
-              "font-bold",
-              data.estGrossProfit > 0 ? "text-green-700" : "text-red-700"
-            )}>
-              {formatCurrency(data.estGrossProfit)}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* ── Recommendation Badge (bottom summary) ── */}
-      <div className={cn(
-        "p-4 rounded-lg border text-center",
-        data.recommendation === "STRONG_BUY" ? "bg-[#dcfce7] border-green-300" :
-        data.recommendation === "FAIR_BUY" ? "bg-[#fce8f3] border-brand-300" :
-        data.recommendation === "OVERPAYING" ? "bg-amber-50 border-amber-300" :
-        "bg-[#fde8e8] border-red-300"
-      )}>
-        <Badge variant={recBadgeVariant(data.recommendation)}>
-          {data.recommendation.replace(/_/g, " ")}
-        </Badge>
-        <p className="text-2xl font-bold text-text-primary mt-2">
-          {formatCurrency(data.adjustedPrice)}
-        </p>
-        <p className="text-xs text-text-secondary">Fair Market Value (This Vehicle)</p>
-      </div>
-
-      {/* ── AI Auditor Badge ── */}
-      {data.aiAuditorApproved != null && (
-        <div className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg border text-xs",
-          data.aiAuditorApproved
-            ? "bg-green-50 border-green-200"
-            : "bg-amber-50 border-amber-200"
-        )}>
-          <div className={cn(
-            "w-2 h-2 rounded-full shrink-0",
-            data.aiAuditorApproved ? "bg-green-500" : "bg-amber-500"
-          )} />
-          <div className="flex-1">
-            <span className={cn(
-              "font-semibold",
-              data.aiAuditorApproved ? "text-green-700" : "text-amber-700"
-            )}>
-              {data.aiAuditorApproved ? "AI Auditor Verified" : "AI Auditor Adjusted"}
-            </span>
-            {data.aiAuditorCoherence != null && (
-              <span className="text-text-tertiary ml-1.5">
-                ({Math.round(data.aiAuditorCoherence * 100)}% coherence)
-              </span>
-            )}
-            {data.aiAuditorReasoning && (
-              <p className="text-text-tertiary mt-0.5 leading-tight">
-                {data.aiAuditorReasoning}
-              </p>
-            )}
-            {data.aiAuditorFlags && data.aiAuditorFlags.length > 0 && (
-              <ul className="text-amber-600 mt-1 space-y-0.5">
-                {data.aiAuditorFlags.map((flag, i) => (
-                  <li key={i}>• {flag}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Five-perspective pricing removed — not needed for dealer reports */}
     </div>
   );
 }
@@ -520,131 +346,72 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
 /* ------------------------------------------------------------------ */
 
 function OfferGuide({ bands }: { bands: NonNullable<MarketAnalysisData["priceBands"]> }) {
-  const friendlyLabel: Record<string, string> = {
-    STRONG_BUY: "Strong Buy",
-    FAIR_BUY: "Fair Buy",
-    OVERPAYING: "Overpaying",
-    PASS: "Pass",
-  };
+  const tiers = [
+    { key: "STRONG_BUY", label: "Great Buy", desc: "Excellent deal — well below market value", icon: "bg-green-500", text: "text-green-700", bg: "bg-green-100", border: "border-green-300" },
+    { key: "FAIR_BUY",   label: "Good Buy",  desc: "Solid deal — at or below market value",    icon: "bg-green-400", text: "text-green-600", bg: "bg-green-50",  border: "border-green-200" },
+    { key: "OVERPAYING", label: "Fair Buy",   desc: "At market value — standard margin",        icon: "bg-yellow-400", text: "text-yellow-700", bg: "bg-yellow-50", border: "border-yellow-300" },
+  ];
 
-  const description: Record<string, string> = {
-    STRONG_BUY: "Great deal — well below market value",
-    FAIR_BUY: "Solid deal — at or below market value",
-    OVERPAYING: "Above market — thin margin",
-    PASS: "Walk away — too far above market",
-  };
+  // Build ranges from band data, add "Bad Buy" as 4th tier
+  const visibleBands = bands.filter((b) => b.label !== "PASS");
+  const lastBand = visibleBands[visibleBands.length - 1];
 
-  // Build price ranges from band thresholds
-  const ranges = bands.map((band, idx) => {
+  const ranges = tiers.map((tier, idx) => {
+    const band = visibleBands[idx];
+    if (!band) return null;
     let rangeText: string;
     if (idx === 0) {
-      // First band: "Up to $X"
       rangeText = `Up to ${formatCurrency(band.maxPriceCents)}`;
-    } else if (band.label === "PASS") {
-      // Last band: "Above $X"
-      rangeText = `Above ${formatCurrency(bands[idx - 1].maxPriceCents)}`;
     } else {
-      // Middle bands: "$X — $Y"
-      const prevMax = bands[idx - 1].maxPriceCents;
+      const prevMax = visibleBands[idx - 1].maxPriceCents;
       rangeText = `${formatCurrency(prevMax + 1)} — ${formatCurrency(band.maxPriceCents)}`;
     }
-    return { ...band, rangeText };
-  });
+    return { ...tier, rangeText };
+  }).filter(Boolean) as Array<typeof tiers[number] & { rangeText: string }>;
 
-  const styles: Record<string, { icon: string; text: string; bg: string; border: string }> = {
-    STRONG_BUY: { icon: "bg-green-500", text: "text-green-700", bg: "bg-green-50", border: "border-green-200" },
-    FAIR_BUY:   { icon: "bg-brand-500", text: "text-brand-700", bg: "bg-brand-50", border: "border-brand-200" },
-    OVERPAYING: { icon: "bg-amber-500", text: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200" },
-    PASS:       { icon: "bg-red-500",   text: "text-red-700",   bg: "bg-red-50",   border: "border-red-200" },
-  };
+  // Add "Bad Buy" tier for anything above the last band
+  if (lastBand) {
+    ranges.push({
+      key: "BAD_BUY",
+      label: "Bad Buy",
+      desc: "Above market — avoid",
+      icon: "bg-red-500",
+      text: "text-red-700",
+      bg: "bg-red-50",
+      border: "border-red-300",
+      rangeText: `Above ${formatCurrency(lastBand.maxPriceCents)}`,
+    });
+  }
 
   return (
     <div>
-      <h4 className="text-sm font-semibold text-text-primary mb-2">
-        Offer Guide
-      </h4>
+      <h4 className="text-sm font-semibold text-text-primary mb-2">Offer Guide</h4>
       <div className="space-y-1.5">
-        {ranges.map((band) => {
-          const s = styles[band.label] || styles.PASS;
-          return (
-            <div
-              key={band.label}
-              className={cn("flex items-center justify-between px-3 py-2.5 rounded-md border", s.bg, s.border)}
-            >
-              <div className="flex items-center gap-2.5">
-                <div className={cn("w-2.5 h-2.5 rounded-full shrink-0", s.icon)} />
-                <div>
-                  <span className={cn("text-xs font-bold block", s.text)}>
-                    {friendlyLabel[band.label] || band.label}
-                  </span>
-                  <span className="text-[10px] text-text-tertiary leading-tight">
-                    {description[band.label]}
-                  </span>
-                </div>
+        {ranges.map((tier) => (
+          <div key={tier.key} className={cn("flex items-center justify-between px-3 py-2.5 rounded-md border", tier.bg, tier.border)}>
+            <div className="flex items-center gap-2.5">
+              <div className={cn("w-2.5 h-2.5 rounded-full shrink-0", tier.icon)} />
+              <div>
+                <span className={cn("text-xs font-bold block", tier.text)}>{tier.label}</span>
+                <span className="text-[10px] text-text-tertiary leading-tight">{tier.desc}</span>
               </div>
-              <span className={cn("text-sm font-bold whitespace-nowrap", s.text)}>
-                {band.rangeText}
-              </span>
             </div>
-          );
-        })}
+            <span className={cn("text-sm font-bold whitespace-nowrap", tier.text)}>{tier.rangeText}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function PerspectiveCard({
-  label,
-  value,
-  color,
-  bgColor,
-  borderColor,
-  highlight = false,
-}: {
-  label: string;
-  value?: number | null;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  highlight?: boolean;
+function PerspectiveCard({ label, value, color, bgColor, borderColor }: {
+  label: string; value?: number | null; color: string; bgColor: string; borderColor: string;
 }) {
   if (!value) return null;
   return (
-    <div className={cn(
-      "p-2.5 rounded-lg border text-center",
-      bgColor,
-      borderColor,
-      highlight && "ring-1 ring-brand-400",
-    )}>
+    <div className={cn("p-2.5 rounded-lg border text-center", bgColor, borderColor)}>
       <p className="text-[10px] text-text-tertiary font-medium uppercase tracking-wide">{label}</p>
-      <p className={cn("text-lg font-bold mt-0.5", color)}>
-        {formatCurrency(value)}
-      </p>
-    </div>
-  );
-}
-
-function WaterfallRow({
-  label,
-  value,
-  isDelta = false,
-}: {
-  label: string;
-  value: number;
-  isDelta?: boolean;
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-text-secondary">{label}</span>
-      <span className={cn(
-        "font-medium",
-        isDelta && value > 0 && "text-green-600",
-        isDelta && value < 0 && "text-red-600",
-        !isDelta && "text-text-primary",
-      )}>
-        {isDelta && value > 0 && "+"}
-        {formatCurrency(value)}
-      </span>
+      <p className={cn("text-lg font-bold mt-0.5", color)}>{formatCurrency(value)}</p>
     </div>
   );
 }

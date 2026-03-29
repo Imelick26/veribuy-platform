@@ -55,9 +55,25 @@ async function main() {
     zip, inspection.odometer || undefined, conditionScore,
   );
   console.log(`  Done in ${Date.now() - t1}ms`);
-  console.log(`  Consensus: $${marketData.estimatedValue.toLocaleString()} (${marketData.sourceCount} sources, ${(marketData.confidence * 100).toFixed(0)}% conf)`);
+  console.log(`  Acquisition Consensus: $${marketData.estimatedValue.toLocaleString()} (${marketData.sourceCount} sources, ${(marketData.confidence * 100).toFixed(0)}% conf)`);
   console.log(`  Config: ${marketData.configMultiplier.toFixed(2)}x | Premiums: ${marketData.configPremiums.map(p => p.factor).join(", ") || "none"}`);
-  console.log(`  AI tiers: consensus=${marketData.aiMetadata?.consensusTier}, config=${marketData.aiMetadata?.configPremiumTier}, geo=${marketData.aiMetadata?.geoPricingTier}`);
+  console.log(`  AI tiers: norm=${marketData.aiMetadata?.sourceNormTier}, consensus=${marketData.aiMetadata?.consensusTier}, config=${marketData.aiMetadata?.configPremiumTier}, geo=${marketData.aiMetadata?.geoPricingTier}`);
+
+  // Show per-source normalization details
+  if (marketData.aiMetadata?.sourceNormalization) {
+    console.log("\n  Source Normalization (pre-consensus):");
+    for (const ns of marketData.aiMetadata.sourceNormalization) {
+      const delta = ns.acquisitionValue - ns.originalValue;
+      const sign = delta >= 0 ? "+" : "";
+      console.log(`    ${ns.source}: $${ns.originalValue.toLocaleString()} → $${ns.acquisitionValue.toLocaleString()} (${ns.multiplier.toFixed(2)}x, ${sign}$${delta.toLocaleString()}) — ${ns.reason}`);
+    }
+    console.log(`  Strategy: ${marketData.aiMetadata.sourceNormReasoning}`);
+  }
+
+  // Consensus is now already acquisition-normalized
+  const bodyCategory = classifyBody(vehicle as VehicleConfig);
+  const basePriceCents = Math.round(marketData.estimatedValue * 100);
+  const retailPriceCents = Math.round((marketData.valueHigh || marketData.estimatedValue * 1.1) * 100);
 
   // ── Build history ──
   const historyData: HistoryData = inspection.vehicleHistory
@@ -71,8 +87,6 @@ async function main() {
       }
     : { titleStatus: "CLEAN", accidentCount: 0, ownerCount: 1, structuralDamage: false, floodDamage: false, openRecallCount: 0 };
 
-  const basePriceCents = Math.round(marketData.estimatedValue * 100);
-  const bodyCategory = classifyBody(vehicle as VehicleConfig);
 
   // ── Step 2: AI History + Condition + Recon (parallel) ──
   console.log("\n[2/5] AI history + condition + recon (parallel)...");
@@ -117,15 +131,32 @@ async function main() {
     console.log(`    ${item.finding}: $${(item.estimatedCostCents / 100).toLocaleString()} — ${item.reasoning}`);
   }
 
-  // ── Compute fair price ──
-  const adjustedBeforeRecon = Math.round(basePriceCents * aiCondition.result.conditionMultiplier * aiHistory.result.historyMultiplier);
-  const fairPrice = Math.max(Math.round(basePriceCents * 0.05), adjustedBeforeRecon - aiRecon.result.totalReconCost);
+  // ── Dealer offer calculation (work backwards from retail) ──
+  const baseDollars = Math.round(basePriceCents / 100);
+  const reconDollars = Math.round(aiRecon.result.totalReconCost / 100);
+
+  const rawRetailDollars = Math.round(marketData.privatePartyValue * 1.15);
+  const estRetailDollars = Math.round(rawRetailDollars * aiCondition.result.conditionMultiplier * aiHistory.result.historyMultiplier);
+  const maxOfferBeforeRecon = Math.round(estRetailDollars * 0.75);
+  const maxOfferDollars = Math.max(
+    Math.round(estRetailDollars * 0.05),
+    maxOfferBeforeRecon - reconDollars,
+  );
+  const fairPrice = maxOfferDollars * 100; // cents
+  const dealerMarginDollars = estRetailDollars - maxOfferDollars - reconDollars;
+
+  const fullTrace = [
+    ...marketData.pricingTrace,
+    { label: "Est. Dealer Retail", inputDollars: rawRetailDollars, operation: `× ${(aiCondition.result.conditionMultiplier * aiHistory.result.historyMultiplier).toFixed(3)}`, outputDollars: estRetailDollars, explanation: `Cond ${aiCondition.result.conditionMultiplier.toFixed(2)}x × Hist ${aiHistory.result.historyMultiplier.toFixed(2)}x` },
+    { label: "Max Offer (75% of retail)", inputDollars: estRetailDollars, operation: "× 0.75", outputDollars: maxOfferBeforeRecon, explanation: "25% covers prep, holding, sales, profit" },
+    { label: "Reconditioning", inputDollars: maxOfferBeforeRecon, operation: reconDollars > 0 ? `- $${reconDollars.toLocaleString()}` : "none", outputDollars: maxOfferDollars, explanation: `${aiRecon.result.itemizedCosts.length} items` },
+    { label: "Max Offer Price", inputDollars: maxOfferDollars, operation: "final", outputDollars: maxOfferDollars, explanation: "" },
+  ];
 
   // ── Step 3: Deal rating ──
   console.log("\n[3/5] AI deal rating...");
   const t3 = Date.now();
   const historySummary = [`Title: ${historyData.titleStatus}`, historyData.accidentCount > 0 ? `${historyData.accidentCount} accident(s)` : null, `${historyData.ownerCount} owner(s)`].filter(Boolean).join(", ");
-  const retailPriceCents = Math.round((marketData.valueHigh || marketData.estimatedValue * 1.1) * 100);
 
   const aiDeal = await rateDeal({
     vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim },
@@ -163,6 +194,7 @@ async function main() {
     fairPurchasePrice: fairPrice,
     dealRating: aiDeal.result.rating,
     dealReasoning: aiDeal.result.reasoning,
+    pricingTrace: fullTrace,
   });
   console.log(`  Done in ${Date.now() - t4}ms`);
 
@@ -171,19 +203,26 @@ async function main() {
   if (aiAudit.result.flags.length > 0) console.log(`  Flags: ${aiAudit.result.flags.join("; ")}`);
   console.log(`  ${aiAudit.result.reasoning}`);
 
-  // ── Final Summary ──
+  // ── Final Summary with Pricing Trace ──
   console.log(`\n${"=".repeat(60)}`);
   console.log(`FINAL RESULTS — ${vehicle.year} ${vehicle.make} ${vehicle.model}`);
   console.log(`${"=".repeat(60)}`);
-  console.log(`Market Consensus:      $${marketData.estimatedValue.toLocaleString()}`);
-  console.log(`Config Premium:        ${marketData.configMultiplier.toFixed(2)}x`);
-  console.log(`Condition:             ${aiCondition.result.conditionMultiplier.toFixed(3)}x (score ${conditionScore}/100, ${getConditionGrade(conditionScore)})`);
-  console.log(`History:               ${aiHistory.result.historyMultiplier.toFixed(3)}x`);
-  console.log(`Adjusted Before Recon: $${(adjustedBeforeRecon / 100).toLocaleString()}`);
-  console.log(`Recon Cost:            -$${(aiRecon.result.totalReconCost / 100).toLocaleString()}`);
-  console.log(`Fair Purchase Price:   $${(finalPrice / 100).toLocaleString()}`);
+  console.log(`\nPRICING TRACE:`);
+  for (let i = 0; i < fullTrace.length; i++) {
+    const step = fullTrace[i];
+    if (step.label === "Fair Purchase Price") {
+      console.log(`  → FAIR PURCHASE PRICE: $${step.outputDollars.toLocaleString()}`);
+    } else {
+      const pad = step.label.padEnd(24);
+      console.log(`  Step ${i + 1}: ${pad} ${step.operation.padEnd(12)} = $${step.outputDollars.toLocaleString()}  [${step.explanation}]`);
+    }
+  }
+  console.log(`\nConfig Premium Mode:   ${marketData.configPremiumMode}`);
   console.log(`Deal Rating:           ${aiDeal.result.rating}`);
   console.log(`Auditor:               ${aiAudit.result.approved ? "VERIFIED" : "ADJUSTED"} (${(aiAudit.result.coherenceScore * 100).toFixed(0)}% coherence)`);
+  if (!aiAudit.result.approved && aiAudit.result.adjustedFairPrice) {
+    console.log(`Auditor Adjusted To:   $${(aiAudit.result.adjustedFairPrice / 100).toLocaleString()}`);
+  }
   console.log(`${"=".repeat(60)}`);
 
   await db.$disconnect();

@@ -100,7 +100,6 @@ export async function analyzeHistoryImpact(
     `Owners: ${history.ownerCount}`,
     `Structural damage: ${history.structuralDamage ? "YES" : "No"}`,
     `Flood damage: ${history.floodDamage ? "YES" : "No"}`,
-    `Open recalls: ${history.openRecallCount}`,
   ].join("\n");
 
   return validatedAICall<HistoryAdjusterResult>({
@@ -116,8 +115,6 @@ Key insights:
 - Owner count impact decreases with vehicle age. 3 owners on a 15-year-old truck is normal. 3 owners on a 3-year-old car is a red flag.
 - Structural damage with high condition score suggests quality repair. Structural damage with low score = compounding problems.
 - Flood damage is almost always severe — but for very old, very cheap vehicles, it matters less.
-- Open recalls: minor impact unless safety-critical.
-
 Each factor is a multiplier between 0.10 and 1.0 (where 1.0 = no impact). The combined multiplier is the PRODUCT of all factors.`,
       userPrompt: `Analyze the history impact on value for:
 
@@ -138,7 +135,6 @@ Return a JSON object with:
    - "ownerImpact"
    - "structuralImpact"
    - "floodImpact"
-   - "recallImpact"
    For factors with no impact, return factor: 1.0.
 
 3. "combinedReasoning": 2-3 sentences explaining the overall history impact on this specific vehicle.
@@ -158,7 +154,7 @@ Return ONLY valid JSON.`,
       }
 
       const bd = p.breakdown as Record<string, Record<string, unknown>> | undefined;
-      const requiredKeys = ["titleImpact", "accidentImpact", "ownerImpact", "structuralImpact", "floodImpact", "recallImpact"];
+      const requiredKeys = ["titleImpact", "accidentImpact", "ownerImpact", "structuralImpact", "floodImpact"];
       if (!bd || typeof bd !== "object") {
         errors.push("breakdown missing or not an object");
       } else {
@@ -193,7 +189,7 @@ Return ONLY valid JSON.`,
         ownerImpact: parseItem(bd!.ownerImpact),
         structuralImpact: parseItem(bd!.structuralImpact),
         floodImpact: parseItem(bd!.floodImpact),
-        recallImpact: parseItem(bd!.recallImpact),
+        recallImpact: { factor: 1.0, reasoning: "" },
       };
 
       // Cross-check: product of factors should be close to historyMultiplier

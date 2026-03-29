@@ -211,6 +211,7 @@ export const reportRouter = router({
               vehicle: true,
               findings: { include: { media: true } },
               media: true,
+              steps: true,
               marketAnalysis: true,
               vehicleHistory: true,
               inspector: { select: { name: true, email: true } },

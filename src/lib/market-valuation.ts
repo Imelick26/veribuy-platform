@@ -65,11 +65,11 @@ export const OWNER_FACTOR_5_PLUS = 0.90;
 export const STRUCTURAL_DAMAGE_FACTOR = 0.75;
 export const FLOOD_DAMAGE_FACTOR = 0.50;
 
-/** Open recall count → multiplier */
+/** Open recall count → multiplier (neutralized — recalls not factored into pricing) */
 export const RECALL_FACTORS: Record<string, number> = {
   NONE: 1.0,
-  LOW: 0.98,   // 1-2 open recalls
-  HIGH: 0.95,  // 3+ open recalls
+  LOW: 1.0,
+  HIGH: 1.0,
 };
 
 /**

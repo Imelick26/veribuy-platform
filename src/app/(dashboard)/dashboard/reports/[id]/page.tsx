@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Progress } from "@/components/ui/Progress";
 import { trpc } from "@/lib/trpc";
-import { formatCurrency, formatDate, severityColor } from "@/lib/utils";
+import { formatCurrency, formatDate, severityColor, cn } from "@/lib/utils";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -133,7 +133,7 @@ export default function ReportDetailPage({
       {/* Report Content */}
       <div className="bg-surface-raised rounded-xl border border-border-default shadow-sm overflow-hidden print:shadow-none print:border-none">
 
-        {/* Report Header */}
+        {/* Report Header — Vehicle identity + key facts */}
         <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-4 sm:px-8 py-5 sm:py-6 text-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
@@ -141,65 +141,185 @@ export default function ReportDetailPage({
               <h2 className="text-xl sm:text-2xl font-bold mt-1">
                 {vehicle.year} {vehicle.make} {vehicle.model}
               </h2>
-              <p className="text-brand-200 font-mono text-xs sm:text-sm mt-1">VIN: {vehicle.vin}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-brand-200 text-xs sm:text-sm mt-1.5">
+                <span className="font-mono">VIN: {vehicle.vin}</span>
+                {inspection.odometer && <span>{inspection.odometer.toLocaleString()} mi</span>}
+                {inspection.location && <span>{inspection.location}</span>}
+              </div>
             </div>
-            <div className="sm:text-right">
-              <p className="text-brand-200 text-sm">Report #{report.number}</p>
-              <p className="text-brand-200 text-sm">{formatDate(report.generatedAt)}</p>
-              {inspector && <p className="text-brand-200 text-sm mt-1">Inspector: {inspector.name}</p>}
+            <div className="sm:text-right flex sm:flex-col items-center sm:items-end gap-3 sm:gap-1">
+              {inspection.overallScore != null && (
+                <div className={cn(
+                  "w-16 h-16 rounded-full flex flex-col items-center justify-center border-2",
+                  (inspection.overallScore || 0) >= 70 ? "bg-green-500/20 border-green-300 text-green-100" :
+                  (inspection.overallScore || 0) >= 50 ? "bg-amber-500/20 border-amber-300 text-amber-100" :
+                  "bg-red-500/20 border-red-300 text-red-100"
+                )}>
+                  <span className="font-bold text-lg leading-none">{inspection.overallScore}</span>
+                  <span className="text-[9px] opacity-70">/100</span>
+                </div>
+              )}
+              <div>
+                <p className="text-brand-200 text-sm">Report #{report.number}</p>
+                <p className="text-brand-200 text-sm">{formatDate(report.generatedAt)}</p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Executive Summary */}
+        {/* Market Analysis — THE DECISION (moved to top) */}
+        {report.inspection.marketAnalysis && (
+          <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
+            <h3 className="text-lg font-bold text-text-primary mb-4">
+              <BarChart3 className="inline h-5 w-5 mr-1" />
+              Market Analysis
+            </h3>
+            <MarketAnalysisSection
+              data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
+            />
+          </div>
+        )}
+
+        {/* Condition Assessment — 4-area breakdown + findings summary */}
         <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
-          <h3 className="text-lg font-bold text-text-primary mb-4">Executive Summary</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 rounded-xl bg-surface-sunken">
-              <p className={`text-4xl font-bold ${
-                (inspection.overallScore || 0) >= 70 ? "text-green-700" :
-                (inspection.overallScore || 0) >= 50 ? "text-text-secondary" : "text-red-700"
-              }`}>
-                {inspection.overallScore ?? "—"}
-              </p>
-              <p className="text-xs text-text-secondary mt-1">Overall Score</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-[#fde8e8]">
-              <p className="text-4xl font-bold text-red-700">{criticalCount + majorCount}</p>
-              <p className="text-xs text-text-secondary mt-1">Critical/Major</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-surface-overlay">
-              <p className="text-4xl font-bold text-text-secondary">{moderateCount}</p>
-              <p className="text-xs text-text-secondary mt-1">Moderate</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-[#fce8f3]">
-              <p className="text-4xl font-bold text-brand-700">{minorCount}</p>
-              <p className="text-xs text-text-secondary mt-1">Minor/Info</p>
-            </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-text-primary">Condition Assessment</h3>
+            <span className={cn(
+              "text-xs font-semibold px-2.5 py-1 rounded-full",
+              findings.length === 0
+                ? "bg-green-50 text-green-700"
+                : "bg-amber-50 text-amber-700"
+            )}>
+              {findings.length} known issue{findings.length !== 1 ? "s" : ""} found
+            </span>
           </div>
 
-          {/* Score breakdown — 4-area AI condition assessment */}
-          {inspection.overallScore != null && (
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {[
-                { label: "Exterior Body", score: inspection.exteriorBodyScore, weight: "30%" },
-                { label: "Interior", score: inspection.interiorScore, weight: "15%" },
-                { label: "Mechanical / Visual", score: inspection.mechanicalVisualScore, weight: "35%" },
-                { label: "Underbody / Frame", score: inspection.underbodyFrameScore, weight: "20%" },
-              ].map((item) => (
-                <div key={item.label}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-text-secondary">{item.label} ({item.weight})</span>
-                    <span className="font-medium">{item.score ?? "—"}/10</span>
-                  </div>
-                  <Progress value={((item.score || 0) / 10) * 100} size="sm" color={
-                    (item.score || 0) >= 7 ? "green" :
-                    (item.score || 0) >= 5 ? "yellow" : "red"
-                  } />
+          {/* Risk Area Summary — known issues checked */}
+          {(() => {
+            // Risk data lives in RISK_INSPECTION step (both risks + check statuses)
+            const riskStep = inspection.steps?.find((s: { step: string }) => s.step === "RISK_INSPECTION")
+              || inspection.steps?.find((s: { step: string }) => s.step === "RISK_REVIEW");
+            const riskData = riskStep?.data as { aggregatedRisks?: Array<{ id: string; title: string; description: string; category: string; severity: string; cost: { low: number; high: number } }>; checkStatuses?: Record<string, { status: string; notes?: string }> } | null;
+            const risks = riskData?.aggregatedRisks;
+            const checks = riskData?.checkStatuses;
+
+            if (!risks || risks.length === 0 || !checks) return null;
+
+            const checkedRisks = risks
+              .filter((r) => checks[r.id] && (checks[r.id].status === "CONFIRMED" || checks[r.id].status === "NOT_FOUND"))
+              .map((r) => ({
+                ...r,
+                status: checks[r.id].status as string,
+                notes: checks[r.id].notes,
+              }));
+
+            if (checkedRisks.length === 0) return null;
+
+            const confirmed = checkedRisks.filter((r) => r.status === "CONFIRMED");
+            const cleared = checkedRisks.filter((r) => r.status === "NOT_FOUND");
+
+            return (
+              <div className="mb-4">
+                <h4 className="text-sm font-semibold text-text-primary mb-2">Known Risk Areas Inspected</h4>
+                <p className="text-xs text-text-tertiary mb-3">
+                  {checkedRisks.length} common issue{checkedRisks.length !== 1 ? "s" : ""} reported for this model were inspected during this assessment.
+                </p>
+                <div className="space-y-1.5">
+                  {checkedRisks.map((r) => {
+                    const statusStyle = r.status === "CONFIRMED"
+                      ? { bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500", text: "text-red-600", label: "Observed" }
+                      : r.status === "NOT_FOUND"
+                      ? { bg: "bg-green-50", border: "border-green-200", dot: "bg-green-500", text: "text-green-600", label: "Not Observed" }
+                      : r.status === "UNABLE_TO_INSPECT"
+                      ? { bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-400", text: "text-amber-600", label: "Unable to Inspect" }
+                      : { bg: "bg-gray-50", border: "border-gray-200", dot: "bg-gray-400", text: "text-gray-500", label: "Not Checked" };
+
+                    return (
+                      <div key={r.id} className={cn(
+                        "flex items-center justify-between px-3 py-2 rounded-md border text-xs",
+                        statusStyle.bg, statusStyle.border,
+                      )}>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div className={cn("w-2 h-2 rounded-full shrink-0", statusStyle.dot)} />
+                          <span className="text-text-primary font-medium truncate">{r.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {r.status === "CONFIRMED" && r.cost && (
+                            <span className="text-red-600 font-medium">
+                              {formatCurrency(r.cost.low)} – {formatCurrency(r.cost.high)}
+                            </span>
+                          )}
+                          <span className={cn("font-semibold", statusStyle.text)}>
+                            {statusStyle.label}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          )}
+                <p className="text-[10px] text-text-tertiary mt-2">
+                  {cleared.length} of {checkedRisks.length} risk areas not observed during inspection
+                  {confirmed.length > 0 && ` · ${confirmed.length} issue${confirmed.length !== 1 ? "s" : ""} observed`}
+                </p>
+              </div>
+            );
+          })()}
+
+          {/* Score breakdown — 4-area AI condition assessment with details */}
+          {inspection.overallScore != null && (() => {
+            const rawData = inspection.conditionRawData as Record<string, unknown> | null;
+            const areas = [
+              { label: "Exterior Body", key: "exteriorBody", score: inspection.exteriorBodyScore, weight: "30%" },
+              { label: "Interior", key: "interior", score: inspection.interiorScore, weight: "15%" },
+              { label: "Mechanical / Visual", key: "mechanicalVisual", score: inspection.mechanicalVisualScore, weight: "35%" },
+              { label: "Underbody / Frame", key: "underbodyFrame", score: inspection.underbodyFrameScore, weight: "20%" },
+            ];
+
+            return (
+              <div className="mt-4 space-y-3">
+                {areas.map((item) => {
+                  const detail = rawData?.[item.key] as { summary?: string; keyObservations?: string[]; concerns?: string[]; scoreJustification?: string } | undefined;
+                  return (
+                    <div key={item.label} className="rounded-lg border border-border-default p-3">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-xs font-semibold text-text-primary">{item.label} ({item.weight})</span>
+                        <span className={cn(
+                          "text-sm font-bold",
+                          (item.score || 0) >= 7 ? "text-green-600" :
+                          (item.score || 0) >= 5 ? "text-amber-600" : "text-red-600"
+                        )}>{item.score ?? "—"}/10</span>
+                      </div>
+                      <Progress value={((item.score || 0) / 10) * 100} size="sm" color={
+                        (item.score || 0) >= 7 ? "green" :
+                        (item.score || 0) >= 5 ? "yellow" : "red"
+                      } />
+                      {detail && (
+                        <div className="mt-2 space-y-1">
+                          {detail.summary && (
+                            <p className="text-xs text-text-secondary">{detail.summary}</p>
+                          )}
+                          {detail.keyObservations && detail.keyObservations.length > 0 && (
+                            <ul className="text-[11px] text-text-tertiary space-y-0.5 mt-1">
+                              {detail.keyObservations.slice(0, 3).map((obs, i) => (
+                                <li key={i}>+ {obs}</li>
+                              ))}
+                            </ul>
+                          )}
+                          {detail.concerns && detail.concerns.length > 0 && (
+                            <ul className="text-[11px] text-amber-700 space-y-0.5">
+                              {detail.concerns.slice(0, 3).map((c, i) => (
+                                <li key={i}>- {c}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Total repair estimate */}
           {totalRepairHigh > 0 && (
@@ -237,19 +357,6 @@ export default function ReportDetailPage({
             ))}
           </div>
         </div>
-
-        {/* Market Analysis */}
-        {report.inspection.marketAnalysis && (
-          <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
-            <h3 className="text-lg font-bold text-text-primary mb-4">
-              <BarChart3 className="inline h-5 w-5 mr-1" />
-              Market Analysis
-            </h3>
-            <MarketAnalysisSection
-              data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
-            />
-          </div>
-        )}
 
         {/* Findings */}
         <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">

@@ -15,6 +15,7 @@
  */
 
 import { validatedAICall, type AIResult, type ValidationResult } from "./validate-and-retry";
+import type { PricingTraceStep } from "@/lib/pricing-consensus";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -68,6 +69,9 @@ export interface PriceAuditInput {
   /** Deal rating */
   dealRating: string;
   dealReasoning: string;
+
+  /** Step-by-step pricing math trace */
+  pricingTrace?: PricingTraceStep[];
 
   /** Full vehicle context for informed auditing */
   transmission?: string | null;
@@ -137,6 +141,12 @@ CRITICAL KNOWLEDGE — ENTHUSIAST PLATFORMS:
 - Diesel + manual + 4WD on a heavy-duty truck is the trifecta — VERY valuable.
 - 200K miles on a diesel truck is MID-LIFE, not high mileage. These run 400K+.
 
+IMPORTANT — ACQUISITION-BASED PRICING:
+The consensus value represents DEALER ACQUISITION COST, not retail or private-party price. Each source has been pre-normalized to strip dealer markup, adjust auction bias, etc. before consensus. So the source prices you see ARE acquisition-equivalent already. Do NOT re-apply acquisition discounts or try to strip markup — that's already done.
+
+The math should be: consensus × config × regional = adjusted base → × condition × history − recon = fair purchase price.
+Verify the math follows this chain. If you recalculate, use the adjusted base as your starting point, NOT the raw consensus.
+
 You should flag issues like:
 - Config premium misapplied (e.g., Lariat/XLT treated like a performance trim)
 - Enthusiast platform UNDERPRICED (e.g., a clean manual Powerstroke priced at $9K is wrong)
@@ -154,18 +164,19 @@ If the price is clearly wrong for this platform/config, provide an adjusted pric
 
 VEHICLE: ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} miles` : ""}
 
-SOURCE PRICES: ${sourceSummary}
+SOURCE PRICES (acquisition-normalized): ${sourceSummary}
 
-PRICING CHAIN:
-1. Consensus: $${input.consensusValue.toLocaleString()} — "${input.consensusReasoning}"
-2. Config premium: ${input.configMultiplier.toFixed(3)}x — "${input.configReasoning}"
-3. Regional: ${input.regionalMultiplier.toFixed(3)}x — "${input.regionalReasoning}"
-4. Adjusted base: $${baseDollars.toLocaleString()} (consensus × config × regional)
-5. Condition: ${input.conditionMultiplier.toFixed(3)}x (score ${input.conditionScore}/100) — "${input.conditionReasoning}"
-6. History: ${input.historyMultiplier.toFixed(3)}x (${input.historySummary}) — "${input.historyReasoning}"
-7. Recon: -$${reconDollars.toLocaleString()} — "${input.reconReasoning}"
-8. FAIR PURCHASE PRICE: $${fairDollars.toLocaleString()}
-9. Deal rating: ${input.dealRating} — "${input.dealReasoning}"
+VERIFIED MATH TRACE (each step's output feeds the next step's input):
+${(input.pricingTrace || []).filter((s) => s.label !== "Fair Purchase Price").map((step, i) => {
+  const pad = step.label.padEnd(24);
+  return `Step ${i + 1}: ${pad} ${step.operation.padEnd(12)} = $${step.outputDollars.toLocaleString()}  [${step.explanation}]`;
+}).join("\n")}
+
+FAIR PURCHASE PRICE: $${fairDollars.toLocaleString()}
+Deal rating: ${input.dealRating} — "${input.dealReasoning}"
+
+YOUR JOB: Verify each step's multiplier/amount makes sense for THIS vehicle.
+Do NOT recalculate from scratch — verify each step independently.
 
 FULL VEHICLE CONTEXT:
 Category: ${input.bodyCategory || "unknown"}${conditionContext}${areaScoreContext}${findingsContext}${compsContext}

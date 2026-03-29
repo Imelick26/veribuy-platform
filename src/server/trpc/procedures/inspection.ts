@@ -15,7 +15,6 @@ import { analyzeConditionValue } from "@/lib/ai/condition-adjuster";
 import { estimateReconCosts } from "@/lib/ai/recon-estimator";
 import { rateDeal } from "@/lib/ai/deal-rater";
 import { auditPrice } from "@/lib/ai/price-auditor";
-import { analyzeAcquisitionCost } from "@/lib/ai/acquisition-adjuster";
 
 // Generate sequential inspection number
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -852,36 +851,11 @@ export const inspectionRouter = router({
         url: l.url,
       }));
 
-      // ── Acquisition cost adjustment (strip dealer markup from comps) ──
-      const compBreakdown = {
-        activeDealer: marketData.nearbyListings.filter((l) => !l.source.includes("Sold") && !l.source.includes("Auction")).length,
-        soldDealer: marketData.nearbyListings.filter((l) => l.source.includes("Sold") && !l.source.includes("Auction")).length,
-        auction: marketData.nearbyListings.filter((l) => l.source.includes("Auction")).length,
-        total: marketData.nearbyListings.length,
-      };
-
-      const aiAcquisition = await analyzeAcquisitionCost({
-        vehicle: {
-          year: vehicle.year, make: vehicle.make, model: vehicle.model,
-          trim: vehicle.trim, engine: vehicle.engine,
-          transmission: vehicle.transmission, drivetrain: vehicle.drivetrain,
-        },
-        consensusValue: marketData.estimatedValue,
-        comps: comparables.map((c) => ({ title: c.title, price: c.price, source: c.source })),
-        compBreakdown,
-        bodyCategory: classifyBody(vehicle as VehicleConfig),
-        conditionScore,
-        isEnthusiastPlatform: marketData.aiMetadata?.consensusReasoning?.toLowerCase().includes("enthusiast") || false,
-      });
-
-      console.log(
-        `[Inspection] Acquisition: ${aiAcquisition.result.acquisitionMultiplier.toFixed(2)}x → $${aiAcquisition.result.acquisitionCost.toLocaleString()} ` +
-        `(tier ${aiAcquisition.fallbackTier}) — ${aiAcquisition.reasoning || ""}`,
+      // Consensus value is already acquisition-normalized (source normalizer runs pre-consensus)
+      const basePriceCents = Math.round(marketData.estimatedValue * 100);
+      const retailPriceCents = Math.round(
+        (marketData.valueHigh || marketData.estimatedValue * 1.1) * 100
       );
-
-      // Use acquisition cost as the base (what dealer should pay), not retail consensus
-      const basePriceCents = Math.round(aiAcquisition.result.acquisitionCost * 100);
-      const retailPriceCents = Math.round(aiAcquisition.result.estimatedRetail * 100);
 
       // Build history data from vehicleHistory (safe defaults if skipped)
       const historyData: HistoryData = inspection.vehicleHistory
@@ -951,10 +925,59 @@ export const inspectionRouter = router({
       const aiHistoryMultiplier = aiHistoryResult.result.historyMultiplier;
       const aiReconCostCents = aiReconResult.result.totalReconCost;
 
-      // Compute fair price: base × condition × history - recon
-      const adjustedValueBeforeRecon = Math.round(basePriceCents * aiConditionMultiplier * aiHistoryMultiplier);
-      const minFloor = Math.round(basePriceCents * 0.05); // 5% floor
-      const fairPurchasePrice = Math.max(minFloor, adjustedValueBeforeRecon - aiReconCostCents);
+      // ── Dealer offer calculation (work backwards from retail) ──
+      // Dealers think: "What can I sell it for → minus recon → minus margin → = max offer"
+      const baseDollars = Math.round(basePriceCents / 100);
+      const reconDollars = Math.round(aiReconCostCents / 100);
+
+      // Estimated retail: what a dealer can list this specific vehicle for
+      // Use private-party value × 1.15 as a grounded retail estimate
+      // (dealerRetailValue from AI tends to run high without real comp data)
+      const rawRetailDollars = Math.round(marketData.privatePartyValue * 1.15);
+      const estRetailDollars = Math.round(rawRetailDollars * aiConditionMultiplier * aiHistoryMultiplier);
+
+      // Max offer = 75% of retail - recon
+      // The 25% covers: detail/prep, holding costs, sales costs, and dealer profit
+      const maxOfferBeforeRecon = Math.round(estRetailDollars * 0.75);
+      const maxOfferDollars = Math.max(
+        Math.round(estRetailDollars * 0.05), // 5% floor
+        maxOfferBeforeRecon - reconDollars,
+      );
+      const fairPurchasePrice = maxOfferDollars * 100; // cents
+      const dealerMarginDollars = estRetailDollars - maxOfferDollars - reconDollars;
+
+      // ── Continue pricing trace from market-data ──
+      const fullTrace = [
+        ...marketData.pricingTrace,
+        {
+          label: "Est. Dealer Retail",
+          inputDollars: rawRetailDollars,
+          operation: `× ${(aiConditionMultiplier * aiHistoryMultiplier).toFixed(3)}`,
+          outputDollars: estRetailDollars,
+          explanation: `Condition ${aiConditionMultiplier.toFixed(2)}x × History ${aiHistoryMultiplier.toFixed(2)}x`,
+        },
+        {
+          label: "Max Offer (75% of retail)",
+          inputDollars: estRetailDollars,
+          operation: `× 0.75`,
+          outputDollars: maxOfferBeforeRecon,
+          explanation: `25% covers prep, holding, sales, profit`,
+        },
+        {
+          label: "Reconditioning",
+          inputDollars: maxOfferBeforeRecon,
+          operation: reconDollars > 0 ? `- $${reconDollars.toLocaleString()}` : "none",
+          outputDollars: maxOfferDollars,
+          explanation: `${inspection.findings.filter((f) => f.repairCostLow || f.repairCostHigh).length} findings`,
+        },
+        {
+          label: "Max Offer Price",
+          inputDollars: maxOfferDollars,
+          operation: "final",
+          outputDollars: maxOfferDollars,
+          explanation: "",
+        },
+      ];
 
       // Baseline (what car would be worth in good condition, no recon)
       const baselineResult = calculateFairPrice(basePriceCents, 85, historyData, 0, marketData.conditionAttenuation);
@@ -974,7 +997,7 @@ export const inspectionRouter = router({
           floodDamageFactor: aiHistoryResult.result.breakdown.floodImpact.factor,
           recallFactor: aiHistoryResult.result.breakdown.recallImpact.factor,
         },
-        adjustedValueBeforeRecon,
+        adjustedValueBeforeRecon: Math.round(estRetailDollars * 100),
         estReconCost: aiReconCostCents,
       };
 
@@ -1033,6 +1056,7 @@ export const inspectionRouter = router({
         fairPurchasePrice,
         dealRating: aiDealResult.result.rating,
         dealReasoning: aiDealResult.result.reasoning,
+        pricingTrace: fullTrace,
         // Full vehicle context
         transmission: vehicle.transmission,
         drivetrain: vehicle.drivetrain,
@@ -1078,7 +1102,8 @@ export const inspectionRouter = router({
       ];
 
       const recommendation = aiDealResult.result.rating;
-      const estGrossProfit = retailPriceCents - finalFairPurchasePrice - aiReconCostCents;
+      const estRetailCents = Math.round(estRetailDollars * 100);
+      const estGrossProfit = estRetailCents - finalFairPurchasePrice - aiReconCostCents;
 
       // Shared data object for create/update
       const marketAnalysisData = {
@@ -1094,7 +1119,7 @@ export const inspectionRouter = router({
         strongBuyMax: bands[0].maxPriceCents,
         fairBuyMax: bands[1].maxPriceCents,
         overpayingMax: bands[2].maxPriceCents,
-        estRetailPrice: retailPriceCents,
+        estRetailPrice: estRetailCents,
         estReconCost: aiReconCostCents,
         estGrossProfit,
         conditionScore,
@@ -1165,7 +1190,7 @@ export const inspectionRouter = router({
 
       // ── Log AI valuation calls for training data ──────────────────
       const aiLogs = [
-        { module: "acquisition", model: aiAcquisition.model, fallbackTier: aiAcquisition.fallbackTier, retried: aiAcquisition.retried, input: { consensusValue: marketData.estimatedValue, compBreakdown }, output: aiAcquisition.result, reasoning: aiAcquisition.reasoning },
+        { module: "source_normalization", model: "gpt-4o-mini", fallbackTier: marketData.aiMetadata?.sourceNormTier ?? 1, retried: false, input: { sourceCount: marketData.sourceCount }, output: marketData.aiMetadata?.sourceNormalization || [], reasoning: marketData.aiMetadata?.sourceNormReasoning },
         { module: "consensus", model: "gpt-4o", fallbackTier: marketData.aiMetadata?.consensusTier ?? 1, retried: false, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim }, sourceCount: marketData.sourceCount }, output: { consensusValue: marketData.baseValuePreConfig, confidence: marketData.confidence }, reasoning: marketData.aiMetadata?.consensusReasoning },
         { module: "config_premium", model: "gpt-4o", fallbackTier: marketData.aiMetadata?.configPremiumTier ?? 1, retried: false, input: { vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim }, bodyCategory, baseConsensusValue: marketData.baseValuePreConfig }, output: { configMultiplier: marketData.configMultiplier }, reasoning: marketData.aiMetadata?.configReasoning },
         { module: "geo_pricing", model: "gpt-4o-mini", fallbackTier: marketData.aiMetadata?.geoPricingTier ?? 1, retried: false, input: { bodyCategory, zip }, output: { regionalMultiplier: marketData.configMultiplier > 0 ? marketData.estimatedValue / (marketData.baseValuePreConfig * marketData.configMultiplier) : 1.0 }, reasoning: marketData.aiMetadata?.geoReasoning },

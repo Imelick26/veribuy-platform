@@ -700,26 +700,35 @@ async function assessArea(
     };
   }
 
-  const imageBlocks = photos.map((m) => ({
+  // Use all photos on primary attempt — reduce only on retry if it fails
+  const cappedPhotos = photos;
+
+  const imageBlocks = cappedPhotos.map((m) => ({
     type: "image_url" as const,
     image_url: { url: m.url, detail: "high" as const },
   }));
 
-  const photoLabels = photos
+  const photoLabels = cappedPhotos
     .map((m, i) => `Photo ${i}: ${m.captureType.replace(/_/g, " ")}`)
     .join("\n");
 
   const systemPrompt = `You are an expert automotive condition assessor specializing in ${vehicle.make} ${vehicle.model} vehicles. You are evaluating the ${areaName.toUpperCase()} of a ${vehicle.year} ${vehicle.make} ${vehicle.model} with ${mileageStr}.
 
-MILEAGE CALIBRATION: This vehicle has ${mileageStr}. Score what is NORMAL wear for this mileage. A 120k-mile truck with moderate tire wear is normal (score 6-7); the same wear at 20k miles is a red flag (score 3-4). A nearly-new vehicle with zero wear scores 9-10; a well-maintained high-mileage vehicle with appropriate wear scores 6-8.
+MILEAGE CALIBRATION: This vehicle has ${mileageStr}. Score what is NORMAL wear for this mileage. A 120k-mile truck with moderate tire wear is normal (score 7-8); the same wear at 20k miles is a concern (score 4-5). A well-maintained high-mileage vehicle should score 7-8 if it shows only age-appropriate wear.
+
+CRITICAL — COSMETIC vs CONDITION:
+- DIRTY/DUSTY is NOT a condition issue. A dusty engine bay, road grime, dirty wheels, or a car that needs a wash should NOT lower the score. Score the UNDERLYING condition, not cleanliness.
+- Minor cosmetic wear (light scratches, small chips, door dings) that is NORMAL for the age/mileage should not drop below 7.
+- Only score below 7 for ACTUAL damage, mechanical issues, structural problems, or wear that is EXCESSIVE for the vehicle's age and mileage.
 
 SCORING RUBRIC (1-10):
-- 10: Showroom / like-new condition
-- 8-9: Excellent to very good, minimal or light normal wear
-- 6-7: Good to above average, typical wear for age/mileage
-- 4-5: Average to below average, moderate wear or minor damage
-- 2-3: Fair to poor, significant wear or multiple issues
-- 1: Very poor, severe damage or extreme neglect
+- 9-10: Showroom / like-new condition, virtually no wear
+- 7-8: Good to very good — well-maintained, normal age-appropriate wear only
+- 5-6: Below average — noticeable damage, excessive wear, or deferred maintenance
+- 3-4: Poor — significant damage, multiple mechanical concerns, or heavy wear
+- 1-2: Very poor — severe damage, major structural issues, or extreme neglect
+
+Most well-maintained vehicles should score 7-8. Reserve 5-6 for vehicles with REAL problems, not cosmetic dirt.
 
 ${checklist}
 
@@ -729,11 +738,13 @@ RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown):
   "confidence": <number 0.0-1.0>,
   "keyObservations": ["observation 1", "observation 2", ...],
   "concerns": ["concern 1", ...],
-  "summary": "1-2 sentence ${areaName.toLowerCase()} condition summary"
+  "summary": "1-2 sentence ${areaName.toLowerCase()} condition summary",
+  "scoreJustification": "2-3 sentences explaining WHY you chose this specific score. Reference the rubric. Explain what would need to be different for a higher or lower score."
 }
 
 - keyObservations: 3-6 factual observations about what you see (neutral or positive)
-- concerns: 0-4 specific issues or concerns (only things that negatively impact condition)
+- concerns: 0-4 specific issues or concerns (only things that ACTUALLY impact condition — not dirt or cosmetic dust)
+- scoreJustification: Explain your reasoning. If you scored 7, explain what's keeping it from an 8 and what would drop it to a 6.
 - confidence: how confident you are in your score (1.0 = clear photos, full coverage; 0.5 = partial visibility; <0.3 = mostly guessing)
 - Be precise and specific. Reference actual components by name.`;
 
@@ -742,58 +753,66 @@ RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown):
 PHOTOS PROVIDED (${imageBlocks.length}):
 ${photoLabels}`;
 
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userContent },
-            ...imageBlocks,
-          ],
-        },
-      ],
-      temperature: 0.2,
-      max_tokens: 800,
-      response_format: { type: "json_object" },
-    });
+  // Retry up to 3 times with ALL photos — a failed assessment is unacceptable
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: userContent },
+              ...imageBlocks,
+            ],
+          },
+        ],
+        temperature: 0.2,
+        max_tokens: 800,
+        response_format: { type: "json_object" },
+      });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        console.warn(`[media-analyzer] ${areaName} attempt ${attempt}/3: empty response`);
+        continue;
+      }
+
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        console.warn(`[media-analyzer] ${areaName} attempt ${attempt}/3: malformed JSON`);
+        continue;
+      }
+
+      const score = Number(parsed.score);
+      if (!score || score < 1 || score > 10) {
+        console.warn(`[media-analyzer] ${areaName} attempt ${attempt}/3: invalid score ${score}`);
+        continue;
+      }
+
       return {
-        score: 5,
-        confidence: 0,
-        keyObservations: ["AI returned empty response"],
-        concerns: [],
-        summary: `${areaName} assessment failed — no AI response.`,
+        score: Math.max(1, Math.min(10, Math.round(score))),
+        confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.5)),
+        keyObservations: Array.isArray(parsed.keyObservations)
+          ? parsed.keyObservations.map(String)
+          : [],
+        concerns: Array.isArray(parsed.concerns)
+          ? parsed.concerns.map(String)
+          : [],
+        summary: String(parsed.summary || `${areaName} assessment completed.`),
+        scoreJustification: parsed.scoreJustification ? String(parsed.scoreJustification) : undefined,
       };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[media-analyzer] ${areaName} attempt ${attempt}/3 failed: ${errMsg}`);
     }
-
-    const parsed = JSON.parse(content);
-
-    return {
-      score: Math.max(1, Math.min(10, Math.round(Number(parsed.score) || 5))),
-      confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.5)),
-      keyObservations: Array.isArray(parsed.keyObservations)
-        ? parsed.keyObservations.map(String)
-        : [],
-      concerns: Array.isArray(parsed.concerns)
-        ? parsed.concerns.map(String)
-        : [],
-      summary: String(parsed.summary || `${areaName} assessment completed.`),
-    };
-  } catch (err) {
-    console.error(`[media-analyzer] ${areaName} condition assessment failed:`, err);
-    return {
-      score: 5,
-      confidence: 0,
-      keyObservations: ["Assessment failed due to an error"],
-      concerns: [],
-      summary: `${areaName} assessment failed. Manual inspection recommended.`,
-    };
   }
+
+  // All 3 attempts failed — should never happen in practice
+  throw new Error(`${areaName} condition assessment failed after 3 attempts with ${photos.length} photos`);
 }
 
 // ---------------------------------------------------------------------------

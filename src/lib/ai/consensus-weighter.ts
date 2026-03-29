@@ -86,20 +86,73 @@ export async function analyzeConsensusWeights(
   const minVal = Math.min(...allPPValues);
   const maxVal = Math.max(...allPPValues);
 
+  // ── Deterministic passthrough for 1-2 sources ──────────────────
+  // AI consensus adds noise with few sources — it hallucinates about
+  // sources that don't exist and arbitrarily adjusts values.
+  if (validSources.length <= 2) {
+    const deterministicResult = calculateConsensus(validSources);
+
+    // Compute configPremiumMode from source flags
+    const conditionTieredCount = validSources.filter((s) => s.isConditionTiered).length;
+    const configAwareCount = validSources.filter((s) => s.isConfigAware).length;
+    const totalSourceCount = validSources.length;
+
+    let configPremiumMode: "full" | "partial" | "none";
+    if (configAwareCount === totalSourceCount) {
+      configPremiumMode = "none";
+    } else if (configAwareCount > 0 || conditionTieredCount >= 2) {
+      configPremiumMode = "partial";
+    } else if (conditionTieredCount >= 1) {
+      configPremiumMode = "partial";
+    } else {
+      configPremiumMode = "full";
+    }
+    const conditionAttenuation = conditionTieredCount >= 2 ? 0.3 : conditionTieredCount >= 1 ? 0.4 : 1.0;
+
+    console.log(`[ConsensusWeighter] Deterministic passthrough (${validSources.length} source${validSources.length > 1 ? "s" : ""}) — configMode: ${configPremiumMode}`);
+
+    return {
+      result: {
+        sourceWeights: Object.fromEntries(validSources.map((s) => [s.source, 1 / validSources.length])),
+        outlierSources: [],
+        outlierReasons: {},
+        consensusValue: deterministicResult.estimatedValue,
+        tradeInValue: deterministicResult.tradeInValue,
+        dealerRetailValue: deterministicResult.dealerRetailValue,
+        wholesaleValue: deterministicResult.wholesaleValue,
+        loanValue: deterministicResult.loanValue,
+        confidenceAssessment: deterministicResult.confidence,
+        reasoning: `Deterministic passthrough — ${validSources.length} source(s): ${validSources.map((s) => s.source).join(", ")}`,
+        configPremiumMode,
+        conditionAttenuation,
+      },
+      aiAnalyzed: false,
+      fallbackTier: 1,
+      retried: false,
+      model: "deterministic",
+      reasoning: `Deterministic passthrough (${validSources.length} sources)`,
+    };
+  }
+
+  // ── AI consensus for 3+ sources ────────────────────────────────
   return validatedAICall<ConsensusWeighterResult>({
     label: "[ConsensusWeighter]",
 
     primary: {
       model: "gpt-4o",
-      systemPrompt: `You are a vehicle pricing analyst specializing in data source evaluation. Your job is to analyze multiple pricing sources for a specific vehicle and determine which sources to trust most, flag outliers, and produce a consensus value.
+      systemPrompt: `You are a vehicle pricing analyst specializing in data source evaluation. Your job is to analyze multiple pricing sources for a specific vehicle and determine which sources to trust most, flag outliers, and produce a consensus ACQUISITION value — what a dealer should PAY to acquire this vehicle.
 
-Key knowledge:
+IMPORTANT: All source values have already been normalized to acquisition-equivalent (dealer pay price). Retail markup, auction discounts, and source biases have been stripped. You are comparing apples-to-apples acquisition cost estimates.
+
+Key knowledge about each source's reliability:
 - BlackBook: Wholesale gold standard, strong for common vehicles, condition-tiered (4 tiers)
-- VehicleDatabases (VDB): Condition-tiered retail (12 price points), good coverage
+- VehicleDatabases (VDB): Condition-tiered with 12 price points, good coverage
 - NADA Guides: Dealer/lender standard, used for loan values, condition-tiered
 - VinAudit: VIN-specific with mileage adjustment, but not condition-tiered
-- MarketCheck: Real dealer inventory prices — strong when there are many local comps, noisy with few
-- Fallback: Category-based age curves, very generic, last resort only
+- MarketCheck: Based on real dealer inventory — strong when there are many local comps, noisy with few
+- Fallback: AI estimate, very generic, last resort only
+
+Your consensus value should represent DEALER ACQUISITION COST — not retail, not private-party. The values you see already target this perspective.
 
 Consider: Which sources are most reliable for THIS specific vehicle? Do the condition-tiered sources agree? Is MarketCheck reflecting real local market conditions?`,
       userPrompt: `Analyze these pricing sources for a ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} miles` : ""}, condition score ${conditionScore}/100 (${conditionTier}):
@@ -113,7 +166,7 @@ Return a JSON object with:
 
 3. "outlierReasons": Object mapping outlier source names to the reason they're outliers.
 
-4. "consensusValue": Your best estimate of fair private-party value in dollars. Must be between $${minVal.toLocaleString()} and $${maxVal.toLocaleString()} (within the source range).
+4. "consensusValue": Your best estimate of fair ACQUISITION cost in dollars (what a dealer should pay). Must be between $${minVal.toLocaleString()} and $${maxVal.toLocaleString()} (within the source range).
 
 5. "tradeInValue": Trade-in estimate in dollars.
 
@@ -149,7 +202,7 @@ Return ONLY valid JSON.`,
       const cv = Number(p.consensusValue);
       if (!cv || cv < 100) {
         errors.push("consensusValue missing or too low");
-      } else if (minVal > 0 && maxVal > 0 && (cv < minVal * 0.5 || cv > maxVal * 1.5)) {
+      } else if (minVal > 0 && maxVal > 0 && (cv < minVal * 0.85 || cv > maxVal * 1.15)) {
         errors.push(`consensusValue $${cv} outside plausible range ($${minVal}-$${maxVal})`);
       }
 
@@ -174,9 +227,21 @@ Return ONLY valid JSON.`,
         normalizedWeights[k] = (Number(v) || 0) / totalWeight;
       }
 
-      // Determine config premium mode from condition-tiered sources
+      // Determine config premium mode — accounts for both condition-tiered AND config-aware sources
       const conditionTieredCount = validSources.filter((s) => s.isConditionTiered).length;
-      const configPremiumMode = conditionTieredCount >= 2 ? "partial" as const : conditionTieredCount >= 1 ? "partial" as const : "full" as const;
+      const configAwareCount = validSources.filter((s) => s.isConfigAware).length;
+      const totalSourceCount = validSources.length;
+
+      let configPremiumMode: "full" | "partial" | "none";
+      if (configAwareCount === totalSourceCount) {
+        configPremiumMode = "none";
+      } else if (configAwareCount > 0 || conditionTieredCount >= 2) {
+        configPremiumMode = "partial";
+      } else if (conditionTieredCount >= 1) {
+        configPremiumMode = "partial";
+      } else {
+        configPremiumMode = "full";
+      }
       const conditionAttenuation = conditionTieredCount >= 2 ? 0.3 : conditionTieredCount >= 1 ? 0.4 : 1.0;
 
       return {

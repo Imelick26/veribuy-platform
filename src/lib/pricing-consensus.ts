@@ -48,8 +48,18 @@ export interface SourceEstimate {
   confidence: number;
   /** Whether this source provides condition-tiered pricing */
   isConditionTiered: boolean;
+  /** Whether this source's value already accounts for trim/config premiums (diesel, manual, 4WD, etc.) */
+  isConfigAware?: boolean;
   /** Raw data for debugging */
   raw?: unknown;
+}
+
+export interface PricingTraceStep {
+  label: string;
+  inputDollars: number;
+  operation: string;       // "× 1.60", "- $2,400", "starting point"
+  outputDollars: number;
+  explanation: string;
 }
 
 export interface ConsensusResult {
@@ -298,13 +308,24 @@ export function calculateConsensus(sources: SourceEstimate[]): ConsensusResult {
   );
   const primarySource = validSources[primaryIdx].source;
 
-  // Step 7: Config premium mode — if primary source is condition-tiered,
-  // use partial mode to avoid double-counting
+  // Step 7: Config premium mode — accounts for both condition-tiered AND config-aware sources
   const conditionTieredCount = validSources.filter((s) => s.isConditionTiered).length;
+  const configAwareCount = validSources.filter((s) => s.isConfigAware).length;
+  const totalSources = validSources.length;
   const primaryIsConditionTiered = validSources[primaryIdx].isConditionTiered;
 
-  // If majority of sources are condition-tiered, attenuate more
-  const configPremiumMode = conditionTieredCount >= 2 ? "partial" : primaryIsConditionTiered ? "partial" : "full";
+  // If ALL sources are config-aware, their values already include config premiums → skip
+  // If some are config-aware, reduce to partial. Otherwise check condition-tiered.
+  let configPremiumMode: "full" | "partial" | "none";
+  if (configAwareCount === totalSources) {
+    configPremiumMode = "none";
+  } else if (configAwareCount > 0 || conditionTieredCount >= 2) {
+    configPremiumMode = "partial";
+  } else if (conditionTieredCount >= 1) {
+    configPremiumMode = "partial";
+  } else {
+    configPremiumMode = "full";
+  }
   const conditionAttenuation = conditionTieredCount >= 2 ? 0.3 : primaryIsConditionTiered ? 0.4 : 1.0;
 
   return {

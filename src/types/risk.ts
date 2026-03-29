@@ -158,6 +158,8 @@ export interface AreaConditionDetail {
   keyObservations: string[];
   concerns: string[];
   summary: string;
+  /** Detailed explanation of why this score was chosen */
+  scoreJustification?: string;
 }
 
 export interface ConditionAssessment {

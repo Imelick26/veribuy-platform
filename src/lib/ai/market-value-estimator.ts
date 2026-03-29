@@ -41,7 +41,10 @@ export interface MarketValueEstimatorInput {
 }
 
 export interface MarketValueEstimate {
+  /** Full config-aware private-party value (diesel/manual/4WD/trim already factored in) */
   estimatedValue: number;
+  /** BASE MODEL value — standard engine, auto trans, 2WD/FWD, base trim. This feeds consensus. */
+  baseEstimatedValue: number;
   valueLow: number;
   valueHigh: number;
   tradeInValue: number;
@@ -115,16 +118,17 @@ CONDITION SCORE: ${conditionScore}/100${mileage ? `\nMILEAGE: ${mileage.toLocale
 ${otherSourceContext}
 
 Return a JSON object with:
-1. "estimatedValue": Fair private-party value in dollars. This is your best estimate.
-2. "valueLow": Conservative estimate (15th percentile — quick sale price)
-3. "valueHigh": Optimistic estimate (85th percentile — patient seller, right buyer)
-4. "tradeInValue": What a dealer would offer on trade (typically 70-85% of private party)
-5. "dealerRetailValue": What a dealer would list it for (typically 115-130% of private party)
-6. "wholesaleValue": Auction/wholesale value (typically 65-80% of private party)
-7. "confidence": Your confidence in this estimate (0.0-1.0). Higher if you know this market well.
-8. "reasoning": 2-3 sentences explaining your valuation. Mention specific factors.
-9. "marketContext": 1-2 sentences about current market conditions for this vehicle.
-10. "isEnthusiastPlatform": boolean — true if this is a vehicle with enthusiast/collector demand above its generic category.
+1. "estimatedValue": Fair private-party value in dollars for THIS SPECIFIC configuration (diesel/manual/4WD/trim all factored in).
+2. "baseEstimatedValue": Fair private-party value for the BASE MODEL of this vehicle — standard engine, automatic transmission, 2WD/FWD, base trim. Examples: For a 1996 F-250 7.3L Powerstroke 4WD manual, the base model is a 1996 F-250 with the 5.8L gas V8, automatic, 2WD. For a 2020 Subaru WRX STI, the base model is a 2020 Subaru Impreza base. For a 2019 Honda CR-V AWD, the base model is a 2019 Honda CR-V FWD. For a commodity vehicle with no config premium (e.g., Camry 4-cyl auto), baseEstimatedValue equals estimatedValue.
+3. "valueLow": Conservative estimate (15th percentile — quick sale price)
+4. "valueHigh": Optimistic estimate (85th percentile — patient seller, right buyer)
+5. "tradeInValue": What a dealer would offer on trade (typically 70-85% of private party)
+6. "dealerRetailValue": What a dealer would list it for (typically 115-130% of private party)
+7. "wholesaleValue": Auction/wholesale value (typically 65-80% of private party)
+8. "confidence": Your confidence in this estimate (0.0-1.0). Higher if you know this market well.
+9. "reasoning": 2-3 sentences explaining your valuation. Mention specific factors.
+10. "marketContext": 1-2 sentences about current market conditions for this vehicle.
+11. "isEnthusiastPlatform": boolean — true if this is a vehicle with enthusiast/collector demand above its generic category.
 
 Return ONLY valid JSON.`,
       temperature: 0.15,
@@ -139,6 +143,12 @@ Return ONLY valid JSON.`,
       if (!ev || ev < 500) errors.push(`estimatedValue ${ev} too low`);
       if (ev > 500000) errors.push(`estimatedValue ${ev} implausibly high`);
 
+      let baseEv = Number(p.baseEstimatedValue);
+      if (!baseEv || baseEv < 200) {
+        // If base not provided, use estimatedValue (commodity vehicle, no config premium)
+        baseEv = ev;
+      }
+
       const conf = Number(p.confidence);
       if (isNaN(conf)) errors.push("confidence missing");
 
@@ -151,10 +161,15 @@ Return ONLY valid JSON.`,
         return { valid: false, partial: p, errors };
       }
 
+      // Sanity: base should be ≤ estimatedValue. If base > estimated (implausible),
+      // the AI misunderstood — use estimatedValue for both.
+      const safeBaseEv = baseEv > ev ? ev : baseEv;
+
       return {
         valid: true,
         data: {
           estimatedValue: Math.round(ev),
+          baseEstimatedValue: Math.round(safeBaseEv),
           valueLow: Math.round(low),
           valueHigh: Math.round(high),
           tradeInValue: Math.round(Number(p.tradeInValue) || ev * 0.80),
@@ -175,7 +190,7 @@ Return ONLY valid JSON.`,
     simplified: {
       model: "gpt-4o",
       buildPrompt: () => {
-        return `What is the fair private-party market value of a ${vehicleDesc}${mileage ? ` with ${mileage.toLocaleString()} miles` : ""}, condition ${conditionScore}/100? Consider ALL configuration details — diesel, manual trans, 4WD, enthusiast demand. Return JSON: { "estimatedValue": dollars, "valueLow": dollars, "valueHigh": dollars, "tradeInValue": dollars, "dealerRetailValue": dollars, "wholesaleValue": dollars, "confidence": 0-1, "reasoning": string, "marketContext": string, "isEnthusiastPlatform": boolean }`;
+        return `What is the fair private-party market value of a ${vehicleDesc}${mileage ? ` with ${mileage.toLocaleString()} miles` : ""}, condition ${conditionScore}/100? Return JSON: { "estimatedValue": config-aware value in dollars, "baseEstimatedValue": base model value (standard engine/auto/2WD) in dollars, "valueLow": dollars, "valueHigh": dollars, "tradeInValue": dollars, "dealerRetailValue": dollars, "wholesaleValue": dollars, "confidence": 0-1, "reasoning": string, "marketContext": string, "isEnthusiastPlatform": boolean }`;
       },
     },
 
@@ -192,6 +207,7 @@ Return ONLY valid JSON.`,
       const base = baseCurves[bodyCategory] || 5000;
       return {
         estimatedValue: base,
+        baseEstimatedValue: base, // Emergency fallback is already config-blind
         valueLow: Math.round(base * 0.75),
         valueHigh: Math.round(base * 1.25),
         tradeInValue: Math.round(base * 0.80),
@@ -210,6 +226,8 @@ Return ONLY valid JSON.`,
  * Convert an AI market value estimate into a SourceEstimate for the consensus engine.
  */
 export function toSourceEstimate(result: MarketValueEstimate): SourceEstimate {
+  // The AI fallback is config-aware — it already prices in diesel, manual, 4WD, etc.
+  // Use the full config-aware value and flag it so the config premium module skips.
   return {
     source: "fallback",
     estimatedValue: result.estimatedValue,
@@ -217,7 +235,8 @@ export function toSourceEstimate(result: MarketValueEstimate): SourceEstimate {
     dealerRetailValue: result.dealerRetailValue,
     wholesaleValue: result.wholesaleValue,
     loanValue: Math.round(result.tradeInValue * 1.05),
-    confidence: Math.min(result.confidence, 0.70), // Cap at 0.70 since it's AI-only, not API-backed
+    confidence: Math.min(result.confidence, 0.70),
     isConditionTiered: false,
+    isConfigAware: true, // AI fallback understands the full config — no additional config premium needed
   };
 }
