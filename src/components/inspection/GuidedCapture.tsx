@@ -82,7 +82,7 @@ interface GuidedCaptureProps {
   captures: CapturedPhoto[];
   onCapture: (captureType: string, file: File) => void;
   isUploading?: string | null;
-  onClose: () => void;
+  onClose: (inspectorNotes?: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +108,10 @@ export function GuidedCapture({
 
   const [currentIndex, setCurrentIndex] = useState(firstUncaptured);
   const [justCaptured, setJustCaptured] = useState<string | null>(null);
+  const [inspectorNotes, setInspectorNotes] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
 
   const currentShot = GUIDED_SHOTS[currentIndex];
   const isCurrentCaptured = captures.some(
@@ -180,7 +184,7 @@ export function GuidedCapture({
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900/80 backdrop-blur-sm border-b border-slate-800">
         <button
-          onClick={onClose}
+          onClick={() => onClose()}
           className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors"
         >
           <X className="h-5 w-5" />
@@ -354,15 +358,79 @@ export function GuidedCapture({
           </button>
         </div>
 
-        {/* All done indicator */}
+        {/* All done — inspector notes + done button */}
         {capturedCount === GUIDED_SHOTS.length && (
-          <div className="mt-4 max-w-lg mx-auto">
+          <div className="mt-4 max-w-lg mx-auto space-y-3">
+            {/* Inspector notes input */}
+            <div className="bg-slate-800/80 rounded-2xl p-4">
+              <p className="text-sm font-medium text-slate-200 mb-2">
+                Anything the camera might have missed?
+              </p>
+              <div className="relative">
+                <textarea
+                  value={inspectorNotes}
+                  onChange={(e) => setInspectorNotes(e.target.value)}
+                  placeholder="Dents, tire wear, smells, noises, leaks..."
+                  rows={3}
+                  className="w-full rounded-xl bg-slate-700 text-white placeholder-slate-400 text-sm px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                {/* Talk-to-text button */}
+                {"webkitSpeechRecognition" in (typeof window !== "undefined" ? window : {}) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isListening) {
+                        recognitionRef.current?.stop();
+                        setIsListening(false);
+                        return;
+                      }
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const SR = (window as any).webkitSpeechRecognition;
+                      const recognition = new SR();
+                      recognition.continuous = true;
+                      recognition.interimResults = true;
+                      recognition.lang = "en-US";
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      recognition.onresult = (event: any) => {
+                        let transcript = "";
+                        for (let i = 0; i < event.results.length; i++) {
+                          transcript += event.results[i][0].transcript;
+                        }
+                        setInspectorNotes((prev) => {
+                          const base = prev.trim();
+                          return base ? `${base} ${transcript}` : transcript;
+                        });
+                      };
+                      recognition.onerror = () => setIsListening(false);
+                      recognition.onend = () => setIsListening(false);
+                      recognitionRef.current = recognition;
+                      recognition.start();
+                      setIsListening(true);
+                    }}
+                    className={cn(
+                      "absolute right-2 top-2 p-2 rounded-full transition-colors",
+                      isListening
+                        ? "bg-red-500 text-white animate-pulse"
+                        : "bg-slate-600 text-slate-300 hover:bg-slate-500"
+                    )}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <line x1="12" x2="12" y1="19" y2="22" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1.5">Optional — helps the AI assessment focus on specific areas</p>
+            </div>
+
             <button
-              onClick={onClose}
+              onClick={() => { onClose(inspectorNotes.trim() || undefined); }}
               className="w-full h-12 rounded-2xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
             >
               <CheckCircle className="h-5 w-5" />
-              All {GUIDED_SHOTS.length} Photos Captured — Done
+              {inspectorNotes.trim() ? "Continue with Notes" : `All ${GUIDED_SHOTS.length} Photos Captured — Done`}
             </button>
           </div>
         )}

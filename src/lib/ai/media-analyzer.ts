@@ -573,7 +573,8 @@ Return JSON: { "mileage": <integer miles or null if unreadable>, "confidence": <
  */
 export async function analyzeVehicleCondition(
   vehicle: VehicleInfo,
-  media: MediaForAnalysis[]
+  media: MediaForAnalysis[],
+  inspectorNotes?: string,
 ): Promise<ConditionAssessment> {
   const openai = getOpenAI();
   const mileageStr = vehicle.mileage
@@ -594,10 +595,10 @@ export async function analyzeVehicleCondition(
   // Run 4 area assessments in parallel
   const [exteriorBody, interior, mechanicalVisual, underbodyFrame] =
     await Promise.all([
-      assessArea(openai, vehicle, mileageStr, "Exterior Body", areaMedia.exteriorBody, EXTERIOR_CHECKLIST),
-      assessArea(openai, vehicle, mileageStr, "Interior", areaMedia.interior, INTERIOR_CHECKLIST),
-      assessArea(openai, vehicle, mileageStr, "Mechanical / Visual", areaMedia.mechanicalVisual, MECHANICAL_CHECKLIST),
-      assessArea(openai, vehicle, mileageStr, "Underbody / Frame", areaMedia.underbodyFrame, UNDERBODY_CHECKLIST),
+      assessArea(openai, vehicle, mileageStr, "Exterior Body", areaMedia.exteriorBody, EXTERIOR_CHECKLIST, inspectorNotes),
+      assessArea(openai, vehicle, mileageStr, "Interior", areaMedia.interior, INTERIOR_CHECKLIST, inspectorNotes),
+      assessArea(openai, vehicle, mileageStr, "Mechanical / Visual", areaMedia.mechanicalVisual, MECHANICAL_CHECKLIST, inspectorNotes),
+      assessArea(openai, vehicle, mileageStr, "Underbody / Frame", areaMedia.underbodyFrame, UNDERBODY_CHECKLIST, inspectorNotes),
     ]);
 
   // Calculate weighted overall score (0-100)
@@ -688,7 +689,8 @@ async function assessArea(
   mileageStr: string,
   areaName: string,
   photos: MediaForAnalysis[],
-  checklist: string
+  checklist: string,
+  inspectorNotes?: string,
 ): Promise<AreaConditionDetail> {
   if (photos.length === 0) {
     return {
@@ -781,10 +783,20 @@ RESPOND WITH EXACTLY THIS JSON FORMAT (no markdown):
 - confidence: how confident you are in your score (1.0 = clear photos, full coverage; 0.5 = partial visibility; <0.3 = mostly guessing)
 - Be precise and specific. Reference actual components by name.`;
 
+  const inspectorHints = inspectorNotes ? `
+
+INSPECTOR HINTS (use these to guide where you look more carefully):
+${inspectorNotes}
+
+These notes tell you WHERE to look in the photos. You must still base your score on what you can SEE.
+- If the inspector mentions an issue, look VERY carefully at the relevant photos for visual confirmation.
+- If you can see the issue → score accordingly and add to concerns.
+- If you genuinely cannot confirm it in the photos → add to concerns as "Inspector reported [X] — not confirmed in photos" and lower your confidence score, but do NOT adjust the score without visual evidence.` : "";
+
   const userContent = `Assess the ${areaName} condition of this ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
 
 PHOTOS PROVIDED (${imageBlocks.length}):
-${photoLabels}`;
+${photoLabels}${inspectorHints}`;
 
   // Retry up to 3 times with ALL photos — a failed assessment is unacceptable
   for (let attempt = 1; attempt <= 3; attempt++) {

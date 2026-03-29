@@ -194,6 +194,19 @@ export default function ReportDetailPage({
             </span>
           </div>
 
+          {/* Inspector Notes (from voice/text during capture) */}
+          {(() => {
+            const conditionStep = inspection.steps?.find((s: { step: string }) => s.step === "AI_CONDITION_SCAN");
+            const condData = conditionStep?.data as { inspectorNotes?: string } | null;
+            if (!condData?.inspectorNotes) return null;
+            return (
+              <div className="mb-4 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-xs font-semibold text-amber-700 mb-1">Inspector Notes</p>
+                <p className="text-xs text-amber-800 italic">{condData.inspectorNotes}</p>
+              </div>
+            );
+          })()}
+
           {/* Risk Area Summary — known issues checked */}
           {(() => {
             // Risk data lives in RISK_INSPECTION step (both risks + check statuses)

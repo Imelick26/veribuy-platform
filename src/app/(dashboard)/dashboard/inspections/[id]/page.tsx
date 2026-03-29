@@ -254,7 +254,7 @@ export default function InspectionDetailPage({
     if (!inspection.vehicle) return;
 
     conditionScanTriggeredRef.current = true;
-    runConditionScan.mutate({ inspectionId: id });
+    runConditionScan.mutate({ inspectionId: id, inspectorNotes });
   }, [inspection, runConditionScan, id]);
 
   // Media upload hook
@@ -264,6 +264,7 @@ export default function InspectionDetailPage({
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showGuidedCapture, setShowGuidedCapture] = useState(false);
+  const [inspectorNotes, setInspectorNotes] = useState<string | undefined>();
   const [findingFromRisk, setFindingFromRisk] = useState<AggregatedRisk | null>(null);
   const [uploadingRiskCapture, setUploadingRiskCapture] = useState<string | null>(null);
 
@@ -673,7 +674,7 @@ export default function InspectionDetailPage({
           isRunningAIAnalysis={runAIAnalysis.isPending}
           aiAnalysisResults={aiAnalysisResults || undefined}
           overallConditionResult={overallConditionResult || undefined}
-          onRunConditionScan={() => runConditionScan.mutate({ inspectionId: id })}
+          onRunConditionScan={() => runConditionScan.mutate({ inspectionId: id, inspectorNotes })}
           isRunningConditionScan={runConditionScan.isPending}
           conditionScanComplete={inspection.steps.some((s) => s.step === "AI_CONDITION_SCAN" && s.status === "COMPLETED")}
           onConfirmVin={(vin) => confirmVin.mutate({ inspectionId: id, vin })}
@@ -713,7 +714,10 @@ export default function InspectionDetailPage({
           }))}
           onCapture={(captureType, file) => mediaUpload.upload(file, captureType)}
           isUploading={mediaUpload.currentCaptureType}
-          onClose={() => setShowGuidedCapture(false)}
+          onClose={(notes) => {
+            setShowGuidedCapture(false);
+            if (notes) setInspectorNotes(notes);
+          }}
         />
       )}
 

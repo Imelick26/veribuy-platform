@@ -279,7 +279,7 @@ export const inspectionRouter = router({
 
   // Run AI condition scan (4-area assessment + unexpected issues)
   runConditionScan: protectedProcedure
-    .input(z.object({ inspectionId: z.string() }))
+    .input(z.object({ inspectionId: z.string(), inspectorNotes: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       const inspection = await ctx.db.inspection.findUnique({
         where: { id: input.inspectionId, orgId: ctx.orgId },
@@ -321,7 +321,7 @@ export const inspectionRouter = router({
       const odometerPhoto = mediaForAnalysis.find((m) => m.captureType === "ODOMETER");
 
       const [conditionAssessment, unexpectedResult, odometerResult] = await Promise.all([
-        analyzeVehicleCondition(vehicleInfo, mediaForAnalysis),
+        analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes),
         scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis),
         odometerPhoto && !inspection.odometer
           ? extractOdometerFromPhoto(odometerPhoto.url)
@@ -355,6 +355,7 @@ export const inspectionRouter = router({
           completedAt: new Date(),
           data: JSON.parse(JSON.stringify({
             conditionAssessment,
+            inspectorNotes: input.inspectorNotes || null,
             unexpectedFindings: unexpectedResult.unexpectedFindings,
             unexpectedSummary: unexpectedResult.summary,
             odometerOCR: odometerResult ? {
