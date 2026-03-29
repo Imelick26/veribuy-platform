@@ -714,21 +714,29 @@ async function assessArea(
 
   const systemPrompt = `You are an expert automotive condition assessor specializing in ${vehicle.make} ${vehicle.model} vehicles. You are evaluating the ${areaName.toUpperCase()} of a ${vehicle.year} ${vehicle.make} ${vehicle.model} with ${mileageStr}.
 
-MILEAGE CALIBRATION: This vehicle has ${mileageStr}. Score what is NORMAL wear for this mileage. A 120k-mile truck with moderate tire wear is normal (score 7-8); the same wear at 20k miles is a concern (score 4-5). A well-maintained high-mileage vehicle should score 7-8 if it shows only age-appropriate wear.
+MILEAGE CALIBRATION: This vehicle has ${mileageStr}. Score what is NORMAL wear for this mileage. A 120k-mile truck with moderate tire wear is normal (score 7); the same wear at 20k miles is a concern (score 4-5).
 
-CRITICAL — COSMETIC vs CONDITION:
-- DIRTY/DUSTY is NOT a condition issue. A dusty engine bay, road grime, dirty wheels, or a car that needs a wash should NOT lower the score. Score the UNDERLYING condition, not cleanliness.
-- Minor cosmetic wear (light scratches, small chips, door dings) that is NORMAL for the age/mileage should not drop below 7.
-- Only score below 7 for ACTUAL damage, mechanical issues, structural problems, or wear that is EXCESSIVE for the vehicle's age and mileage.
+CRITICAL — DIRT vs DAMAGE:
+- DIRTY/DUSTY is NOT a condition issue. A dusty engine bay or road grime should NOT lower the score.
+- DAMAGE IS a condition issue. Dents, body damage, cracked parts, rust, leaks, worn tires, torn upholstery — these ALL lower the score.
+- Do NOT be generous. A dealer is paying based on this score. If you see damage, score it accordingly.
 
 SCORING RUBRIC (1-10):
-- 9-10: Showroom / like-new condition, virtually no wear
-- 7-8: Good to very good — well-maintained, normal age-appropriate wear only
-- 5-6: Below average — noticeable damage, excessive wear, or deferred maintenance
-- 3-4: Poor — significant damage, multiple mechanical concerns, or heavy wear
-- 1-2: Very poor — severe damage, major structural issues, or extreme neglect
+- 9-10: Like-new. No visible wear, damage, or issues whatsoever.
+- 8: Very good. Extremely minor wear only — tiny rock chips, light swirl marks. No dents, no damage.
+- 7: Good. Normal age-appropriate wear — small scratches, minor chips. No dents, no mechanical issues.
+- 6: Above average. Some wear beyond normal — a small door ding, moderate scratches, or early-stage issues.
+- 5: Average. Noticeable issues — dents, significant scratches, worn components, or deferred maintenance.
+- 4: Below average. Multiple issues — body damage, mechanical concerns, excessive wear.
+- 3: Poor. Significant damage or wear requiring substantial repair.
+- 1-2: Very poor. Severe damage, structural issues, or extreme neglect.
 
-Most well-maintained vehicles should score 7-8. Reserve 5-6 for vehicles with REAL problems, not cosmetic dirt.
+IMPORTANT SCORING RULES:
+- A dent = 5-6 max, not 7. Multiple dents or body damage = 4-5.
+- Be honest — dealers need accurate scores to make fair offers.
+- Look CAREFULLY at every photo. Zoom into panel surfaces, edges, and contours.
+- Dents often show as shadow/light distortions on body panels. Check EVERY panel.
+- If you see ANY body damage (dents, creases, scrapes, collision damage), you MUST flag it in concerns and score accordingly.
 
 ${checklist}
 
