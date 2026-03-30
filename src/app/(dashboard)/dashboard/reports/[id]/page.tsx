@@ -4,7 +4,7 @@ import { use, useState } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Progress } from "@/components/ui/Progress";
+
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, severityColor, cn } from "@/lib/utils";
 import Link from "next/link";
@@ -98,6 +98,11 @@ export default function ReportDetailPage({
   const totalRepairLow = findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
   const totalRepairHigh = findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
 
+  // AI recon cost — single source of truth for repair costs
+  const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> })?.aiValuationLogs?.[0];
+  const reconOutput = reconLog?.output as { totalReconCost?: number } | null;
+  const aiReconCost = reconOutput?.totalReconCost || null;
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
@@ -175,21 +180,6 @@ export default function ReportDetailPage({
           </div>
         </div>
 
-        {/* Market Analysis — THE DECISION (moved to top) */}
-        {report.inspection.marketAnalysis && (
-          <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
-            <h3 className="text-lg font-bold text-text-primary mb-4">
-              <BarChart3 className="inline h-5 w-5 mr-1" />
-              Vehicle Valuation
-            </h3>
-            <MarketAnalysisSection
-              data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
-              audience="seller"
-              findings={allFindings}
-            />
-          </div>
-        )}
-
         {/* Condition Assessment — 4-area breakdown + findings summary */}
         <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
           <div className="flex items-center justify-between mb-4">
@@ -219,12 +209,23 @@ export default function ReportDetailPage({
 
           {/* Risk Area Summary — known issues checked */}
           {(() => {
+            // Build AI recon cost lookup so risk items show consistent costs
+            const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> })?.aiValuationLogs?.[0];
+            const reconOutput = reconLog?.output as {
+              itemizedCosts?: Array<{ finding: string; estimatedCostCents: number }>;
+            } | null;
+            const reconCostByName = new Map<string, number>();
+            reconOutput?.itemizedCosts?.forEach((item) => {
+              reconCostByName.set(item.finding.toLowerCase(), item.estimatedCostCents);
+            });
+
             // Risk data lives in RISK_INSPECTION step (both risks + check statuses)
             const riskStep = inspection.steps?.find((s: { step: string }) => s.step === "RISK_INSPECTION")
               || inspection.steps?.find((s: { step: string }) => s.step === "RISK_REVIEW");
             const riskData = riskStep?.data as {
               aggregatedRisks?: Array<{
                 id: string; title: string; description: string; category: string; severity: string;
+                whyItMatters?: string;
                 cost: { low: number; high: number };
                 costTiers?: Array<{ condition: string; label: string; costLow: number; costHigh: number }>;
                 inspectionQuestions?: Array<{ id: string; failureAnswer: string }>;
@@ -288,23 +289,37 @@ export default function ReportDetailPage({
 
                     return (
                       <div key={r.id} className={cn(
-                        "flex items-center justify-between px-3 py-2 rounded-md border text-xs",
+                        "px-3 py-2.5 rounded-md border text-xs",
                         statusStyle.bg, statusStyle.border,
                       )}>
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <div className={cn("w-2 h-2 rounded-full shrink-0", statusStyle.dot)} />
-                          <span className="text-text-primary font-medium truncate">{r.title}</span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {r.status === "CONFIRMED" && r.cost && (
-                            <span className="text-red-600 font-bold">
-                              {formatCurrency(Math.round((r.cost.low + r.cost.high) / 2))}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className={cn("w-2 h-2 rounded-full shrink-0", statusStyle.dot)} />
+                            <span className="text-text-primary font-medium truncate">{r.title}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {r.status === "CONFIRMED" && (() => {
+                              // Prefer AI recon cost for consistency
+                              const aiCost = reconCostByName.get(r.title.toLowerCase());
+                              const fallbackCost = r.cost ? Math.round((r.cost.low + r.cost.high) / 2) : null;
+                              const displayCost = aiCost || fallbackCost;
+                              return displayCost ? (
+                                <span className="text-red-600 font-bold">
+                                  {formatCurrency(displayCost)}
+                                </span>
+                              ) : null;
+                            })()}
+                            <span className={cn("font-semibold", statusStyle.text)}>
+                              {statusStyle.label}
                             </span>
-                          )}
-                          <span className={cn("font-semibold", statusStyle.text)}>
-                            {statusStyle.label}
-                          </span>
+                          </div>
                         </div>
+                        {r.status === "CONFIRMED" && r.description && (
+                          <p className="text-xs text-text-secondary mt-1.5 ml-4 leading-relaxed">{r.description}</p>
+                        )}
+                        {r.status === "CONFIRMED" && r.whyItMatters && (
+                          <p className="text-xs text-red-600 mt-1 ml-4 leading-relaxed">{r.whyItMatters}</p>
+                        )}
                       </div>
                     );
                   })}
@@ -317,7 +332,7 @@ export default function ReportDetailPage({
             );
           })()}
 
-          {/* Score breakdown — 4-area AI condition assessment with details */}
+          {/* Score breakdown — 4-area AI condition assessment (matches vehicle detail style) */}
           {inspection.overallScore != null && (() => {
             const rawData = inspection.conditionRawData as Record<string, unknown> | null;
             const areas = [
@@ -328,42 +343,27 @@ export default function ReportDetailPage({
             ];
 
             return (
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 space-y-0">
                 {areas.map((item) => {
                   const detail = rawData?.[item.key] as { summary?: string; keyObservations?: string[]; concerns?: string[]; scoreJustification?: string } | undefined;
+                  const dotColor = (item.score || 0) >= 7 ? "bg-green-500" : (item.score || 0) >= 6 ? "bg-yellow-400" : "bg-red-500";
                   return (
-                    <div key={item.label} className="rounded-lg border border-border-default p-3">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-xs font-semibold text-text-primary">{item.label} ({item.weight})</span>
-                        <span className={cn(
-                          "text-sm font-bold",
-                          (item.score || 0) >= 7 ? "text-green-600" :
-                          (item.score || 0) >= 5 ? "text-amber-600" : "text-red-600"
-                        )}>{item.score ?? "—"}/10</span>
+                    <div key={item.label} className="pb-4 border-b border-border-default last:border-0 last:pb-0 pt-4 first:pt-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColor)} />
+                          <span className="text-sm font-medium text-text-primary">{item.label}</span>
+                        </div>
+                        <span className="text-sm font-bold text-text-primary">{item.score ?? "—"}/10</span>
                       </div>
-                      <Progress value={((item.score || 0) / 10) * 100} size="sm" color={
-                        (item.score || 0) >= 7 ? "green" :
-                        (item.score || 0) >= 5 ? "yellow" : "red"
-                      } />
-                      {detail && (
-                        <div className="mt-2 space-y-1">
-                          {detail.summary && (
-                            <p className="text-xs text-text-secondary">{detail.summary}</p>
-                          )}
-                          {detail.keyObservations && detail.keyObservations.length > 0 && (
-                            <ul className="text-[11px] text-text-tertiary space-y-0.5 mt-1">
-                              {detail.keyObservations.slice(0, 3).map((obs, i) => (
-                                <li key={i}>+ {obs}</li>
-                              ))}
-                            </ul>
-                          )}
-                          {detail.concerns && detail.concerns.length > 0 && (
-                            <ul className="text-[11px] text-amber-700 space-y-0.5">
-                              {detail.concerns.slice(0, 3).map((c, i) => (
-                                <li key={i}>- {c}</li>
-                              ))}
-                            </ul>
-                          )}
+                      {detail?.summary && (
+                        <p className="text-sm text-text-secondary mt-1 leading-relaxed ml-[18px]">{detail.summary}</p>
+                      )}
+                      {detail?.concerns && detail.concerns.length > 0 && (
+                        <div className="mt-1 ml-[18px]">
+                          {detail.concerns.map((c, i) => (
+                            <p key={i} className="text-sm text-red-600 leading-relaxed">{"\u2022"} {c}</p>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -517,6 +517,71 @@ export default function ReportDetailPage({
             </div>
           )}
         </div>
+
+        {/* Repair Cost Breakdown — AI-computed justification */}
+        {(() => {
+          const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> })?.aiValuationLogs?.[0];
+          const reconBreakdown = reconLog?.output as {
+            totalReconCost?: number;
+            itemizedCosts?: Array<{ finding: string; estimatedCostCents: number; laborHours?: number; partsEstimate?: number; shopType: string; reasoning: string }>;
+            laborRateContext?: string;
+          } | null;
+          if (!reconBreakdown?.itemizedCosts || reconBreakdown.itemizedCosts.length === 0) return null;
+
+          return (
+            <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
+              <h3 className="text-lg font-bold text-text-primary mb-4">
+                <Wrench className="inline h-5 w-5 mr-1" />
+                Estimated Repair Costs
+              </h3>
+              <div className="space-y-2">
+                {reconBreakdown.itemizedCosts.map((item, i) => (
+                  <div key={i} className="flex items-start justify-between text-sm px-3 py-2.5 rounded-lg bg-surface-sunken">
+                    <div className="flex-1 min-w-0 mr-3">
+                      <span className="font-medium text-text-primary">{item.finding}</span>
+                      {item.reasoning && (
+                        <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{item.reasoning}</p>
+                      )}
+                      {(item.laborHours || item.partsEstimate) && (
+                        <p className="text-xs text-text-tertiary mt-0.5">
+                          {item.laborHours ? `${item.laborHours}h labor` : ""}
+                          {item.laborHours && item.partsEstimate ? " + " : ""}
+                          {item.partsEstimate ? `${formatCurrency(item.partsEstimate)} parts` : ""}
+                        </p>
+                      )}
+                    </div>
+                    <span className="font-bold text-red-600 shrink-0">{formatCurrency(item.estimatedCostCents)}</span>
+                  </div>
+                ))}
+              </div>
+              {reconBreakdown.totalReconCost && (
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-border-default">
+                  <span className="text-sm font-semibold text-text-primary">Total Estimated Repairs</span>
+                  <span className="text-sm font-bold text-red-600">{formatCurrency(reconBreakdown.totalReconCost)}</span>
+                </div>
+              )}
+              {reconBreakdown.laborRateContext && (
+                <p className="text-[10px] text-text-tertiary mt-2">{reconBreakdown.laborRateContext}</p>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Vehicle Valuation — Our Offer (at the end, after all evidence) */}
+        {report.inspection.marketAnalysis && (
+          <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
+            <h3 className="text-lg font-bold text-text-primary mb-4">
+              <BarChart3 className="inline h-5 w-5 mr-1" />
+              Vehicle Valuation
+            </h3>
+            <MarketAnalysisSection
+              data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
+              audience="seller"
+              overallScore={inspection.overallScore}
+              reconCostOverride={aiReconCost}
+            />
+          </div>
+        )}
 
         {/* Photo Gallery — Standard + Evidence + All */}
         <PhotoGallery media={media ?? []} findings={findings} />

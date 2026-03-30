@@ -30,7 +30,8 @@ model Organization {
   bonusInspections       Int              @default(0)
 
   // Pricing preferences
-  targetMarginPercent  Int      @default(25) // Dealer target margin (e.g., 25 = 25%)
+  targetMarginPercent  Int      @default(20) // Dealer target margin percentage (e.g., 20 = 20%)
+  minProfitPerUnit     Int      @default(150000) // Minimum profit per vehicle in cents ($1,500)
 
   // Stripe subscription billing
   stripeCustomerId     String?  @unique

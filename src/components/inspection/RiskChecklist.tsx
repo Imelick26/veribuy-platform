@@ -273,19 +273,7 @@ export function RiskChecklist({
                       {risk.description}
                     </p>
                   )}
-                  {/* Repair cost — refined after inspection, full range before */}
-                  {risk.cost.low > 0 && status !== "NOT_FOUND" && (
-                    refinedCost ? (
-                      <span className="text-[11px] text-amber-700 font-medium">
-                        Est. {formatCurrency(refinedCost.low)} – {formatCurrency(refinedCost.high)}
-                        <span className="text-text-tertiary font-normal"> · {refinedCost.tierLabel}</span>
-                      </span>
-                    ) : status === "NOT_CHECKED" ? (
-                      <span className="text-[11px] text-text-tertiary">
-                        Est. {formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}
-                      </span>
-                    ) : null
-                  )}
+                  {/* Repair costs removed — shown in vehicle page & report instead */}
                 </div>
 
                 {/* Severity badge */}
@@ -435,24 +423,7 @@ export function RiskChecklist({
                           </ul>
                         </div>
                       )}
-                      {risk.cost.low > 0 && (
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <DollarSign className="h-3 w-3 text-text-tertiary" />
-                          {refinedCost ? (
-                            <span className="text-amber-700">
-                              Est. repair: <span className="font-medium">{formatCurrency(refinedCost.low)} – {formatCurrency(refinedCost.high)}</span>
-                              <span className="text-text-tertiary ml-1">({refinedCost.tierLabel})</span>
-                            </span>
-                          ) : (
-                            <span className="text-text-secondary">
-                              Est. repair: <span className="font-medium text-text-primary">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
-                              {risk.costTiers && risk.costTiers.length > 0 && (
-                                <span className="text-text-tertiary ml-1">(narrows after inspection)</span>
-                              )}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                      {/* Repair costs removed — shown in vehicle page & report instead */}
                       {status === "NOT_CHECKED" && (
                         <button
                           onClick={() => handleSkip(risk.id)}

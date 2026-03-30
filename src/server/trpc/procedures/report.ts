@@ -215,6 +215,11 @@ export const reportRouter = router({
               marketAnalysis: true,
               vehicleHistory: true,
               inspector: { select: { name: true, email: true } },
+              aiValuationLogs: {
+                where: { module: "recon" },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+              },
             },
           },
         },
@@ -293,6 +298,11 @@ export const reportRouter = router({
               marketAnalysis: true,
               vehicleHistory: true,
               inspector: { select: { name: true } },
+              aiValuationLogs: {
+                where: { module: "recon" },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+              },
             },
           },
           org: { select: { name: true, logo: true } },

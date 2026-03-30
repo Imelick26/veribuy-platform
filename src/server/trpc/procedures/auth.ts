@@ -202,20 +202,27 @@ export const authRouter = router({
   getOrgSettings: protectedProcedure.query(async ({ ctx }) => {
     const org = await ctx.db.organization.findUnique({
       where: { id: ctx.orgId },
-      select: { targetMarginPercent: true },
+      select: { targetMarginPercent: true, minProfitPerUnit: true },
     });
-    return { targetMarginPercent: org?.targetMarginPercent ?? 25 };
+    return {
+      targetMarginPercent: org?.targetMarginPercent ?? 20,
+      minProfitPerUnit: org?.minProfitPerUnit ?? 150000,
+    };
   }),
 
   // Update org pricing settings
   updateOrgSettings: managerProcedure
     .input(z.object({
       targetMarginPercent: z.number().int().min(5).max(50),
+      minProfitPerUnit: z.number().int().min(0).max(1000000).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await ctx.db.organization.update({
         where: { id: ctx.orgId },
-        data: { targetMarginPercent: input.targetMarginPercent },
+        data: {
+          targetMarginPercent: input.targetMarginPercent,
+          ...(input.minProfitPerUnit != null && { minProfitPerUnit: input.minProfitPerUnit }),
+        },
       });
       return { success: true };
     }),

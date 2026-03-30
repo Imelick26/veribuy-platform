@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Progress } from "@/components/ui/Progress";
-import { MarketAnalysisSection } from "@/components/report/MarketAnalysisSection";
+import { MarketAnalysisSection, getConditionMarginPct, getConditionTierLabel } from "@/components/report/MarketAnalysisSection";
 import type { MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
 import { PhotoGallery } from "@/components/report/PhotoGallery";
 import { getConditionGrade } from "@/lib/market-valuation";
@@ -23,10 +23,12 @@ type Tab = "condition" | "history" | "market" | "photos" | "risks";
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: vehicle, isLoading } = trpc.vehicle.getDetail.useQuery({ id });
+  const { data: orgSettings } = trpc.auth.getOrgSettings.useQuery();
   const utils = trpc.useUtils();
   const [activeTab, setActiveTab] = useState<Tab>("risks");
   const [showPriceInput, setShowPriceInput] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [marginOverride, setMarginOverride] = useState<number | null>(null);
 
   const recordOutcome = trpc.inspection.recordOutcome.useMutation({
     onSuccess: () => {
@@ -34,6 +36,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       setShowPriceInput(false);
       setPurchasePrice("");
     },
+  });
+
+  const generateReport = trpc.report.generate.useMutation({
+    onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
   });
 
   if (isLoading) {
@@ -76,8 +82,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const media = inspection?.media || [];
   const steps = inspection?.steps || [];
 
-  // Hero photo — 3/4 driver front, fall back to front center
-  const heroPhoto = media.find((m) => m.captureType === "FRONT_34_DRIVER")
+  // Hero photo — passenger front 3/4, fall back to driver 3/4, then front center
+  const heroPhoto = media.find((m) => m.captureType === "FRONT_34_PASSENGER")
+    || media.find((m) => m.captureType === "FRONT_34_DRIVER")
     || media.find((m) => m.captureType === "FRONT_CENTER");
 
   // Recon cost = AI-computed (accounts for bundled labor, local rates)
@@ -98,12 +105,19 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     || market?.estReconCost
     || (reconLow > 0 ? Math.round((reconLow + reconHigh) / 2) : 0);
 
-  // Max bid = recommended buy price from market analysis
-  const maxBid = market?.fairBuyMax || market?.adjustedPrice || 0;
-
-  // Fair market value
-  const fairValue = market ? (market.adjustedPrice || 0) : 0;
-  const estRetail = market?.estRetailPrice || 0;
+  // Fair market value & margin-driven buy price
+  const estRetail = market?.estRetailPrice || market?.baselinePrice || 0;
+  const condMult = market?.conditionMultiplier ?? 1;
+  const histMult = market?.historyMultiplier ?? 1;
+  const fmv = Math.round(estRetail * condMult * histMult) - reconEstimate;
+  const basePct = orgSettings?.targetMarginPercent ?? 20;
+  const condScore = inspection?.overallScore ?? null;
+  const effectiveMarginPct = marginOverride ?? getConditionMarginPct(basePct, condScore);
+  const tierLabel = getConditionTierLabel(condScore);
+  const minProfit = orgSettings?.minProfitPerUnit ?? 150000;
+  const pctMargin = Math.round(estRetail * (effectiveMarginPct / 100));
+  const dealerMarginAmount = Math.max(pctMargin, minProfit);
+  const maxBid = Math.max(0, Math.round((estRetail - dealerMarginAmount - reconEstimate) / 100) * 100);
   const netMargin = estRetail > 0 && maxBid > 0 ? estRetail - maxBid - reconEstimate : 0;
 
   // Odometer
@@ -167,13 +181,22 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             <ArrowLeft className="h-4 w-4" /> Vehicles
           </Link>
           <div className="flex items-center gap-2">
-            {inspection?.report && (
+            {inspection?.report ? (
               <Link href={`/dashboard/reports/${inspection.report.id}`}>
                 <Button variant="secondary" size="sm">
                   <FileText className="h-3.5 w-3.5 mr-1" /> View Report
                 </Button>
               </Link>
-            )}
+            ) : inspection?.status === "COMPLETED" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => generateReport.mutate({ inspectionId: inspection.id })}
+                loading={generateReport.isPending}
+              >
+                <FileText className="h-3.5 w-3.5 mr-1" /> Generate Report
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -222,6 +245,33 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
         </div>
+
+        {/* Margin Adjuster */}
+        {estRetail > 0 && (
+          <div className="flex items-center gap-3 mt-4 px-3 py-2 rounded-lg bg-surface-overlay border border-border-default">
+            <span className="text-xs font-medium text-text-secondary shrink-0">Margin</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setMarginOverride(Math.max(5, effectiveMarginPct - 5))}
+                className="w-6 h-6 rounded text-xs font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+              >-</button>
+              <span className="text-sm font-bold text-text-primary w-10 text-center">{effectiveMarginPct}%</span>
+              <button
+                onClick={() => setMarginOverride(Math.min(50, effectiveMarginPct + 5))}
+                className="w-6 h-6 rounded text-xs font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+              >+</button>
+            </div>
+            <span className="text-[10px] text-text-tertiary">
+              {marginOverride != null ? (
+                <button onClick={() => setMarginOverride(null)} className="text-brand-600 hover:underline">
+                  Reset to {getConditionMarginPct(basePct, condScore)}% ({tierLabel})
+                </button>
+              ) : (
+                <>{tierLabel} condition</>
+              )}
+            </span>
+          </div>
+        )}
 
         {/* Negotiation Playbook — the value prop */}
         {maxBid > 0 && (() => {
@@ -626,7 +676,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       {activeTab === "market" && (
         <div>
           {market ? (
-            <MarketAnalysisSection data={market} compact hideHero />
+            <MarketAnalysisSection data={market} compact hideHero targetMarginPercent={orgSettings?.targetMarginPercent} minProfitPerUnit={orgSettings?.minProfitPerUnit} reconCostOverride={reconEstimate > 0 ? reconEstimate : undefined} overallScore={condScore} marginOverride={marginOverride} />
           ) : (
             <Card className="p-8 text-center">
               <TrendingUp className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />

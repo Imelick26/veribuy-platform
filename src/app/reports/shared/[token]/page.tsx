@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { Badge } from "@/components/ui/Badge";
-import { Progress } from "@/components/ui/Progress";
+
 import { trpc } from "@/lib/trpc";
 import { formatCurrency, formatDate, severityColor } from "@/lib/utils";
 import { AlertTriangle, CheckCircle, Wrench, BarChart3 } from "lucide-react";
@@ -57,6 +57,11 @@ export default function SharedReportPage({
   const majorCount = findings.filter((f) => f.severity === "MAJOR").length;
   const totalRepairLow = findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
   const totalRepairHigh = findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
+
+  // AI recon cost — single source of truth
+  const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> })?.aiValuationLogs?.[0];
+  const reconOutput = reconLog?.output as { totalReconCost?: number } | null;
+  const aiReconCost = reconOutput?.totalReconCost || null;
 
   return (
     <div className="min-h-screen bg-surface-base py-8 px-4">
@@ -119,42 +124,43 @@ export default function SharedReportPage({
             )}
 
             {inspection.overallScore != null && (
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="mt-4 space-y-0">
                 {[
-                  { label: "Exterior Body", score: inspection.exteriorBodyScore, weight: "30%" },
-                  { label: "Interior", score: inspection.interiorScore, weight: "15%" },
-                  { label: "Mechanical / Visual", score: inspection.mechanicalVisualScore, weight: "35%" },
-                  { label: "Underbody / Frame", score: inspection.underbodyFrameScore, weight: "20%" },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-text-secondary">{item.label} ({item.weight})</span>
-                      <span className="font-medium">{item.score ?? "—"}/10</span>
+                  { label: "Exterior Body", key: "exteriorBody", score: inspection.exteriorBodyScore },
+                  { label: "Interior", key: "interior", score: inspection.interiorScore },
+                  { label: "Mechanical / Visual", key: "mechanicalVisual", score: inspection.mechanicalVisualScore },
+                  { label: "Underbody / Frame", key: "underbodyFrame", score: inspection.underbodyFrameScore },
+                ].map((item) => {
+                  const rawData = inspection.conditionRawData as Record<string, unknown> | null;
+                  const detail = rawData?.[item.key] as { summary?: string; concerns?: string[] } | undefined;
+                  const dotColor = (item.score || 0) >= 7 ? "bg-green-500" : (item.score || 0) >= 6 ? "bg-yellow-400" : "bg-red-500";
+                  return (
+                    <div key={item.label} className="pb-4 border-b border-border-default last:border-0 last:pb-0 pt-4 first:pt-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotColor}`} />
+                          <span className="text-sm font-medium text-text-primary">{item.label}</span>
+                        </div>
+                        <span className="text-sm font-bold text-text-primary">{item.score ?? "—"}/10</span>
+                      </div>
+                      {detail?.summary && (
+                        <p className="text-sm text-text-secondary mt-1 leading-relaxed ml-[18px]">{detail.summary}</p>
+                      )}
+                      {detail?.concerns && detail.concerns.length > 0 && (
+                        <div className="mt-1 ml-[18px]">
+                          {detail.concerns.map((c, i) => (
+                            <p key={i} className="text-sm text-red-600 leading-relaxed">{"\u2022"} {c}</p>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <Progress value={((item.score || 0) / 10) * 100} size="sm" color={
-                      (item.score || 0) >= 7 ? "green" :
-                      (item.score || 0) >= 5 ? "yellow" : "red"
-                    } />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Findings */}
-          {/* Market Analysis */}
-          {report.inspection.marketAnalysis && (
-            <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
-              <h3 className="text-lg font-bold text-text-primary mb-4">
-                <BarChart3 className="inline h-5 w-5 mr-1" />
-                Market Analysis
-              </h3>
-              <MarketAnalysisSection
-                data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
-              />
-            </div>
-          )}
-
           <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
             <h3 className="text-lg font-bold text-text-primary mb-4">
               <Wrench className="inline h-5 w-5 mr-1" />
@@ -201,6 +207,22 @@ export default function SharedReportPage({
               </div>
             )}
           </div>
+
+          {/* Vehicle Valuation — Our Offer (at the end, after all evidence) */}
+          {report.inspection.marketAnalysis && (
+            <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
+              <h3 className="text-lg font-bold text-text-primary mb-4">
+                <BarChart3 className="inline h-5 w-5 mr-1" />
+                Vehicle Valuation
+              </h3>
+              <MarketAnalysisSection
+                data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
+                audience="seller"
+                overallScore={inspection.overallScore}
+                reconCostOverride={aiReconCost}
+              />
+            </div>
+          )}
 
           {/* Photo Gallery — Standard + Evidence + All */}
           <PhotoGallery media={media ?? []} findings={findings} />

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Progress } from "@/components/ui/Progress";
 import { trpc } from "@/lib/trpc";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle,
@@ -84,6 +85,7 @@ export default function InspectionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const utils = trpc.useUtils();
   const { data: inspection, isLoading } = trpc.inspection.get.useQuery({ id });
 
@@ -347,7 +349,14 @@ export default function InspectionDetailPage({
   const isCancelled = inspection.status === "CANCELLED";
 
   function handleAdvanceStep(step: string) {
-    advanceStep.mutate({ inspectionId: id, step: step as never });
+    advanceStep.mutate({ inspectionId: id, step: step as never }, {
+      onSuccess: () => {
+        if (step === "MARKET_ANALYSIS" && inspection?.vehicle) {
+          // Inspection is done — redirect to vehicle page
+          router.push(`/dashboard/vehicles/${inspection.vehicle.id}`);
+        }
+      },
+    });
   }
 
   function handleCheckRisk(riskId: string, status: RiskCheckStatus["status"], notes?: string) {

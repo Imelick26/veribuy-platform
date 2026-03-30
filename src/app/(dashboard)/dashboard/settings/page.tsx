@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { trpc } from "@/lib/trpc";
 import { Building2, Users, CreditCard, Lock, Check, Mail, ExternalLink, Zap } from "lucide-react";
+import { getConditionMarginPct } from "@/components/report/MarketAnalysisSection";
 
 const PACKS = [
   { size: 1 as const, label: "1 Inspection", price: "$39.99", perUnit: "$39.99/ea" },
@@ -59,6 +60,7 @@ export default function SettingsPage() {
   // Pricing settings
   const { data: orgSettings } = trpc.auth.getOrgSettings.useQuery();
   const [marginPercent, setMarginPercent] = useState<number | null>(null);
+  const [minProfit, setMinProfit] = useState<string>("");
   const [marginSaved, setMarginSaved] = useState(false);
   const updateSettings = trpc.auth.updateOrgSettings.useMutation({
     onSuccess: () => {
@@ -66,7 +68,9 @@ export default function SettingsPage() {
       setTimeout(() => setMarginSaved(false), 3000);
     },
   });
-  const currentMargin = marginPercent ?? orgSettings?.targetMarginPercent ?? 25;
+  const currentMargin = marginPercent ?? orgSettings?.targetMarginPercent ?? 20;
+  const currentMinProfit = minProfit !== "" ? Math.round(parseFloat(minProfit) * 100) : (orgSettings?.minProfitPerUnit ?? 150000);
+  const currentMinProfitDollars = currentMinProfit / 100;
 
   const hasSubscription = subStatus?.hasSubscription;
   const canUpgrade = !hasSubscription || subStatus?.tier === "BASE";
@@ -88,7 +92,7 @@ export default function SettingsPage() {
           <CardDescription>Adjust how vehicle buy prices are calculated</CardDescription>
         </CardHeader>
         <div className="px-6 pb-6">
-          <div className="space-y-3">
+          <div className="space-y-5">
             <div>
               <label className="text-sm font-medium text-text-primary block mb-1">
                 Target Dealer Margin
@@ -96,34 +100,81 @@ export default function SettingsPage() {
               <p className="text-xs text-text-secondary mb-2">
                 The margin percentage used to calculate the recommended buy price. Higher margin = lower buy price.
               </p>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  {[15, 20, 25, 30, 35].map((pct) => (
-                    <button
-                      key={pct}
-                      onClick={() => setMarginPercent(pct)}
-                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                        currentMargin === pct
-                          ? "bg-brand-600 text-white"
-                          : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
-                      }`}
-                    >
-                      {pct}%
-                    </button>
-                  ))}
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => updateSettings.mutate({ targetMarginPercent: currentMargin })}
-                  loading={updateSettings.isPending}
-                  disabled={currentMargin === (orgSettings?.targetMarginPercent ?? 25)}
-                >
-                  {marginSaved ? <><Check className="h-3.5 w-3.5 mr-1" /> Saved</> : "Save"}
-                </Button>
+              <div className="flex items-center gap-2">
+                {[15, 20, 25, 30, 35].map((pct) => (
+                  <button
+                    key={pct}
+                    onClick={() => setMarginPercent(pct)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      currentMargin === pct
+                        ? "bg-brand-600 text-white"
+                        : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
+                    }`}
+                  >
+                    {pct}%
+                  </button>
+                ))}
               </div>
-              <p className="text-[11px] text-text-tertiary mt-2">
-                At {currentMargin}% margin: a $10,000 retail vehicle = ${((10000 * (1 - currentMargin / 100))).toLocaleString()} max buy price (before recon)
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-text-primary block mb-1">
+                Minimum Profit Per Vehicle
+              </label>
+              <p className="text-xs text-text-secondary mb-2">
+                The minimum gross profit per unit. Ensures low-value vehicles are still worth buying. Whichever is greater — the percentage or this floor — is used.
               </p>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-text-secondary">$</span>
+                <input
+                  type="number"
+                  value={minProfit !== "" ? minProfit : (orgSettings?.minProfitPerUnit ? (orgSettings.minProfitPerUnit / 100).toString() : "1500")}
+                  onChange={(e) => setMinProfit(e.target.value)}
+                  className="w-32 text-sm bg-white border border-border-default rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                  min={0}
+                  step={100}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                size="sm"
+                onClick={() => updateSettings.mutate({
+                  targetMarginPercent: currentMargin,
+                  minProfitPerUnit: currentMinProfit,
+                })}
+                loading={updateSettings.isPending}
+                disabled={
+                  currentMargin === (orgSettings?.targetMarginPercent ?? 20) &&
+                  currentMinProfit === (orgSettings?.minProfitPerUnit ?? 150000)
+                }
+              >
+                {marginSaved ? <><Check className="h-3.5 w-3.5 mr-1" /> Saved</> : "Save"}
+              </Button>
+            </div>
+            {/* Condition-based tier table */}
+            <div className="mt-1">
+              <p className="text-[11px] text-text-tertiary mb-2">
+                Margin adjusts automatically based on vehicle condition. Base rate ({currentMargin}%) applies to &quot;Good&quot; condition. Minimum profit floor: ${currentMinProfitDollars.toLocaleString()}/unit.
+              </p>
+              <div className="grid grid-cols-4 gap-1 text-[10px]">
+                {([
+                  { label: "Excellent", score: "85+", color: "bg-green-50 text-green-700" },
+                  { label: "Good", score: "70-84", color: "bg-blue-50 text-blue-700" },
+                  { label: "Fair", score: "60-69", color: "bg-amber-50 text-amber-700" },
+                  { label: "Poor", score: "<60", color: "bg-red-50 text-red-700" },
+                ] as const).map(({ label, score, color }) => {
+                  const pct = getConditionMarginPct(currentMargin, label === "Excellent" ? 90 : label === "Good" ? 75 : label === "Fair" ? 65 : 50);
+                  return (
+                    <div key={label} className={`rounded-md px-2 py-1.5 text-center ${color}`}>
+                      <p className="font-bold text-sm">{pct}%</p>
+                      <p className="font-medium">{label}</p>
+                      <p className="opacity-70">{score}</p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>

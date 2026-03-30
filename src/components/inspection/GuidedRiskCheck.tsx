@@ -173,17 +173,7 @@ export function GuidedRiskCheck({
           </div>
         )}
 
-        {/* Cost info */}
-        {risk.cost.low > 0 && (
-          <div className="px-2.5 pb-2.5">
-            <div className="flex items-center gap-1.5 text-xs ml-5.5">
-              <DollarSign className="h-3 w-3 text-blue-400 shrink-0" />
-              <span className="text-blue-600">
-                If found: <span className="font-medium text-blue-700">{formatCurrency(risk.cost.low)} – {formatCurrency(risk.cost.high)}</span>
-              </span>
-            </div>
-          </div>
-        )}
+        {/* Repair costs removed — shown in vehicle page & report instead */}
       </div>
 
       {/* ─── SECTION 2: YES/NO QUESTIONS ─── */}

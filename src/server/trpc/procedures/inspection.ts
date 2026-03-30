@@ -502,7 +502,7 @@ export const inspectionRouter = router({
         AI_CONDITION_SCAN: "AI_ANALYZED",
         RISK_INSPECTION: "RISK_REVIEWED",
         VEHICLE_HISTORY: "AI_ANALYZED",
-        MARKET_ANALYSIS: "MARKET_PRICED",
+        MARKET_ANALYSIS: "COMPLETED",
         REPORT_GENERATION: "COMPLETED",
         // Deprecated
         VIN_DECODE: "VIN_DECODED",
@@ -514,7 +514,7 @@ export const inspectionRouter = router({
         where: { id: input.inspectionId },
         data: {
           status: statusMap[input.step] as never,
-          ...(input.step === "REPORT_GENERATION"
+          ...((input.step === "MARKET_ANALYSIS" || input.step === "REPORT_GENERATION")
             ? { completedAt: new Date() }
             : {}),
         },
