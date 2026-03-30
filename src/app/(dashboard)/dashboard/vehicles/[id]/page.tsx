@@ -18,7 +18,7 @@ import {
   Car,
 } from "lucide-react";
 
-type Tab = "condition" | "tires" | "history" | "market" | "photos" | "risks";
+type Tab = "condition" | "history" | "market" | "photos" | "risks";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -144,7 +144,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "condition", label: "Condition", icon: <Activity className="h-4 w-4" /> },
-    { key: "tires", label: "Tires", icon: <CircleDot className="h-4 w-4" /> },
     { key: "history", label: "History", icon: <History className="h-4 w-4" /> },
     { key: "market", label: "Market", icon: <TrendingUp className="h-4 w-4" /> },
     { key: "photos", label: "Photos", icon: <Camera className="h-4 w-4" /> },
@@ -420,6 +419,75 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </Card>
           )}
 
+          {/* Tire Condition — inline in condition tab */}
+          {tireAssessment && (() => {
+            const condColor = (c: string) =>
+              c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
+              c === "WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
+              "text-red-700 bg-red-50 border-red-300";
+
+            const condLabel = (c: string) =>
+              c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
+
+            const tireEntries = [
+              { label: "Front Left", key: "TIRE_FRONT_DRIVER", data: tireAssessment.frontDriver },
+              { label: "Front Right", key: "TIRE_FRONT_PASSENGER", data: tireAssessment.frontPassenger },
+              { label: "Rear Left", key: "TIRE_REAR_DRIVER", data: tireAssessment.rearDriver },
+              { label: "Rear Right", key: "TIRE_REAR_PASSENGER", data: tireAssessment.rearPassenger },
+            ];
+
+            return (
+              <Card className="p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-text-primary">Tire Condition</h3>
+                  <span className={cn(
+                    "text-xs font-bold",
+                    tireAssessment.overallTireScore >= 7 ? "text-green-600" :
+                    tireAssessment.overallTireScore >= 5 ? "text-amber-600" : "text-red-600"
+                  )}>
+                    {tireAssessment.overallTireScore}/10
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {tireEntries.map(({ label, key, data }) => {
+                    const tirePhoto = media.find((m) => m.captureType === key);
+                    return (
+                      <div key={label} className={cn("p-2.5 rounded-lg border", condColor(data.condition))}>
+                        <div className="flex gap-2">
+                          {tirePhoto?.url && (
+                            <div className="shrink-0 w-14 h-14 rounded overflow-hidden bg-surface-sunken">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={tirePhoto.url} alt={label} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</span>
+                              <Badge variant={
+                                data.condition === "REPLACE" ? "danger" :
+                                data.condition === "WORN" ? "warning" : "success"
+                              } className="text-[9px]">
+                                {condLabel(data.condition)}
+                              </Badge>
+                            </div>
+                            {data.observations.length > 0 && (
+                              <p className="text-[10px] opacity-70 leading-snug">
+                                {data.observations.slice(0, 2).join(". ")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {tireAssessment.summary && (
+                  <p className="text-xs text-text-secondary mt-2">{tireAssessment.summary}</p>
+                )}
+              </Card>
+            );
+          })()}
+
           {/* Identified issues */}
           {findings.length > 0 && (
             <Card className="p-5">
@@ -527,113 +595,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             <Card className="p-8 text-center">
               <Activity className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
               <p className="text-sm text-text-secondary">No condition data yet. Complete an inspection to see results.</p>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Tires Tab */}
-      {activeTab === "tires" && (
-        <div className="space-y-5">
-          {tireAssessment ? (() => {
-            const condColor = (c: string) =>
-              c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
-              c === "WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
-              "text-red-700 bg-red-50 border-red-300";
-
-            const condLabel = (c: string) =>
-              c === "GOOD" ? "Good" : c === "WORN" ? "Worn — Plan Replacement" : "Replace Before Resale";
-
-            const tireEntries = [
-              { label: "Front Left (Driver)", data: tireAssessment.frontDriver },
-              { label: "Front Right (Passenger)", data: tireAssessment.frontPassenger },
-              { label: "Rear Left (Driver)", data: tireAssessment.rearDriver },
-              { label: "Rear Right (Passenger)", data: tireAssessment.rearPassenger },
-            ];
-
-            const replaceCount = tireEntries.filter((t) => t.data.condition === "REPLACE").length;
-            const wornCount = tireEntries.filter((t) => t.data.condition === "WORN").length;
-
-            return (
-              <>
-                {/* Overall tire status */}
-                <Card className="p-5">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-sm font-semibold text-text-primary">Tire Condition Overview</h3>
-                    <span className={cn(
-                      "text-xs font-bold",
-                      tireAssessment.overallTireScore >= 7 ? "text-green-600" :
-                      tireAssessment.overallTireScore >= 5 ? "text-amber-600" : "text-red-600"
-                    )}>
-                      {tireAssessment.overallTireScore}/10
-                    </span>
-                  </div>
-                  {tireAssessment.summary && (
-                    <p className="text-xs text-text-secondary leading-relaxed">{tireAssessment.summary}</p>
-                  )}
-                  {(replaceCount > 0 || wornCount > 0) && (
-                    <div className="flex gap-3 mt-2">
-                      {replaceCount > 0 && (
-                        <Badge variant="danger" className="text-xs">{replaceCount} need{replaceCount === 1 ? "s" : ""} replacement</Badge>
-                      )}
-                      {wornCount > 0 && (
-                        <Badge variant="warning" className="text-xs">{wornCount} worn</Badge>
-                      )}
-                    </div>
-                  )}
-                </Card>
-
-                {/* Per-tire detail cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {tireEntries.map(({ label, data }) => {
-                    const tirePhoto = media.find((m) =>
-                      m.captureType === (
-                        label.includes("Front Left") ? "TIRE_FRONT_DRIVER" :
-                        label.includes("Front Right") ? "TIRE_FRONT_PASSENGER" :
-                        label.includes("Rear Left") ? "TIRE_REAR_DRIVER" : "TIRE_REAR_PASSENGER"
-                      )
-                    );
-
-                    return (
-                      <Card key={label} className={cn("p-4 border", condColor(data.condition))}>
-                        <div className="flex gap-3">
-                          {/* Tire photo thumbnail */}
-                          {tirePhoto?.url && (
-                            <div className="shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-surface-sunken">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={tirePhoto.url} alt={label} className="w-full h-full object-cover" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-text-primary">{label}</span>
-                              <Badge variant={
-                                data.condition === "REPLACE" ? "danger" :
-                                data.condition === "WORN" ? "warning" : "success"
-                              } className="text-[9px]">
-                                {data.condition}
-                              </Badge>
-                            </div>
-                            <p className="text-xs font-medium mb-1">{condLabel(data.condition)}</p>
-                            {data.observations.length > 0 && (
-                              <div className="space-y-0.5">
-                                {data.observations.map((obs, i) => (
-                                  <p key={i} className="text-[11px] text-text-secondary leading-snug">• {obs}</p>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </>
-            );
-          })() : (
-            <Card className="p-8 text-center">
-              <CircleDot className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
-              <p className="text-sm text-text-secondary">No tire data yet. Complete an inspection to assess tire condition.</p>
             </Card>
           )}
         </div>
