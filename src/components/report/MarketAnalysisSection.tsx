@@ -194,10 +194,8 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false 
         </div>
       </div>}
 
-      {/* ── Offer Guide ── */}
-      {bands && bands.length > 0 && (
-        <OfferGuide bands={bands} />
-      )}
+      {/* ── Negotiation Playbook ── */}
+      <NegotiationPlaybook recommendedPrice={recommendedPrice} />
 
       {/* Deal economics now shown inline in the hero card above */}
 
@@ -362,41 +360,32 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false 
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
-function OfferGuide({ bands }: { bands: NonNullable<MarketAnalysisData["priceBands"]> }) {
-  // Get the fair buy max as the anchor (recommended buy price)
-  const fairBuyBand = bands.find((b) => b.label === "FAIR_BUY");
-  const recommendedPrice = fairBuyBand?.maxPriceCents || 0;
+function NegotiationPlaybook({ recommendedPrice }: { recommendedPrice: number }) {
   if (recommendedPrice <= 0) return null;
 
-  // Build sensible ranges anchored to recommended buy price (round to nearest $100)
-  const roundTo100 = (v: number) => Math.round(v / 10000) * 10000;
-  const greatMax = roundTo100(recommendedPrice * 0.85);
-  const goodMax = roundTo100(recommendedPrice);
-  const fairMax = roundTo100(recommendedPrice * 1.15);
-
-  const tiers = [
-    { key: "GREAT", label: "Great Buy", desc: "Well below recommended — strong margin", icon: "bg-green-500", text: "text-green-700", bg: "bg-green-100", border: "border-green-300", rangeText: `Under ${formatCurrency(greatMax)}` },
-    { key: "GOOD", label: "Good Buy", desc: "At or below recommended price", icon: "bg-green-400", text: "text-green-600", bg: "bg-green-50", border: "border-green-200", rangeText: `${formatCurrency(greatMax)} — ${formatCurrency(goodMax)}` },
-    { key: "FAIR", label: "Fair Buy", desc: "Slightly above recommended — thin margin", icon: "bg-yellow-400", text: "text-yellow-700", bg: "bg-yellow-50", border: "border-yellow-300", rangeText: `${formatCurrency(goodMax)} — ${formatCurrency(fairMax)}` },
-    { key: "BAD", label: "Bad Buy", desc: "Above market — avoid", icon: "bg-red-500", text: "text-red-700", bg: "bg-red-50", border: "border-red-300", rangeText: `Above ${formatCurrency(fairMax)}` },
-  ];
+  const roundTo50 = (v: number) => Math.round(v / 5000) * 5000;
+  const openAt = roundTo50(Math.round(recommendedPrice * 0.80));
+  const walkAway = roundTo50(Math.round(recommendedPrice * 1.12));
 
   return (
     <div>
-      <h4 className="text-sm font-semibold text-text-primary mb-2">Offer Guide</h4>
-      <div className="space-y-1.5">
-        {tiers.map((tier) => (
-          <div key={tier.key} className={cn("flex items-center justify-between px-3 py-2.5 rounded-md border", tier.bg, tier.border)}>
-            <div className="flex items-center gap-2.5">
-              <div className={cn("w-2.5 h-2.5 rounded-full shrink-0", tier.icon)} />
-              <div>
-                <span className={cn("text-xs font-bold block", tier.text)}>{tier.label}</span>
-                <span className="text-[10px] text-text-tertiary leading-tight">{tier.desc}</span>
-              </div>
-            </div>
-            <span className={cn("text-sm font-bold whitespace-nowrap", tier.text)}>{tier.rangeText}</span>
-          </div>
-        ))}
+      <h4 className="text-base font-semibold text-text-primary tracking-tight mb-3">Negotiation Playbook</h4>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="p-4 rounded-lg border border-border-default bg-surface-raised text-center">
+          <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Open At</p>
+          <p className="text-xl font-bold text-text-primary mt-1">{formatCurrency(openAt)}</p>
+          <p className="text-[10px] text-text-tertiary mt-1">Start here</p>
+        </div>
+        <div className="p-4 rounded-lg border-2 border-text-primary bg-surface-raised text-center">
+          <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Target</p>
+          <p className="text-xl font-bold text-text-primary mt-1">{formatCurrency(recommendedPrice)}</p>
+          <p className="text-[10px] text-text-tertiary mt-1">Recommended buy</p>
+        </div>
+        <div className="p-4 rounded-lg border border-border-default bg-surface-raised text-center">
+          <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Walk Away</p>
+          <p className="text-xl font-bold text-red-600 mt-1">{formatCurrency(walkAway)}</p>
+          <p className="text-[10px] text-text-tertiary mt-1">Don&apos;t exceed</p>
+        </div>
       </div>
     </div>
   );
