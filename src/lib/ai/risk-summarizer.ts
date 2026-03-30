@@ -324,7 +324,7 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },

@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
-import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, assessTires, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
+import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, assessTires, estimateTireReplacementCost, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
 import { fetchMarketData } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
@@ -332,6 +332,48 @@ export const inspectionRouter = router({
       // Merge tire assessment into condition assessment
       if (tireResult) {
         conditionAssessment.tireAssessment = tireResult;
+      }
+
+      // Auto-create tire replacement finding if any tires need replacing
+      if (tireResult) {
+        const tires = [
+          { pos: "Front Left", ...tireResult.frontDriver },
+          { pos: "Front Right", ...tireResult.frontPassenger },
+          { pos: "Rear Left", ...tireResult.rearDriver },
+          { pos: "Rear Right", ...tireResult.rearPassenger },
+        ];
+        const replaceCount = tires.filter((t) => t.condition === "REPLACE").length;
+        const wornCount = tires.filter((t) => t.condition === "WORN").length;
+        const needsAttention = replaceCount + wornCount;
+
+        if (needsAttention > 0) {
+          // Estimate cost for the specific vehicle
+          const tireCost = await estimateTireReplacementCost(vehicleInfo, needsAttention);
+          const positions = tires
+            .filter((t) => t.condition === "REPLACE" || t.condition === "WORN")
+            .map((t) => `${t.pos} (${t.condition.toLowerCase()})`)
+            .join(", ");
+
+          // Check for existing tire finding before creating
+          const existingTireFinding = await ctx.db.finding.findFirst({
+            where: { inspectionId: input.inspectionId, title: { startsWith: "Tire Replacement" } },
+          });
+
+          if (!existingTireFinding) {
+            await ctx.db.finding.create({
+              data: {
+                inspectionId: input.inspectionId,
+                title: `Tire Replacement (${needsAttention} tire${needsAttention > 1 ? "s" : ""})`,
+                description: `${positions}. ${tireResult.summary}`,
+                severity: replaceCount > 0 ? "MAJOR" : "MODERATE",
+                category: "TIRES_WHEELS",
+                repairCostLow: tireCost ? tireCost.costCents : needsAttention * 15000,
+                repairCostHigh: tireCost ? Math.round(tireCost.costCents * 1.2) : needsAttention * 25000,
+              },
+            });
+            console.log(`[Inspection] Auto-created tire finding: ${needsAttention} tires, est. $${tireCost ? (tireCost.costCents / 100).toFixed(0) : "N/A"}`);
+          }
+        }
       }
 
       // Persist condition scores to Inspection record
