@@ -828,8 +828,15 @@ export const inspectionRouter = router({
       const zip = /^\d{5}$/.test(locStr) ? locStr
         : (locStr.match(/\b(\d{5})\b/)?.[1] || "97201");
 
-      // Fetch market value from multi-source consensus engine
-      const conditionScore = inspection.overallScore || 70;
+      // Get condition score — prefer inspection record, fall back to condition scan step data
+      let conditionScore = inspection.overallScore || 0;
+      if (!conditionScore) {
+        const conditionStep = await ctx.db.inspectionStep.findUnique({
+          where: { inspectionId_step: { inspectionId: input.inspectionId, step: "AI_CONDITION_SCAN" } },
+        });
+        const condData = conditionStep?.data as { conditionAssessment?: { overallScore?: number } } | null;
+        conditionScore = condData?.conditionAssessment?.overallScore || 70;
+      }
       const marketData = await fetchMarketData(
         {
           vin: vehicle.vin,

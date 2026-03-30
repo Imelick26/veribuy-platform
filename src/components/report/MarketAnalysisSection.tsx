@@ -346,48 +346,28 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
 /* ------------------------------------------------------------------ */
 
 function OfferGuide({ bands }: { bands: NonNullable<MarketAnalysisData["priceBands"]> }) {
+  // Get the fair buy max as the anchor (recommended buy price)
+  const fairBuyBand = bands.find((b) => b.label === "FAIR_BUY");
+  const recommendedPrice = fairBuyBand?.maxPriceCents || 0;
+  if (recommendedPrice <= 0) return null;
+
+  // Build sensible ranges anchored to recommended buy price
+  const greatMax = Math.round(recommendedPrice * 0.85);
+  const goodMax = recommendedPrice;
+  const fairMax = Math.round(recommendedPrice * 1.15);
+
   const tiers = [
-    { key: "STRONG_BUY", label: "Great Buy", desc: "Excellent deal — well below market value", icon: "bg-green-500", text: "text-green-700", bg: "bg-green-100", border: "border-green-300" },
-    { key: "FAIR_BUY",   label: "Good Buy",  desc: "Solid deal — at or below market value",    icon: "bg-green-400", text: "text-green-600", bg: "bg-green-50",  border: "border-green-200" },
-    { key: "OVERPAYING", label: "Fair Buy",   desc: "At market value — standard margin",        icon: "bg-yellow-400", text: "text-yellow-700", bg: "bg-yellow-50", border: "border-yellow-300" },
+    { key: "GREAT", label: "Great Buy", desc: "Well below recommended — strong margin", icon: "bg-green-500", text: "text-green-700", bg: "bg-green-100", border: "border-green-300", rangeText: `Under ${formatCurrency(greatMax)}` },
+    { key: "GOOD", label: "Good Buy", desc: "At or below recommended price", icon: "bg-green-400", text: "text-green-600", bg: "bg-green-50", border: "border-green-200", rangeText: `${formatCurrency(greatMax)} — ${formatCurrency(goodMax)}` },
+    { key: "FAIR", label: "Fair Buy", desc: "Slightly above recommended — thin margin", icon: "bg-yellow-400", text: "text-yellow-700", bg: "bg-yellow-50", border: "border-yellow-300", rangeText: `${formatCurrency(goodMax)} — ${formatCurrency(fairMax)}` },
+    { key: "BAD", label: "Bad Buy", desc: "Above market — avoid", icon: "bg-red-500", text: "text-red-700", bg: "bg-red-50", border: "border-red-300", rangeText: `Above ${formatCurrency(fairMax)}` },
   ];
-
-  // Build ranges from band data, add "Bad Buy" as 4th tier
-  const visibleBands = bands.filter((b) => b.label !== "PASS");
-  const lastBand = visibleBands[visibleBands.length - 1];
-
-  const ranges = tiers.map((tier, idx) => {
-    const band = visibleBands[idx];
-    if (!band) return null;
-    let rangeText: string;
-    if (idx === 0) {
-      rangeText = `Up to ${formatCurrency(band.maxPriceCents)}`;
-    } else {
-      const prevMax = visibleBands[idx - 1].maxPriceCents;
-      rangeText = `${formatCurrency(prevMax + 1)} — ${formatCurrency(band.maxPriceCents)}`;
-    }
-    return { ...tier, rangeText };
-  }).filter(Boolean) as Array<typeof tiers[number] & { rangeText: string }>;
-
-  // Add "Bad Buy" tier for anything above the last band
-  if (lastBand) {
-    ranges.push({
-      key: "BAD_BUY",
-      label: "Bad Buy",
-      desc: "Above market — avoid",
-      icon: "bg-red-500",
-      text: "text-red-700",
-      bg: "bg-red-50",
-      border: "border-red-300",
-      rangeText: `Above ${formatCurrency(lastBand.maxPriceCents)}`,
-    });
-  }
 
   return (
     <div>
       <h4 className="text-sm font-semibold text-text-primary mb-2">Offer Guide</h4>
       <div className="space-y-1.5">
-        {ranges.map((tier) => (
+        {tiers.map((tier) => (
           <div key={tier.key} className={cn("flex items-center justify-between px-3 py-2.5 rounded-md border", tier.bg, tier.border)}>
             <div className="flex items-center gap-2.5">
               <div className={cn("w-2.5 h-2.5 rounded-full shrink-0", tier.icon)} />

@@ -313,58 +313,7 @@ export function StepPanel({
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Summary stats */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <div className="text-center p-3 rounded-lg bg-surface-sunken">
-                  <p className="text-2xl font-bold text-text-primary">{riskProfile.aggregatedRisks.length}</p>
-                  <p className="text-xs text-text-secondary">Total Risks</p>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
-                  <p className="text-2xl font-bold text-red-700">
-                    {riskProfile.aggregatedRisks.filter((r) => r.severity === "CRITICAL").length}
-                  </p>
-                  <p className="text-xs text-text-secondary">Critical</p>
-                </div>
-                <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
-                  <p className="text-2xl font-bold text-red-700">
-                    {riskProfile.aggregatedRisks.filter((r) => r.severity === "MAJOR").length}
-                  </p>
-                  <p className="text-xs text-text-secondary">Major</p>
-                </div>
-              </div>
-
-              {/* NHTSA data summary */}
-              <div className="p-3 rounded-lg bg-[#fce8f3] border border-brand-300 text-xs text-brand-700">
-                <p className="font-semibold mb-1">NHTSA Intelligence Summary</p>
-                <ul className="space-y-0.5">
-                  <li>{riskProfile.nhtsaData.complaintCount} owner complaints analyzed</li>
-                  <li>{riskProfile.nhtsaData.investigationCount} federal investigations</li>
-                  {riskProfile.curatedProfileId && <li>Curated risk data available for this model</li>}
-                </ul>
-              </div>
-
-              {/* Assessment Confidence */}
-              {inspectionConfidence && inspectionConfidence.overall > 0 && (
-                <div className="p-3 rounded-lg bg-surface-sunken border border-border-default">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-text-secondary">Assessment Confidence</span>
-                    <span className="text-xs font-bold text-text-primary">{Math.round(inspectionConfidence.overall * 100)}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-surface-overlay overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-500",
-                        inspectionConfidence.overall >= 0.7 ? "bg-green-500" :
-                        inspectionConfidence.overall >= 0.45 ? "bg-brand-400" : "bg-gray-500"
-                      )}
-                      style={{ width: `${inspectionConfidence.overall * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-text-tertiary mt-1.5">{inspectionConfidence.summary}</p>
-                </div>
-              )}
-
+            <div>
               <Button
                 onClick={() => onAdvanceStep("RISK_INSPECTION")}
                 loading={isAdvancingStep}

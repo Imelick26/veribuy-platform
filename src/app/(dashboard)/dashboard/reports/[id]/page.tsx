@@ -67,7 +67,8 @@ export default function ReportDetailPage({
 
   const { inspection } = report;
   const vehicle = inspection.vehicle;
-  const { findings, media, inspector } = inspection;
+  const { media, inspector } = inspection;
+  const allFindings = inspection.findings;
 
   if (!vehicle) {
     return (
@@ -81,6 +82,13 @@ export default function ReportDetailPage({
       </div>
     );
   }
+
+  // Filter out findings that came from risk items (already shown in "Known Risk Areas Inspected")
+  const riskStep = inspection.steps?.find((s: { step: string }) => s.step === "RISK_INSPECTION")
+    || inspection.steps?.find((s: { step: string }) => s.step === "RISK_REVIEW");
+  const riskData = riskStep?.data as { aggregatedRisks?: Array<{ title: string }> } | null;
+  const riskTitles = new Set((riskData?.aggregatedRisks || []).map((r) => r.title));
+  const findings = allFindings.filter((f) => !riskTitles.has(f.title));
 
   const criticalCount = findings.filter((f) => f.severity === "CRITICAL").length;
   const majorCount = findings.filter((f) => f.severity === "MAJOR").length;
@@ -212,7 +220,18 @@ export default function ReportDetailPage({
             // Risk data lives in RISK_INSPECTION step (both risks + check statuses)
             const riskStep = inspection.steps?.find((s: { step: string }) => s.step === "RISK_INSPECTION")
               || inspection.steps?.find((s: { step: string }) => s.step === "RISK_REVIEW");
-            const riskData = riskStep?.data as { aggregatedRisks?: Array<{ id: string; title: string; description: string; category: string; severity: string; cost: { low: number; high: number } }>; checkStatuses?: Record<string, { status: string; notes?: string }> } | null;
+            const riskData = riskStep?.data as {
+              aggregatedRisks?: Array<{
+                id: string; title: string; description: string; category: string; severity: string;
+                cost: { low: number; high: number };
+                costTiers?: Array<{ condition: string; label: string; costLow: number; costHigh: number }>;
+                inspectionQuestions?: Array<{ id: string; failureAnswer: string }>;
+              }>;
+              checkStatuses?: Record<string, {
+                status: string; notes?: string;
+                questionAnswers?: Array<{ questionId: string; answer: string | null }>;
+              }>;
+            } | null;
             const risks = riskData?.aggregatedRisks;
             const checks = riskData?.checkStatuses;
 
@@ -220,11 +239,29 @@ export default function ReportDetailPage({
 
             const checkedRisks = risks
               .filter((r) => checks[r.id] && (checks[r.id].status === "CONFIRMED" || checks[r.id].status === "NOT_FOUND"))
-              .map((r) => ({
-                ...r,
-                status: checks[r.id].status as string,
-                notes: checks[r.id].notes,
-              }));
+              .map((r) => {
+                const check = checks[r.id];
+                // Narrow cost to specific tier based on inspection question answers
+                let narrowedCost = r.cost;
+                if (check.status === "CONFIRMED" && r.costTiers && r.costTiers.length === 3 && check.questionAnswers) {
+                  const failureCount = check.questionAnswers.filter((qa) => {
+                    const question = r.inspectionQuestions?.find((q) => q.id === qa.questionId);
+                    return question && qa.answer === question.failureAnswer;
+                  }).length;
+                  // 1 failure = MINOR, 2 = MODERATE, 3+ = SEVERE
+                  const tierIndex = Math.min(Math.max(failureCount - 1, 0), 2);
+                  const tier = r.costTiers[tierIndex];
+                  if (tier) {
+                    narrowedCost = { low: tier.costLow, high: tier.costHigh };
+                  }
+                }
+                return {
+                  ...r,
+                  cost: narrowedCost,
+                  status: check.status as string,
+                  notes: check.notes,
+                };
+              });
 
             if (checkedRisks.length === 0) return null;
 
