@@ -608,7 +608,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       {activeTab === "market" && (
         <div>
           {market ? (
-            <MarketAnalysisSection data={market} compact />
+            <MarketAnalysisSection data={market} compact hideHero />
           ) : (
             <Card className="p-8 text-center">
               <TrendingUp className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />

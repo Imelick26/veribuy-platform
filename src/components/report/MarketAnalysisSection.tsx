@@ -87,6 +87,8 @@ export interface MarketAnalysisData {
 interface MarketAnalysisSectionProps {
   data: MarketAnalysisData;
   compact?: boolean;
+  /** Hide the hero recommended buy price card (when already shown elsewhere) */
+  hideHero?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -115,7 +117,7 @@ const recLabel = (rec: string) =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisSectionProps) {
+export function MarketAnalysisSection({ data, compact = false, hideHero = false }: MarketAnalysisSectionProps) {
   const comps = (data.comparables ?? []) as MarketAnalysisData["comparables"] & object[];
   const bands = data.priceBands as MarketAnalysisData["priceBands"];
 
@@ -159,7 +161,7 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
       {/* ═══════════════════════════════════════════════════════════════ */}
 
       {/* ── Hero: Recommended Buy Price ── */}
-      <div className="p-5 rounded-xl border border-border-default bg-surface-overlay">
+      {!hideHero && <div className="p-5 rounded-xl border border-border-default bg-surface-overlay">
         <div>
           <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
             Recommended Buy Price
@@ -190,7 +192,7 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* ── Offer Guide ── */}
       {bands && bands.length > 0 && (
