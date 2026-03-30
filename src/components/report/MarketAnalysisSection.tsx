@@ -194,8 +194,8 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false 
         </div>
       </div>}
 
-      {/* ── Negotiation Playbook ── */}
-      <NegotiationPlaybook recommendedPrice={recommendedPrice} />
+      {/* ── Negotiation Playbook (only on report, vehicle detail shows it in header) ── */}
+      {!hideHero && <NegotiationPlaybook recommendedPrice={recommendedPrice} />}
 
       {/* Deal economics now shown inline in the hero card above */}
 
@@ -373,7 +373,7 @@ function NegotiationPlaybook({ recommendedPrice }: { recommendedPrice: number })
       <div className="grid grid-cols-3 gap-3">
         <div className="p-4 rounded-lg border border-border-default bg-surface-raised text-center">
           <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Open At</p>
-          <p className="text-xl font-bold text-text-primary mt-1">{formatCurrency(openAt)}</p>
+          <p className="text-xl font-bold text-green-600 mt-1">{formatCurrency(openAt)}</p>
           <p className="text-[10px] text-text-tertiary mt-1">Start here</p>
         </div>
         <div className="p-4 rounded-lg border-2 border-text-primary bg-surface-raised text-center">

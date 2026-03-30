@@ -198,38 +198,56 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        {/* Key Metrics — clean horizontal layout */}
-        <div className="grid grid-cols-3 gap-4 mt-2">
-          <div>
-            <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Condition</p>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold text-text-primary">
-                {conditionGrade ? conditionGrade.replace("_", " ") : "—"}
+        {/* Condition + Recon summary */}
+        <div className="flex items-baseline gap-6 mt-2">
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Condition</span>
+            <span className="text-lg font-bold text-text-primary">
+              {conditionGrade ? conditionGrade.replace("_", " ") : "—"}
+            </span>
+            {conditionScore != null && (
+              <span className={cn(
+                "text-sm font-bold",
+                conditionScore >= 70 ? "text-green-600" :
+                conditionScore >= 60 ? "text-amber-600" : "text-red-600"
+              )}>
+                {conditionScore}<span className="text-text-tertiary font-normal text-xs">/100</span>
               </span>
-              {conditionScore != null && (
-                <span className={cn(
-                  "text-lg font-bold",
-                  conditionScore >= 70 ? "text-green-600" :
-                  conditionScore >= 60 ? "text-amber-600" : "text-red-600"
-                )}>
-                  {conditionScore}<span className="text-text-tertiary font-normal text-sm">/100</span>
-                </span>
-              )}
+            )}
+          </div>
+          {reconEstimate > 0 && (
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Est. Recon</span>
+              <span className="text-lg font-bold text-red-600">{formatCurrency(reconEstimate)}</span>
             </div>
-          </div>
-          <div>
-            <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Recommended Buy Price</p>
-            <p className="text-2xl font-bold text-text-primary mt-1">
-              {maxBid > 0 ? formatCurrency(maxBid) : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Est. Recon</p>
-            <p className={cn("text-2xl font-bold mt-1", reconEstimate > 0 ? "text-red-600" : "text-text-primary")}>
-              {reconEstimate > 0 ? formatCurrency(reconEstimate) : "$0"}
-            </p>
-          </div>
+          )}
         </div>
+
+        {/* Negotiation Playbook — the value prop */}
+        {maxBid > 0 && (() => {
+          const roundTo50 = (v: number) => Math.round(v / 5000) * 5000;
+          const openAt = roundTo50(Math.round(maxBid * 0.80));
+          const walkAway = roundTo50(Math.round(maxBid * 1.12));
+          return (
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="p-4 rounded-lg border border-border-default bg-surface-raised text-center">
+                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Open At</p>
+                <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(openAt)}</p>
+                <p className="text-[10px] text-text-tertiary mt-1">Start here</p>
+              </div>
+              <div className="p-4 rounded-lg border-2 border-text-primary bg-surface-raised text-center">
+                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Target</p>
+                <p className="text-2xl font-bold text-text-primary mt-1">{formatCurrency(maxBid)}</p>
+                <p className="text-[10px] text-text-tertiary mt-1">Recommended buy</p>
+              </div>
+              <div className="p-4 rounded-lg border border-border-default bg-surface-raised text-center">
+                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Walk Away</p>
+                <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(walkAway)}</p>
+                <p className="text-[10px] text-text-tertiary mt-1">Don&apos;t exceed</p>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Action buttons */}
         <div className="flex items-center gap-2 mt-5">
