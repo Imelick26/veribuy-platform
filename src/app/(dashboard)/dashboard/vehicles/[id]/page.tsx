@@ -333,23 +333,23 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       {/* ═══ DEAL STRIP ═══ */}
       {market && (
-        <Card className="p-0 overflow-hidden">
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border-default">
+        <div className="rounded-lg bg-surface-sunken px-2 py-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
             {[
               { label: "Est. Retail", value: estRetail, color: "text-text-primary" },
               { label: "Est. Recon", value: reconEstimate, color: "text-red-600" },
-              { label: "Net Margin", value: netMargin, color: netMargin > 0 ? "text-green-600" : "text-red-600" },
+              { label: "Net Margin", value: netMargin, color: netMargin > 0 ? "text-green-700" : "text-red-600" },
               { label: "Avg. Time on Lot", value: avgDaysOnMarket, color: "text-text-primary", suffix: " days", raw: true },
             ].map(({ label, value, color, suffix, raw }) => (
-              <div key={label} className="px-4 py-3 text-center">
+              <div key={label} className="px-3 py-2.5 text-center">
                 <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
-                <p className={cn("text-sm font-bold mt-0.5", color)}>
+                <p className={cn("text-sm font-semibold mt-0.5", color)}>
                   {value ? `${raw ? value : formatCurrency(typeof value === "number" ? value : 0)}${suffix || ""}` : "—"}
                 </p>
               </div>
             ))}
           </div>
-        </Card>
+        </div>
       )}
 
       {/* ═══ TABS ═══ */}
@@ -361,7 +361,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             className={cn(
               "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
               activeTab === tab.key
-                ? "border-brand-600 text-brand-700"
+                ? "border-text-primary text-text-primary"
                 : "border-transparent text-text-tertiary hover:text-text-secondary"
             )}
           >
@@ -378,8 +378,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         <div className="space-y-5">
           {/* Overall + 4-area breakdown */}
           {conditionScore != null && (
-            <Card className="p-5">
-              <h3 className="text-sm font-semibold text-text-primary mb-3">Condition Assessment</h3>
+            <div>
+              <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">Condition Assessment</h3>
               <div className="space-y-4">
                 {[
                   { label: "Exterior Body", key: "exteriorBody", score: inspection?.exteriorBodyScore, weight: "30%" },
@@ -390,29 +390,23 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   const areaDetail = rawConditionData?.[key as keyof typeof rawConditionData] as {
                     summary?: string; keyObservations?: string[]; concerns?: string[]; scoreJustification?: string;
                   } | undefined;
+                  const dotColor = (score || 0) >= 7 ? "bg-green-500" : (score || 0) >= 6 ? "bg-yellow-400" : "bg-red-500";
                   return (
-                    <div key={label} className="pb-3 border-b border-border-default last:border-0 last:pb-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-text-primary">{label} <span className="text-text-tertiary font-normal">({weight})</span></span>
-                        <span className={cn(
-                          "text-xs font-bold",
-                          (score || 0) >= 7 ? "text-green-600" : (score || 0) >= 6 ? "text-amber-600" : "text-red-600"
-                        )}>
-                          {score ?? "—"}/10
-                        </span>
+                    <div key={label} className="pb-4 border-b border-border-default last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColor)} />
+                          <span className="text-sm font-medium text-text-primary">{label}</span>
+                        </div>
+                        <span className="text-sm font-bold text-text-primary">{score ?? "—"}/10</span>
                       </div>
-                      <Progress
-                        value={(score || 0) * 10}
-                        color={(score || 0) >= 7 ? "green" : (score || 0) >= 6 ? "yellow" : "red"}
-                        size="sm"
-                      />
                       {areaDetail?.summary && (
-                        <p className="text-xs text-text-secondary mt-1.5 leading-relaxed">{areaDetail.summary}</p>
+                        <p className="text-sm text-text-secondary mt-1 leading-relaxed ml-[18px]">{areaDetail.summary}</p>
                       )}
                       {areaDetail?.concerns && areaDetail.concerns.length > 0 && (
-                        <div className="mt-1.5">
+                        <div className="mt-1 ml-[18px]">
                           {areaDetail.concerns.map((c, i) => (
-                            <p key={i} className="text-xs text-red-600 leading-relaxed">• {c}</p>
+                            <p key={i} className="text-sm text-red-600 leading-relaxed">• {c}</p>
                           ))}
                         </div>
                       )}
@@ -420,82 +414,61 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   );
                 })}
               </div>
-            </Card>
+            </div>
           )}
 
           {/* Tire Condition — inline in condition tab */}
           {tireAssessment && (() => {
-            const condColor = (c: string) =>
-              c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
-              c === "WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
-              "text-red-700 bg-red-50 border-red-300";
-
-            const condLabel = (c: string) =>
-              c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
-
             const tireEntries = [
               { label: "Front Left", key: "TIRE_FRONT_DRIVER", data: tireAssessment.frontDriver },
               { label: "Front Right", key: "TIRE_FRONT_PASSENGER", data: tireAssessment.frontPassenger },
               { label: "Rear Left", key: "TIRE_REAR_DRIVER", data: tireAssessment.rearDriver },
               { label: "Rear Right", key: "TIRE_REAR_PASSENGER", data: tireAssessment.rearPassenger },
             ];
+            const dotColor = (c: string) => c === "GOOD" ? "bg-green-500" : c === "WORN" ? "bg-yellow-400" : "bg-red-500";
+            const condLabel = (c: string) => c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
 
             return (
-              <Card className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-text-primary">Tire Condition</h3>
-                  <span className={cn(
-                    "text-xs font-bold",
-                    tireAssessment.overallTireScore >= 7 ? "text-green-600" :
-                    tireAssessment.overallTireScore >= 6 ? "text-amber-600" : "text-red-600"
-                  )}>
-                    {tireAssessment.overallTireScore}/10
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
+              <div>
+                <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">Tire Condition</h3>
+                <div className="grid grid-cols-2 gap-3">
                   {tireEntries.map(({ label, key, data }) => {
                     const tirePhoto = media.find((m) => m.captureType === key);
                     return (
-                      <div key={label} className={cn("p-2.5 rounded-lg border", condColor(data.condition))}>
-                        <div className="flex gap-2">
-                          {tirePhoto?.url && (
-                            <div className="shrink-0 w-14 h-14 rounded overflow-hidden bg-surface-sunken">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={tirePhoto.url} alt={label} className="w-full h-full object-cover" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-0.5">
-                              <span className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</span>
-                              <Badge variant={
-                                data.condition === "REPLACE" ? "danger" :
-                                data.condition === "WORN" ? "warning" : "success"
-                              } className="text-[9px]">
-                                {condLabel(data.condition)}
-                              </Badge>
-                            </div>
-                            {data.observations.length > 0 && (
-                              <p className="text-[10px] opacity-70 leading-snug">
-                                {data.observations.slice(0, 2).join(". ")}
-                              </p>
-                            )}
+                      <div key={label} className="flex gap-3 p-3 rounded-lg border border-border-default bg-surface-raised">
+                        {tirePhoto?.url && (
+                          <div className="shrink-0 w-14 h-14 rounded overflow-hidden bg-surface-sunken">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={tirePhoto.url} alt={label} className="w-full h-full object-cover" />
                           </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <div className={cn("w-2 h-2 rounded-full shrink-0", dotColor(data.condition))} />
+                            <span className="text-xs font-medium text-text-primary">{label}</span>
+                          </div>
+                          <p className="text-xs font-semibold text-text-primary">{condLabel(data.condition)}</p>
+                          {data.observations.length > 0 && (
+                            <p className="text-xs text-text-tertiary leading-snug mt-0.5">
+                              {data.observations.slice(0, 2).join(". ")}
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
                 {tireAssessment.summary && (
-                  <p className="text-xs text-text-secondary mt-2">{tireAssessment.summary}</p>
+                  <p className="text-sm text-text-secondary mt-3">{tireAssessment.summary}</p>
                 )}
-              </Card>
+              </div>
             );
           })()}
 
           {/* Identified issues */}
           {findings.length > 0 && (
-            <Card className="p-5">
-              <h3 className="text-sm font-semibold text-text-primary mb-3">
+            <div>
+              <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">
                 Identified Issues ({findings.length})
               </h3>
               <div className="space-y-2">
@@ -528,12 +501,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   return (
                     <div
                       key={f.id}
-                      className={cn(
-                        "p-3 rounded-lg border",
-                        f.severity === "CRITICAL" ? "bg-red-50 border-red-200" :
-                        f.severity === "MAJOR" ? "bg-amber-50 border-amber-200" :
-                        "bg-surface-raised border-border-default"
-                      )}
+                      className="p-3 rounded-lg border border-border-default bg-surface-raised border-l-4 border-l-red-500"
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-text-primary">{f.title}</span>
@@ -592,14 +560,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   )}
                 </div>
               )}
-            </Card>
+            </div>
           )}
 
           {!conditionScore && findings.length === 0 && (
-            <Card className="p-8 text-center">
+            <div className="py-12 text-center">
               <Activity className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
               <p className="text-sm text-text-secondary">No condition data yet. Complete an inspection to see results.</p>
-            </Card>
+            </div>
           )}
         </div>
       )}
@@ -610,8 +578,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {history ? (
             <>
               {/* Status flags */}
-              <Card className="p-5">
-                <h3 className="text-sm font-semibold text-text-primary mb-3">Vehicle History</h3>
+              <div>
+                <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">Vehicle History</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {[
                     { label: "Title Status", value: history.titleStatus || "Unknown", bad: history.titleStatus !== "CLEAN" },
@@ -620,21 +588,18 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                     { label: "Structural Damage", value: history.structuralDamage ? "YES" : "No", bad: !!history.structuralDamage },
                     { label: "Flood Damage", value: history.floodDamage ? "YES" : "No", bad: !!history.floodDamage },
                   ].map(({ label, value, bad }) => (
-                    <div key={label} className={cn(
-                      "p-3 rounded-lg border text-center",
-                      bad ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"
-                    )}>
+                    <div key={label} className="p-3 rounded-lg border border-border-default bg-surface-raised text-center">
                       <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
-                      <p className={cn("text-sm font-bold mt-0.5", bad ? "text-red-700" : "text-green-700")}>{value}</p>
+                      <p className={cn("text-sm font-bold mt-0.5", bad ? "text-red-600" : "text-text-primary")}>{value}</p>
                     </div>
                   ))}
                 </div>
-              </Card>
+              </div>
 
               {/* Odometer timeline */}
               {history.rawData?.odometerReadings && history.rawData.odometerReadings.length > 0 && (
-                <Card className="p-5">
-                  <h3 className="text-sm font-semibold text-text-primary mb-3">Odometer History</h3>
+                <div>
+                  <h3 className="text-base font-semibold text-text-primary tracking-tight mb-3">Odometer History</h3>
                   <div className="space-y-1.5">
                     {history.rawData.odometerReadings.slice(0, 10).map((reading, i) => (
                       <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-border-default last:border-0">
@@ -644,7 +609,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                       </div>
                     ))}
                   </div>
-                </Card>
+                </div>
               )}
             </>
           ) : (
@@ -689,7 +654,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         <div className="space-y-5">
           {riskData?.aggregatedRisks && riskData.aggregatedRisks.length > 0 ? (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-text-primary">
+              <h3 className="text-base font-semibold text-text-primary tracking-tight">
                 Known Risk Areas ({riskData.aggregatedRisks.length})
               </h3>
               {riskData.aggregatedRisks.map((risk) => {
@@ -697,12 +662,12 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                 const status = check?.status || "NOT_CHECKED";
 
                 const statusStyle = status === "CONFIRMED"
-                  ? { bg: "bg-red-50", border: "border-red-200", text: "text-red-600", label: "Identified" }
+                  ? { border: "border-border-default border-l-4 border-l-red-500", text: "text-red-600", label: "Identified" }
                   : status === "NOT_FOUND"
-                  ? { bg: "bg-green-50", border: "border-green-200", text: "text-green-600", label: "Clear" }
+                  ? { border: "border-border-default", text: "text-green-600", label: "Clear" }
                   : status === "UNABLE_TO_INSPECT"
-                  ? { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-600", label: "Skipped" }
-                  : { bg: "bg-surface-raised", border: "border-border-default", text: "text-text-tertiary", label: "Not Checked" };
+                  ? { border: "border-border-default", text: "text-text-tertiary", label: "Skipped" }
+                  : { border: "border-border-default", text: "text-text-tertiary", label: "Not Checked" };
 
                 // Get evidence photos for this risk
                 const evidenceMediaIds = check?.mediaIds || [];
@@ -713,7 +678,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   : [];
 
                 return (
-                  <Card key={risk.id} className={cn("p-4 border", statusStyle.bg, statusStyle.border)}>
+                  <div key={risk.id} className={cn("p-4 rounded-lg border bg-surface-raised", statusStyle.border)}>
                     {/* Header */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -781,9 +746,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
                     {/* Why it matters */}
                     {risk.whyItMatters && status === "CONFIRMED" && (
-                      <p className="text-[11px] text-red-600 mt-2">{risk.whyItMatters}</p>
+                      <p className="text-sm text-red-600 mt-2">{risk.whyItMatters}</p>
                     )}
-                  </Card>
+                  </div>
                 );
               })}
             </div>
