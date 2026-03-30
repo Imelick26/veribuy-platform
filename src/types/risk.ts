@@ -111,10 +111,16 @@ export interface AggregatedRisk {
   whyItMatters?: string;
   /** How commonly this issue occurs on this vehicle */
   likelihood?: Likelihood;
-  /** How this risk should be checked: photo (AI vision), manual (yes/no questions), or both */
-  checkMethod?: "photo" | "manual" | "both";
-  /** Structured yes/no questions for guided inspection (manual/both checks) */
+  /** How this risk should be checked: visual (questions + evidence photo on failure), manual (questions only — not photographable), photo (legacy AI vision), or both (legacy) */
+  checkMethod?: "photo" | "manual" | "both" | "visual";
+  /** Structured yes/no questions for guided inspection */
   inspectionQuestions?: InspectionQuestion[];
+  /** Plain-English explanation of what this component is and why it matters */
+  whatThisIs?: string;
+  /** Step-by-step wayfinding directions to locate the component on the vehicle */
+  howToLocate?: string;
+  /** Single evidence photo prompt, shown only when failure is detected */
+  evidencePrompt?: string;
 }
 
 export interface AIAnalysisResult {

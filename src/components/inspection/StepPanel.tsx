@@ -328,9 +328,9 @@ export function StepPanel({
                 </div>
                 <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
                   <p className="text-2xl font-bold text-red-700">
-                    {riskProfile.nhtsaData.recallCount}
+                    {riskProfile.aggregatedRisks.filter((r) => r.severity === "MAJOR").length}
                   </p>
-                  <p className="text-xs text-text-secondary">Recalls</p>
+                  <p className="text-xs text-text-secondary">Major</p>
                 </div>
               </div>
 
@@ -339,28 +339,10 @@ export function StepPanel({
                 <p className="font-semibold mb-1">NHTSA Intelligence Summary</p>
                 <ul className="space-y-0.5">
                   <li>{riskProfile.nhtsaData.complaintCount} owner complaints analyzed</li>
-                  <li>{riskProfile.nhtsaData.recallCount} active recalls found</li>
                   <li>{riskProfile.nhtsaData.investigationCount} federal investigations</li>
                   {riskProfile.curatedProfileId && <li>Curated risk data available for this model</li>}
                 </ul>
               </div>
-
-              {/* Estimated repair cost range */}
-              {riskProfile.aggregatedRisks.length > 0 && (() => {
-                const totalLow = riskProfile.aggregatedRisks.reduce((s, r) => s + r.cost.low, 0);
-                const totalHigh = riskProfile.aggregatedRisks.reduce((s, r) => s + r.cost.high, 0);
-                return totalLow > 0 ? (
-                  <div className="p-3 rounded-lg bg-[#fde8e8] border border-red-300">
-                    <p className="text-xs font-semibold text-red-700 mb-1">
-                      <AlertTriangle className="inline h-3 w-3 mr-1" />
-                      Total Potential Repair Exposure
-                    </p>
-                    <p className="text-lg font-bold text-red-700">
-                      {formatCurrency(totalLow)} – {formatCurrency(totalHigh)}
-                    </p>
-                  </div>
-                ) : null;
-              })()}
 
               {/* Assessment Confidence */}
               {inspectionConfidence && inspectionConfidence.overall > 0 && (
@@ -429,9 +411,9 @@ export function StepPanel({
                 </div>
                 <div className="text-center p-3 rounded-lg bg-[#fde8e8]">
                   <p className="text-2xl font-bold text-red-700">
-                    {riskProfile.nhtsaData.recallCount}
+                    {riskProfile.aggregatedRisks.filter((r) => r.severity === "MAJOR").length}
                   </p>
-                  <p className="text-xs text-text-secondary">Recalls</p>
+                  <p className="text-xs text-text-secondary">Major</p>
                 </div>
               </div>
               <Button

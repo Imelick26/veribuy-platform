@@ -498,12 +498,18 @@ export const inspectionRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // Prevent duplicate findings — if one with the same title already exists, return it
+      const existing = await ctx.db.finding.findFirst({
+        where: {
+          inspectionId: input.inspectionId,
+          title: input.title,
+        },
+      });
+      if (existing) return existing;
+
       const finding = await ctx.db.finding.create({
         data: input,
       });
-
-      // Condition score is now independent (AI-driven from photos).
-      // Findings only affect repair costs, not condition score.
 
       return finding;
     }),

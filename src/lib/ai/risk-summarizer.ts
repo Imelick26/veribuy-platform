@@ -20,18 +20,26 @@ interface KnownIssueOutput {
   category: string;
   severity: "CRITICAL" | "MAJOR" | "MODERATE" | "MINOR";
   likelihood: Likelihood;
-  checkMethod: "photo" | "manual" | "both";
+  checkMethod: "visual" | "manual";
   componentHint: string;
   whatToCheck: string;
   whereToLook: string;
   howToInspect: string;
   signsOfFailure: string[];
   whyItMatters: string;
+  /** Plain-English explanation of what this component is — no jargon */
+  whatThisIs: string;
+  /** Step-by-step wayfinding directions to physically locate the component */
+  howToLocate: string;
+  /** Single evidence photo prompt, shown only when inspector detects a problem */
+  evidencePrompt: string;
   estimatedCostLow: number;
   estimatedCostHigh: number;
   costTiers: CostTierOutput[];
+  /** Used by AI vision in condition scan step — NOT shown to inspector during risk check */
   capturePrompts: string[];
-  inspectionQuestions?: InspectionQuestionOutput[];
+  /** YES/NO questions — required for ALL risks */
+  inspectionQuestions: InspectionQuestionOutput[];
 }
 
 interface CuratedRisk {
@@ -111,6 +119,7 @@ RULES:
 - Severity reflects consequence of the issue (CRITICAL = safety or engine/trans failure, MAJOR = expensive repair, MODERATE = notable repair, MINOR = wear item or cosmetic).
 - Likelihood reflects how common this issue actually is on this specific platform based on real-world failure rates.
 - Generate 8-15 items — thorough but not padded with generic filler. Every item should be a DATA-BACKED known issue for this platform with YOUR expert inspection procedure.
+- Each item must cover a DISTINCT failure point with a distinct root cause. If multiple NHTSA complaints describe the EXACT SAME underlying problem, consolidate into one item. But if similar symptoms have DIFFERENT root causes (e.g., two different sources of an oil leak), keep them as separate items.
 
 ISSUE DESCRIPTIONS — BE PRECISE ABOUT THE ACTUAL PROBLEM:
 The "description" field must explain EXACTLY what goes wrong, not just name the component. The inspector and the buyer need to understand the specific failure mechanism.
@@ -120,32 +129,35 @@ BAD: "Engine oil leak"
 GOOD: "The HPOP (High Pressure Oil Pump) develops leaks at the base O-ring seal and the discharge fitting, typically after 150k miles, causing oil to pool on top of the engine valley under the turbo pedestal"
 Include the root cause, the specific behavior/symptom, affected speed/RPM/mileage ranges, and the specific part or subcomponent that fails.
 
-COST ESTIMATES — TIERED BY SEVERITY:
-For each issue, provide 3 cost tiers representing MINOR, MODERATE, and SEVERE versions of the problem. This allows cost estimates to narrow once the actual condition is inspected.
-- Labor rate: $150/hr average for independent shops. Use higher for specialty (diesel, European).
-- Each tier's HIGH should be no more than 2x its LOW. Keep per-tier ranges tight.
-- Do NOT lowball. Real-world independent shop prices including parts + labor.
-- The 3 tiers should cover the realistic spectrum of how bad this issue could be.
+COST ESTIMATES — TIERED BY DETERIORATION STAGE:
+This is a DEALER TOOL. Dealers must recondition every issue before resale. If the issue is present, it's getting fixed — the only question is how extensive the repair is. Cost estimates must reflect real dealer reconditioning costs: shop labor rates ($150-200/hr, higher for diesel/European), OEM parts for safety-critical components, and include related wear items a shop would recommend replacing while they're in there.
+
+For each issue, provide 3 cost tiers representing the STAGE OF DETERIORATION. The inspector's questions will determine which stage applies:
 
 "costTiers" must contain exactly 3 entries:
-1. MINOR — Early stage / minimal impact. Cheapest fix (e.g., monitoring, minor repair, preventive maintenance).
-2. MODERATE — Moderate damage requiring notable repair (e.g., partial replacement, section repair).
-3. SEVERE — Worst case requiring major repair or full replacement.
+1. MINOR — Issue is present but contained. Minimal repair needed (seal replacement, gasket, adjustment, cleaning). The component is still functional but showing early signs.
+2. MODERATE — Issue has progressed. The component is deteriorating and approaching failure. Requires partial replacement or significant repair labor.
+3. SEVERE — Component has failed or damage has spread beyond the original part. Full replacement or major repair. Include adjacent components that would need to be replaced.
 
-Each tier needs a short "label" describing that specific scenario.
+- Each tier's HIGH should be no more than 2x its LOW. Keep per-tier ranges TIGHT — this is what the dealer uses to make a buy decision.
+- Do NOT lowball. Err on the HIGH side. Dealers need to know worst-case reconditioning cost, not best-case.
+- Include labor to access the component (some parts are cheap but take 6 hours to reach).
+- If a shop would recommend replacing related wear items while they're in there (e.g., doing both ball joints when one is bad, replacing the water pump with the timing belt), include that in the tier cost.
+
+Each tier needs a short "label" describing the specific repair scenario at that stage.
 
 Example for frame corrosion:
   [
-    {"condition": "MINOR", "label": "Surface rust, no structural impact", "costLow": 300, "costHigh": 600},
-    {"condition": "MODERATE", "label": "Section corrosion requiring welding", "costLow": 2500, "costHigh": 4000},
-    {"condition": "SEVERE", "label": "Structural compromise, frame section replacement", "costLow": 5000, "costHigh": 8000}
+    {"condition": "MINOR", "label": "Surface corrosion, sand and treat affected areas", "costLow": 400, "costHigh": 800},
+    {"condition": "MODERATE", "label": "Active corrosion, cut and weld repair sections", "costLow": 2500, "costHigh": 4500},
+    {"condition": "SEVERE", "label": "Structural perforation, frame section replacement", "costLow": 5000, "costHigh": 9000}
   ]
 
-Example for ball joint wear (4WD):
+Example for ball joint wear (4WD — replace both sides):
   [
-    {"condition": "MINOR", "label": "Early play, boot intact", "costLow": 150, "costHigh": 250},
-    {"condition": "MODERATE", "label": "Noticeable play, boot cracked", "costLow": 400, "costHigh": 600},
-    {"condition": "SEVERE", "label": "Excessive play, unsafe to drive", "costLow": 600, "costHigh": 900}
+    {"condition": "MINOR", "label": "Early play detected, boots intact — replace both lowers", "costLow": 350, "costHigh": 500},
+    {"condition": "MODERATE", "label": "Noticeable play, boots cracked — replace uppers and lowers", "costLow": 600, "costHigh": 900},
+    {"condition": "SEVERE", "label": "Excessive play, knuckle/hub damage — full front end rebuild", "costLow": 1200, "costHigh": 1800}
   ]
 
 The "estimatedCostLow" and "estimatedCostHigh" fields should be the FULL range (MINOR low to SEVERE high). These are shown pre-inspection. After inspection, the system narrows to the matching tier.
@@ -186,42 +198,74 @@ DO NOT INCLUDE generic items that any dealer can spot in seconds. The following 
 - Brake pad thickness (unless this platform has a SPECIFIC known brake issue)
 Focus ONLY on platform-specific known failure points that require expert knowledge of this vehicle.
 
-CHECK METHOD — CRITICAL DECISION FOR EACH ISSUE:
-For each issue, you MUST decide how it should be inspected by setting "checkMethod":
-- "photo" — DEFAULT. The issue CAN be detected or documented by taking a photograph of the affected area (e.g., oil leaks, rust, corrosion, worn bushings, cracked hoses, fluid residue, damaged components). The inspector takes a photo and AI vision analyzes it. For these, "capturePrompts" must describe exactly what to photograph. Do NOT include "inspectionQuestions".
-- "manual" — ONLY use when photos genuinely cannot capture the issue and it requires hands-on physical testing (e.g., steering play, transmission slip under load, engine knock sound, brake pulsation feel, A/C cooling output). For these, include 2-5 YES/NO "inspectionQuestions". Do NOT include "capturePrompts".
-- "both" — The issue benefits from BOTH a photo AND hands-on checks (e.g., ball joints — photograph for visual wear AND test for play by rocking the wheel). Include both "capturePrompts" and "inspectionQuestions".
+INSPECTOR GUIDANCE — WHAT THIS IS + HOW TO LOCATE:
+The inspector is NOT a mechanic. They don't know what an "HPOP" or a "ball joint boot" is. For EVERY risk item, you MUST provide:
 
-IMPORTANT: Default to "photo" whenever possible. Photo capture is the core of this tool. Only use "manual" when the issue truly cannot be seen in a photograph (sounds, vibrations, temperature, feel, functional tests). Most issues (70%+) should be "photo" or "both".
+"whatThisIs" — A plain-English explanation of what this component is and why it matters. 1-3 sentences. NO acronyms without explanation. Written for someone who has never worked on a car. Explain what the part DOES, what it LOOKS LIKE, and why it matters for the vehicle.
+BAD: "The HPOP supplies high-pressure oil to the injectors."
+GOOD: "The high-pressure oil pump (HPOP) is a fist-sized silver pump bolted to the engine block. It pressurizes engine oil to fire the fuel injectors — without it, the engine won't run. When its seals wear out, oil leaks onto the engine and can eventually cause hard starts or no-starts."
 
-INSPECTION QUESTIONS (for "manual" and "both" check methods):
-Each question must be a precise, hands-on check the inspector performs at the vehicle. Must be answerable with "yes" or "no". Set "failureAnswer" to whichever answer indicates a PROBLEM. Optionally include "mediaPrompt" for what to photograph/record if failure is detected.
+"howToLocate" — Step-by-step wayfinding directions, written like you're guiding someone over the phone. Start from a landmark they can easily find (the hood, a wheel, the driver's door). Use visual references: color, shape, size comparisons to everyday objects. Number each step.
+BAD: "Driver side of the engine, below the exhaust manifold."
+GOOD: "1. Open the hood and stand at the driver-side fender.\n2. Look down into the engine bay — you'll see a big black snail-shaped part (that's the turbo).\n3. Look behind and below the turbo — there's a silver pump about the size of your fist bolted to the engine block.\n4. That's the HPOP. Check the base where it meets the block, and the two metal lines coming out the top."
 
-CRITICAL — QUESTIONS MUST BE GRADUATED TO DETERMINE COST TIER:
-The questions are used to narrow the repair cost estimate. The number of "failure" answers maps to cost tiers:
-- 0 failures → MINOR tier (cheapest repair)
-- 1 failure → MODERATE tier (mid-range repair)
-- 2+ failures → SEVERE tier (most expensive repair)
+CHECK METHOD — EVERY RISK USES QUESTIONS:
+The inspector's primary tool is fast YES/NO questions. For EVERY risk, set "checkMethod" to one of:
+- "visual" — DEFAULT (use for 80%+ of issues). The inspector answers yes/no questions to screen for the issue. If ANY failure answer is given, they are prompted to take ONE evidence photo. The questions detect the issue; the photo documents severity for AI analysis. Use this for anything that CAN be seen (leaks, rust, wear, cracks, damage, discoloration, etc.) AND for anything that requires hands-on testing (play, vibration, sounds).
+- "manual" — ONLY use when photos genuinely cannot document the issue even after detection (e.g., transmission behavior during a test drive, A/C temperature output, brake pedal feel). The inspector answers questions only, no photo prompt.
 
-Therefore, ORDER your questions from LEAST SEVERE indicator to MOST SEVERE indicator. The first question should detect if ANY problem exists. The second should detect if it's MODERATE or worse. Additional questions should confirm SEVERE status.
+EVERY risk MUST include "inspectionQuestions" (2-4 questions). There is no photo-only path.
 
-Example for steering column play (tiers: MINOR=$200-$300 adjustment, MODERATE=$400-$700 intermediate shaft, SEVERE=$800-$1200 full column replacement):
-  Question 1 (detects any problem):
-  {"question": "Turn the steering wheel left and right with the engine off. Is there more than 1/4 inch of free play before the wheels start to turn?", "failureAnswer": "yes", "mediaPrompt": "Record the steering wheel play showing how far it moves before the wheels respond"}
-  Question 2 (escalates to MODERATE — intermediate shaft worn):
-  {"question": "While turning the steering wheel slowly, do you hear or feel a clunk/pop from behind the dashboard or at the firewall?", "failureAnswer": "yes"}
-  Question 3 (escalates to SEVERE — full column):
-  {"question": "Does the steering wheel physically wobble or shift on its shaft when pulled up/down or side to side?", "failureAnswer": "yes", "mediaPrompt": "Record the steering column wobble showing the shaft movement"}
+"evidencePrompt" — A single, specific photo capture instruction shown ONLY when the inspector's answers indicate a problem. Tell them exactly what to photograph to document the severity. This replaces multi-photo capture prompts for the inspector-facing flow.
+BAD: "Take a photo of the engine area"
+GOOD: "Close-up of where the oil is coming from — fill the frame with the leak source so we can see if it's a seep or an active drip"
 
-Example for transmission shudder (tiers: MINOR=$300-$500 fluid flush, MODERATE=$1500-$2500 valve body, SEVERE=$3500-$5500 rebuild):
-  Question 1 (detects any problem):
-  {"question": "During a test drive, accelerate gently from 35 to 55 mph and hold steady throttle. Does the transmission produce a noticeable shudder or vibration?", "failureAnswer": "yes"}
-  Question 2 (escalates to MODERATE):
-  {"question": "When accelerating from a stop, does the transmission slip (RPMs rise without matching acceleration) or shift harshly with a jolt?", "failureAnswer": "yes", "mediaPrompt": "Record a video of the tachometer during 0-40 mph acceleration showing RPM behavior"}
-  Question 3 (escalates to SEVERE):
-  {"question": "Does the transmission fail to engage a gear, get stuck in one gear, or go into limp mode at any point during the test drive?", "failureAnswer": "yes"}
+Note: "capturePrompts" are still included for the AI vision system that analyzes the 21 standard photos in an earlier step. They are NOT shown to the inspector during the risk check. Keep generating detailed capturePrompts for AI analysis.
 
-Questions should test things photos CANNOT capture: sounds, feel, movement, temperature, smell, function tests, etc. Be specific about conditions (speed, RPM, temperature, load) needed to reproduce the issue.
+INSPECTION QUESTIONS — REQUIRED FOR ALL RISKS:
+Each question must be a precise check the inspector performs at the vehicle — looking, touching, listening, or smelling. Must be answerable with "yes" or "no". Set "failureAnswer" to whichever answer indicates a PROBLEM.
+
+CRITICAL — QUESTIONS MUST DETERMINE THE STAGE OF DETERIORATION:
+The questions serve two purposes: (1) detect whether the issue is present at all, and (2) if present, determine HOW FAR the deterioration has progressed. This maps directly to repair cost.
+
+Question structure — ALWAYS follow this pattern:
+- Question 1: DETECTION — Is the issue present at all? If the answer is "no problem found," the risk is cleared ($0 cost).
+- Question 2: SEVERITY STAGING — How bad is it? This question distinguishes "present but contained" (MINOR) from "progressing toward failure" (MODERATE). Ask about indicators of ACTIVE deterioration vs. stable/old signs.
+- Question 3 (optional): FAILURE CONFIRMATION — Has the component actually failed? This distinguishes MODERATE from SEVERE. Ask about functional breakdown, not just visual signs.
+
+The number of "failure" answers maps to cost tiers:
+- 0 failures → Issue not found ($0 — risk cleared)
+- 1 failure → MINOR tier (present but contained, minimal repair)
+- 2 failures → MODERATE tier (progressing, significant repair)
+- 3 failures → SEVERE tier (failed, major repair/replacement)
+
+KEY PRINCIPLE: Question 2 should distinguish between OLD/STABLE signs and ACTIVE/WORSENING signs. This is the critical question that separates a $400 repair from a $2,000 repair.
+
+Example for oil leak (tiers: MINOR=$400-$600 gasket, MODERATE=$800-$1400 pump reseal + lines, SEVERE=$2000-$3500 pump replacement + cleanup):
+  Question 1 (DETECTION — is it present?):
+  {"question": "Look at the base of the pump and the area around it. Can you see any oil residue, staining, or wetness?", "failureAnswer": "yes"}
+  Question 2 (STAGING — old stain vs active leak):
+  {"question": "Is the oil wet and fresh-looking (shiny, not covered in dust), or can you see oil that has run or dripped down from the source?", "failureAnswer": "yes"}
+  Question 3 (FAILURE — actively leaking now):
+  {"question": "With the engine running and idling for 2 minutes, can you see oil actively dripping or accumulating?", "failureAnswer": "yes", "mediaPrompt": "Close-up of the active leak while engine is running"}
+
+Example for transmission shudder (tiers: MINOR=$400-$700 fluid flush, MODERATE=$1800-$3000 valve body, SEVERE=$4000-$6000 rebuild):
+  Question 1 (DETECTION):
+  {"question": "During a test drive at 35-55 mph with steady light throttle, does the transmission produce any shudder, vibration, or hesitation?", "failureAnswer": "yes"}
+  Question 2 (STAGING — occasional vs persistent):
+  {"question": "Does the shudder or harshness happen on MOST shifts, not just occasionally?", "failureAnswer": "yes"}
+  Question 3 (FAILURE):
+  {"question": "Does the transmission slip (RPMs flare without acceleration), fail to engage a gear, or go into limp mode at any point?", "failureAnswer": "yes"}
+
+Example for ball joint wear (tiers: MINOR=$350-$500 both lowers, MODERATE=$600-$900 uppers+lowers, SEVERE=$1200-$1800 full rebuild):
+  Question 1 (DETECTION):
+  {"question": "Grab the tire at 12 and 6 o'clock and push/pull firmly. Do you feel any clunking or see movement at the ball joint?", "failureAnswer": "yes"}
+  Question 2 (STAGING — boot condition indicates progression):
+  {"question": "Look at the ball joint boot (the rubber cover). Is it torn, cracked, or leaking grease?", "failureAnswer": "yes"}
+  Question 3 (FAILURE):
+  {"question": "Can you see visible separation or looseness at the joint itself, or does the tire feel wobbly/unstable?", "failureAnswer": "yes", "mediaPrompt": "Close-up of the ball joint showing the boot and joint condition"}
+
+Questions can test ANYTHING the inspector can observe: visual signs, sounds, feel, movement, temperature, smell, functional tests. Be specific about what to look for and what conditions reveal the answer (engine cold vs. warm, driving speed, etc.).
 
 CATEGORIES (use exactly these values):
 ENGINE, TRANSMISSION, DRIVETRAIN, STRUCTURAL, SUSPENSION, BRAKES, TIRES_WHEELS, ELECTRICAL, ELECTRONICS, SAFETY, COSMETIC_EXTERIOR, COSMETIC_INTERIOR, HVAC, OTHER
@@ -253,13 +297,16 @@ Generate the known-issues inspection checklist for this vehicle. For each known 
   "category": "one of the CATEGORIES above",
   "severity": "CRITICAL | MAJOR | MODERATE | MINOR",
   "likelihood": "VERY_COMMON | COMMON | OCCASIONAL | RARE",
-  "checkMethod": "photo | manual | both",
+  "checkMethod": "visual | manual",
   "componentHint": "snake_case keyword for 3D hotspot placement (e.g., 'oil', 'ball_joint', 'differential')",
   "whatToCheck": "The specific component or system",
+  "whatThisIs": "Plain-English explanation of what this component is. No jargon. 1-3 sentences for someone who has never worked on a car. What does it look like? What does it do? Why does it matter?",
+  "howToLocate": "NUMBERED step-by-step wayfinding directions starting from a landmark (hood, wheel, door). Use visual references (color, shape, size comparisons). Guide them like you're on the phone with them.",
   "whereToLook": "PRECISE physical location — describe as if giving directions to someone standing at the vehicle. Include side of vehicle, reference nearby components, specify access method (from above, from below, behind X panel).",
   "howToInspect": "NUMBERED step-by-step procedure. Include what tools or conditions needed (engine cold/warm, vehicle on lift, etc.). Each step should be one clear action.",
   "signsOfFailure": ["specific observable sign 1", "sign 2", ...],
   "whyItMatters": "What happens if this is bad — consequence and context",
+  "evidencePrompt": "Single specific photo instruction shown ONLY when the inspector detects a problem. What to photograph to document severity. Be specific about framing and what to capture.",
   "costTiers": [
     {"condition": "MINOR", "label": "Short description of minor scenario", "costLow": 150, "costHigh": 400},
     {"condition": "MODERATE", "label": "Short description of moderate scenario", "costLow": 400, "costHigh": 900},
@@ -267,9 +314,9 @@ Generate the known-issues inspection checklist for this vehicle. For each known 
   ],
   "estimatedCostLow": 150,
   "estimatedCostHigh": 2500,
-  "capturePrompts": ["Each prompt must capture evidence that reveals severity — include at least one close-up for depth/condition and one wider shot for spread/scope. Specify camera angle, framing, and what visual indicators distinguish MINOR from SEVERE", ...],
+  "capturePrompts": ["For AI vision analysis of standard photos (NOT shown to inspector). Describe what to look for in engine bay, undercarriage, etc. photos to detect this issue.", ...],
   "inspectionQuestions": [
-    {"question": "Graduated severity probes — order from least to most severe. Q1 detects any problem, Q2 escalates to MODERATE tier, Q3+ escalates to SEVERE tier. Include specific test conditions.", "failureAnswer": "yes or no", "mediaPrompt": "optional: what to photograph/record if failure detected"}
+    {"question": "REQUIRED for ALL risks. Graduated severity probes — order from least to most severe. Q1 detects any problem, Q2 escalates to MODERATE tier, Q3+ escalates to SEVERE tier. Include specific test conditions.", "failureAnswer": "yes or no", "mediaPrompt": "optional: what to photograph/record if failure detected"}
   ]
 }
 
@@ -297,7 +344,7 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
     const items: KnownIssueOutput[] = parsed.knownIssues || parsed.issues || parsed.items || [];
 
     // Validate structure
-    const validated = items.filter(
+    const structureValid = items.filter(
       (item) =>
         item.title &&
         item.description &&
@@ -309,6 +356,15 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
         Array.isArray(item.signsOfFailure) &&
         item.whyItMatters
     );
+
+    // Deduplicate: AI sometimes generates near-duplicate items for the same issue
+    const validated: KnownIssueOutput[] = [];
+    for (const item of structureValid) {
+      const isDupe = validated.some((existing) =>
+        existing.category === item.category && titlesSimilar(existing.title, item.title)
+      );
+      if (!isDupe) validated.push(item);
+    }
 
     // Post-process: normalize costTiers, checkMethod, and assign IDs to inspection questions
     for (const item of validated) {
@@ -344,15 +400,19 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
           { condition: "SEVERE", label: "Full replacement or major repair", costLow: Math.round(high * 0.7), costHigh: high },
         ];
       }
-      // Default checkMethod to "photo" if not specified or invalid
-      if (!item.checkMethod || !["photo", "manual", "both"].includes(item.checkMethod)) {
-        item.checkMethod = "photo";
+      // Normalize checkMethod — AI may still return legacy "photo" or "both" values
+      const rawCheckMethod = item.checkMethod as string;
+      if (rawCheckMethod === "photo" || rawCheckMethod === "both") {
+        item.checkMethod = "visual";
       }
-      // If manual/both but no questions, downgrade to photo
-      if ((item.checkMethod === "manual" || item.checkMethod === "both") &&
-          (!Array.isArray(item.inspectionQuestions) || item.inspectionQuestions.length === 0)) {
-        item.checkMethod = "photo";
+      if (!item.checkMethod || !["visual", "manual"].includes(item.checkMethod)) {
+        item.checkMethod = "visual";
       }
+      // If no questions provided, fall back to "visual" — the UI will handle gracefully
+      if (!Array.isArray(item.inspectionQuestions) || item.inspectionQuestions.length === 0) {
+        item.checkMethod = "visual";
+      }
+      // Normalize and assign IDs to inspection questions
       if (Array.isArray(item.inspectionQuestions) && item.inspectionQuestions.length > 0) {
         item.inspectionQuestions = item.inspectionQuestions
           .filter((q) => q.question && (q.failureAnswer === "yes" || q.failureAnswer === "no"))
@@ -361,6 +421,13 @@ Return ONLY a JSON object with a "knownIssues" array. No markdown, no explanatio
             id: `q${idx}`,
             order: idx,
           })) as unknown as InspectionQuestionOutput[];
+      }
+      // Ensure evidencePrompt has a value — fall back to first capturePrompt
+      if (!item.evidencePrompt && Array.isArray(item.capturePrompts) && item.capturePrompts.length > 0) {
+        item.evidencePrompt = item.capturePrompts[0];
+      }
+      if (!item.evidencePrompt) {
+        item.evidencePrompt = `Photograph the ${item.whatToCheck || item.title} — fill the frame so we can assess the severity`;
       }
     }
 
@@ -438,4 +505,19 @@ function buildCuratedContext(curatedRisks: CuratedRisk[]): string {
     }
   }
   return parts.join("\n");
+}
+
+/** Check if two risk titles are similar enough to be duplicates */
+function titlesSimilar(a: string, b: string): boolean {
+  const stopWords = new Set(["the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "with", "from", "issue", "issues", "problem", "problems", "failure"]);
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter((w) => w.length > 1 && !stopWords.has(w));
+
+  const wordsA = normalize(a);
+  const wordsB = new Set(normalize(b));
+  if (wordsA.length === 0 || wordsB.size === 0) return false;
+
+  const overlap = wordsA.filter((w) => wordsB.has(w)).length;
+  const minLen = Math.min(wordsA.length, wordsB.size);
+  return minLen > 0 && overlap / minLen >= 0.6;
 }

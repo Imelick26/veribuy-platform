@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { CheckCircle, XCircle, HelpCircle, Camera, ChevronDown, AlertTriangle, Loader2, DollarSign, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
@@ -53,12 +53,36 @@ export function RiskChecklist({
   uploadingQuestionId,
   photoDiscoveredRisks = [],
 }: RiskChecklistProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  // Find the first unchecked risk for auto-expand
+  const firstUncheckedId = risks.find(
+    (r) => (checkStatuses[r.id]?.status || "NOT_CHECKED") === "NOT_CHECKED"
+  )?.id ?? null;
+
+  const [expandedId, setExpandedId] = useState<string | null>(firstUncheckedId);
+  const prevCheckedCountRef = useRef(0);
 
   const checkedCount = Object.values(checkStatuses).filter(
     (s) => s.status !== "NOT_CHECKED"
   ).length;
+
+  // Auto-advance: when a risk gets checked, expand the next unchecked one
+  useEffect(() => {
+    if (checkedCount > prevCheckedCountRef.current) {
+      // A risk was just completed — advance to next unchecked
+      const nextUnchecked = risks.find(
+        (r) => (checkStatuses[r.id]?.status || "NOT_CHECKED") === "NOT_CHECKED"
+      );
+      if (nextUnchecked) {
+        setExpandedId(nextUnchecked.id);
+        onHighlightRisk(nextUnchecked.id);
+      } else {
+        setExpandedId(null);
+      }
+    }
+    prevCheckedCountRef.current = checkedCount;
+  }, [checkedCount, risks, checkStatuses, onHighlightRisk]);
   const failedCount = Object.values(checkStatuses).filter(
     (s) => s.status === "CONFIRMED"
   ).length;
@@ -233,19 +257,22 @@ export function RiskChecklist({
                   {status === "NOT_CHECKED" && <div className="h-5 w-5 rounded-full border-2 border-border-strong" />}
                 </div>
 
-                {/* Title + meta */}
+                {/* Title + description + meta */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className={cn(
-                      "text-sm font-medium truncate",
+                      "text-sm font-medium",
                       status === "NOT_FOUND" ? "text-text-tertiary line-through" : "text-text-primary"
                     )}>
                       {risk.title}
                     </span>
-                    {risk.hasActiveRecall && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white shrink-0">RECALL</span>
-                    )}
                   </div>
+                  {/* Detailed description — always visible */}
+                  {risk.description && status !== "NOT_FOUND" && (
+                    <p className="text-xs text-text-secondary leading-relaxed mt-0.5">
+                      {risk.description}
+                    </p>
+                  )}
                   {/* Repair cost — refined after inspection, full range before */}
                   {risk.cost.low > 0 && status !== "NOT_FOUND" && (
                     refinedCost ? (
@@ -362,8 +389,8 @@ export function RiskChecklist({
               {/* Expandable details — guided flow or legacy static details */}
               {isExpanded && (
                 <div className="px-3 pb-3 border-t border-border-default pt-2">
-                  {risk.checkMethod ? (
-                    /* Guided check flow (photo, manual, or both) */
+                  {risk.checkMethod || risk.inspectionQuestions?.length ? (
+                    /* Guided check flow — questions-first with conditional photo */
                     <GuidedRiskCheck
                       risk={risk}
                       questionAnswers={checkStatuses[risk.id]?.questionAnswers || []}
@@ -381,6 +408,7 @@ export function RiskChecklist({
                         if (s === "CONFIRMED") onCreateFinding(risk);
                       }}
                       status={status}
+                      isFirstRisk={risk.id === risks[0]?.id}
                     />
                   ) : (
                     /* Legacy static details */
@@ -423,12 +451,6 @@ export function RiskChecklist({
                               )}
                             </span>
                           )}
-                        </div>
-                      )}
-                      {risk.hasActiveRecall && risk.relatedRecalls && risk.relatedRecalls.length > 0 && (
-                        <div className="p-2 rounded bg-red-50 border border-red-200 text-xs text-red-700">
-                          <span className="font-bold">Recall: </span>
-                          {risk.relatedRecalls[0].remedy}
                         </div>
                       )}
                       {status === "NOT_CHECKED" && (

@@ -15,13 +15,19 @@ interface KnownIssueInput {
   category: string;
   severity: Severity;
   likelihood: Likelihood;
-  checkMethod?: "photo" | "manual" | "both";
+  checkMethod?: "photo" | "manual" | "both" | "visual";
   componentHint?: string;
   whatToCheck: string;
   whereToLook: string;
   howToInspect: string;
   signsOfFailure: string[];
   whyItMatters: string;
+  /** Plain-English explanation of what this component is */
+  whatThisIs?: string;
+  /** Step-by-step wayfinding directions to locate the component */
+  howToLocate?: string;
+  /** Single evidence photo prompt shown only when failure is detected */
+  evidencePrompt?: string;
   estimatedCostLow: number;
   estimatedCostHigh: number;
   costTiers?: Array<{
@@ -68,9 +74,17 @@ export function buildRiskProfile(input: BuildProfileInput): AggregatedRiskProfil
   const risks: AggregatedRisk[] = [];
   const coveredCategories = new Set<string>();
 
-  // 1. Add AI-generated known issues as primary items
+  // 1. Add AI-generated known issues as primary items (deduplicated)
   for (const issue of input.knownIssues) {
     const category = issue.category || "OTHER";
+
+    // Dedup: skip if we already have a risk with a very similar title in the same category
+    const isDuplicate = risks.some((existing) => {
+      if (existing.category !== category) return false;
+      return titlesOverlap(existing.title, issue.title);
+    });
+    if (isDuplicate) continue;
+
     coveredCategories.add(category);
 
     risks.push({
@@ -97,14 +111,17 @@ export function buildRiskProfile(input: BuildProfileInput): AggregatedRiskProfil
         ? issue.capturePrompts
         : getCapturePromptList(category),
       inspectionGuidance: issue.howToInspect,
-      // New structured fields
-      checkMethod: issue.checkMethod || "photo",
+      // Structured fields
+      checkMethod: issue.checkMethod === "photo" || issue.checkMethod === "both" ? "visual" : (issue.checkMethod || "visual"),
       whatToCheck: issue.whatToCheck,
       whereToLook: issue.whereToLook,
       howToInspect: issue.howToInspect,
       signsOfFailure: issue.signsOfFailure,
       whyItMatters: issue.whyItMatters,
       likelihood: issue.likelihood,
+      whatThisIs: issue.whatThisIs,
+      howToLocate: issue.howToLocate,
+      evidencePrompt: issue.evidencePrompt,
       inspectionQuestions: issue.inspectionQuestions?.map((q, idx) => ({
         id: q.id || `q${idx}`,
         question: q.question,
@@ -162,6 +179,26 @@ export function buildRiskProfile(input: BuildProfileInput): AggregatedRiskProfil
     aggregatedRisks: risks,
     generatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Checks if two risk titles refer to the same issue using keyword overlap.
+ * Strips common filler words and compares significant terms.
+ */
+function titlesOverlap(a: string, b: string): boolean {
+  const stopWords = new Set(["the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "with", "from", "issue", "issues", "problem", "problems", "failure"]);
+  const normalize = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter((w) => w.length > 1 && !stopWords.has(w));
+
+  const wordsA = normalize(a);
+  const wordsB = new Set(normalize(b));
+  if (wordsA.length === 0 || wordsB.size === 0) return false;
+
+  const overlap = wordsA.filter((w) => wordsB.has(w)).length;
+  const minLen = Math.min(wordsA.length, wordsB.size);
+
+  // If 60%+ of the shorter title's significant words match, it's a duplicate
+  return minLen > 0 && overlap / minLen >= 0.6;
 }
 
 function severityRank(severity: Severity | string): number {
