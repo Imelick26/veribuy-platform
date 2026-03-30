@@ -24,7 +24,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { data: vehicle, isLoading } = trpc.vehicle.getDetail.useQuery({ id });
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState<Tab>("condition");
+  const [activeTab, setActiveTab] = useState<Tab>("risks");
   const [showPriceInput, setShowPriceInput] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
 
@@ -116,11 +116,17 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       id: string; title: string; description: string; severity: string;
       cost: { low: number; high: number };
       costTiers?: Array<{ condition: string; label: string; costLow: number; costHigh: number }>;
-      inspectionQuestions?: Array<{ id: string; failureAnswer: string }>;
+      inspectionQuestions?: Array<{ id: string; question: string; failureAnswer: string }>;
+      whatThisIs?: string;
+      howToLocate?: string;
+      howToInspect?: string;
+      signsOfFailure?: string[];
+      whyItMatters?: string;
     }>;
     checkStatuses?: Record<string, {
       status: string;
-      questionAnswers?: Array<{ questionId: string; answer: string | null }>;
+      mediaIds?: string[];
+      questionAnswers?: Array<{ questionId: string; answer: string | null; mediaIds?: string[] }>;
     }>;
   } | null;
 
@@ -143,11 +149,11 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const tireAssessment = rawConditionData?.tireAssessment ?? null;
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "condition", label: "Condition", icon: <Activity className="h-4 w-4" /> },
-    { key: "history", label: "History", icon: <History className="h-4 w-4" /> },
-    { key: "market", label: "Market", icon: <TrendingUp className="h-4 w-4" /> },
-    { key: "photos", label: "Photos", icon: <Camera className="h-4 w-4" /> },
     { key: "risks", label: "Risks", icon: <ShieldAlert className="h-4 w-4" /> },
+    { key: "condition", label: "Condition", icon: <Activity className="h-4 w-4" /> },
+    { key: "market", label: "Market", icon: <TrendingUp className="h-4 w-4" /> },
+    { key: "history", label: "History", icon: <History className="h-4 w-4" /> },
+    { key: "photos", label: "Photos", icon: <Camera className="h-4 w-4" /> },
   ];
 
   return (
@@ -684,57 +690,105 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       {activeTab === "risks" && (
         <div className="space-y-5">
           {riskData?.aggregatedRisks && riskData.aggregatedRisks.length > 0 ? (
-            <Card className="p-5">
-              <h3 className="text-sm font-semibold text-text-primary mb-3">
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-text-primary">
                 Known Risk Areas ({riskData.aggregatedRisks.length})
               </h3>
-              <div className="space-y-1.5">
-                {riskData.aggregatedRisks.map((risk) => {
-                  const check = riskData.checkStatuses?.[risk.id];
-                  const status = check?.status || "NOT_CHECKED";
+              {riskData.aggregatedRisks.map((risk) => {
+                const check = riskData.checkStatuses?.[risk.id];
+                const status = check?.status || "NOT_CHECKED";
 
-                  // Narrow cost to tier based on question answers
-                  let displayCost = risk.cost;
-                  if (status === "CONFIRMED" && risk.costTiers && risk.costTiers.length === 3 && check?.questionAnswers) {
-                    const failureCount = check.questionAnswers.filter((qa) => {
-                      const q = risk.inspectionQuestions?.find((iq) => iq.id === qa.questionId);
-                      return q && qa.answer === q.failureAnswer;
-                    }).length;
-                    const tierIndex = Math.min(Math.max(failureCount - 1, 0), 2);
-                    const tier = risk.costTiers[tierIndex];
-                    if (tier) displayCost = { low: tier.costLow, high: tier.costHigh };
-                  }
+                const statusStyle = status === "CONFIRMED"
+                  ? { bg: "bg-red-50", border: "border-red-200", text: "text-red-600", label: "Identified" }
+                  : status === "NOT_FOUND"
+                  ? { bg: "bg-green-50", border: "border-green-200", text: "text-green-600", label: "Clear" }
+                  : status === "UNABLE_TO_INSPECT"
+                  ? { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-600", label: "Skipped" }
+                  : { bg: "bg-surface-raised", border: "border-border-default", text: "text-text-tertiary", label: "Not Checked" };
 
-                  const statusStyle = status === "CONFIRMED"
-                    ? { bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500", text: "text-red-600", label: "Confirmed" }
-                    : status === "NOT_FOUND"
-                    ? { bg: "bg-green-50", border: "border-green-200", dot: "bg-green-500", text: "text-green-600", label: "Clear" }
-                    : status === "UNABLE_TO_INSPECT"
-                    ? { bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-400", text: "text-amber-600", label: "Skipped" }
-                    : { bg: "bg-surface-raised", border: "border-border-default", dot: "bg-gray-300", text: "text-text-tertiary", label: "Not Checked" };
+                // Get evidence photos for this risk
+                const evidenceMediaIds = check?.mediaIds || [];
+                const questionMediaIds = check?.questionAnswers?.flatMap((qa) => qa.mediaIds || []) || [];
+                const allEvidenceIds = [...evidenceMediaIds, ...questionMediaIds];
+                const evidencePhotos = allEvidenceIds.length > 0
+                  ? media.filter((m) => allEvidenceIds.includes(m.id))
+                  : [];
 
-                  return (
-                    <div key={risk.id} className={cn("flex items-center justify-between px-3 py-2.5 rounded-lg border", statusStyle.bg, statusStyle.border)}>
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className={cn("w-2 h-2 rounded-full shrink-0", statusStyle.dot)} />
-                        <div className="min-w-0">
-                          <span className="text-xs font-medium text-text-primary block truncate">{risk.title}</span>
-                          <span className="text-[10px] text-text-tertiary">{risk.severity}</span>
-                        </div>
+                return (
+                  <Card key={risk.id} className={cn("p-4 border", statusStyle.bg, statusStyle.border)}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-text-primary">{risk.title}</span>
+                        <Badge variant={
+                          risk.severity === "CRITICAL" ? "danger" :
+                          risk.severity === "MAJOR" ? "warning" : "default"
+                        } className="text-[9px]">
+                          {risk.severity}
+                        </Badge>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {status === "CONFIRMED" && (
-                          <span className="text-xs font-medium text-red-600">
-                            {formatCurrency(displayCost.low)} – {formatCurrency(displayCost.high)}
-                          </span>
-                        )}
-                        <span className={cn("text-xs font-semibold", statusStyle.text)}>{statusStyle.label}</span>
-                      </div>
+                      <span className={cn("text-xs font-bold", statusStyle.text)}>{statusStyle.label}</span>
                     </div>
-                  );
-                })}
-              </div>
-            </Card>
+
+                    {/* Description */}
+                    {risk.description && (
+                      <p className="text-xs text-text-secondary leading-relaxed mb-2">{risk.description}</p>
+                    )}
+
+                    {/* How it was checked — questions + answers */}
+                    {risk.inspectionQuestions && risk.inspectionQuestions.length > 0 && check?.questionAnswers && (
+                      <div className="mb-2 space-y-1">
+                        <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Inspection Checks</p>
+                        {risk.inspectionQuestions.map((q) => {
+                          const qa = check.questionAnswers?.find((a) => a.questionId === q.id);
+                          const answered = qa?.answer != null;
+                          const isFailing = answered && qa?.answer === q.failureAnswer;
+                          return (
+                            <div key={q.id} className="flex items-start gap-2 text-xs">
+                              <span className={cn(
+                                "shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold",
+                                !answered ? "bg-gray-100 text-gray-400" :
+                                isFailing ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"
+                              )}>
+                                {!answered ? "?" : isFailing ? "!" : "✓"}
+                              </span>
+                              <div className="flex-1">
+                                <span className="text-text-secondary">{q.question}</span>
+                                {answered && (
+                                  <span className={cn(
+                                    "ml-1.5 font-semibold",
+                                    isFailing ? "text-red-600" : "text-green-600"
+                                  )}>
+                                    {qa?.answer === "yes" ? "Yes" : "No"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Evidence photos */}
+                    {evidencePhotos.length > 0 && (
+                      <div className="flex gap-2 mt-2">
+                        {evidencePhotos.map((p) => (
+                          <div key={p.id} className="w-16 h-16 rounded-lg overflow-hidden bg-surface-sunken border border-border-default">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.url || ""} alt="Evidence" className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Why it matters */}
+                    {risk.whyItMatters && status === "CONFIRMED" && (
+                      <p className="text-[11px] text-red-600 mt-2">{risk.whyItMatters}</p>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
           ) : (
             <Card className="p-8 text-center">
               <ShieldAlert className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
