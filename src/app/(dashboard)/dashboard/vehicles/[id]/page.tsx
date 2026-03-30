@@ -76,12 +76,23 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const media = inspection?.media || [];
   const steps = inspection?.steps || [];
 
-  // Recon cost = sum of confirmed finding repair costs
+  // Hero photo — 3/4 driver front, fall back to front center
+  const heroPhoto = media.find((m) => m.captureType === "FRONT_34_DRIVER")
+    || media.find((m) => m.captureType === "FRONT_CENTER");
+
+  // Recon cost = AI-computed (accounts for bundled labor, local rates)
   const confirmedFindings = findings.filter((f) => f.repairCostLow || f.repairCostHigh);
   const reconLow = confirmedFindings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
   const reconHigh = confirmedFindings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
-  // Prefer AI-computed recon from market analysis; fall back to findings sum
   const reconEstimate = market?.estReconCost || (reconLow > 0 ? Math.round((reconLow + reconHigh) / 2) : 0);
+
+  // Recon breakdown from AI valuation log
+  const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> })?.aiValuationLogs?.[0];
+  const reconBreakdown = reconLog?.output as {
+    itemizedCosts?: Array<{ finding: string; estimatedCostCents: number; laborHours?: number; partsEstimate?: number; shopType: string; reasoning: string }>;
+    laborRateContext?: string;
+    totalReasoning?: string;
+  } | null;
 
   // Max bid = recommended buy price from market analysis
   const maxBid = market?.fairBuyMax || market?.adjustedPrice || 0;
@@ -145,16 +156,24 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        {/* Vehicle identity */}
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight">
-            {vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim || ""}
-          </h1>
-          <div className="flex items-center gap-3 text-sm text-text-secondary mt-1 flex-wrap">
-            <span className="font-mono text-xs">{vehicle.vin}</span>
-            {odometer && <span>{odometer.toLocaleString()} mi</span>}
-            {vehicle.drivetrain && <span>{vehicle.drivetrain}</span>}
-            {vehicle.engine && <span>{vehicle.engine}</span>}
+        {/* Vehicle identity + hero photo */}
+        <div className="flex gap-4 mb-4">
+          {heroPhoto?.url && (
+            <div className="shrink-0 w-32 h-24 sm:w-40 sm:h-28 rounded-lg overflow-hidden bg-surface-sunken border border-border-default">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={heroPhoto.url} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+              {vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim || ""}
+            </h1>
+            <div className="flex items-center gap-3 text-sm text-text-secondary mt-1 flex-wrap">
+              <span className="font-mono text-xs">{vehicle.vin}</span>
+              {odometer && <span>{odometer.toLocaleString()} mi</span>}
+              {vehicle.drivetrain && <span>{vehicle.drivetrain}</span>}
+              {vehicle.engine && <span>{vehicle.engine}</span>}
+            </div>
           </div>
         </div>
 
@@ -458,11 +477,42 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   );
                 })}
               </div>
-              {/* Total recon — AI-computed, single authoritative number */}
+              {/* Recon breakdown — AI-computed with justification */}
               {reconEstimate > 0 && (
-                <div className="flex items-center justify-between pt-3 mt-3 border-t border-border-default">
-                  <span className="text-sm font-semibold text-text-primary">Total Est. Reconditioning</span>
-                  <span className="text-sm font-bold text-red-600">{formatCurrency(reconEstimate)}</span>
+                <div className="pt-3 mt-3 border-t border-border-default space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-text-primary">Total Est. Reconditioning</span>
+                    <span className="text-sm font-bold text-red-600">{formatCurrency(reconEstimate)}</span>
+                  </div>
+
+                  {/* Itemized cost justification */}
+                  {reconBreakdown?.itemizedCosts && reconBreakdown.itemizedCosts.length > 0 && (
+                    <div className="space-y-1.5 mt-2">
+                      {reconBreakdown.itemizedCosts.map((item, i) => (
+                        <div key={i} className="flex items-start justify-between text-xs px-2 py-1.5 rounded bg-surface-sunken">
+                          <div className="flex-1 min-w-0 mr-3">
+                            <span className="font-medium text-text-primary">{item.finding}</span>
+                            {item.reasoning && (
+                              <p className="text-text-tertiary mt-0.5">{item.reasoning}</p>
+                            )}
+                            {(item.laborHours || item.partsEstimate) && (
+                              <p className="text-text-tertiary mt-0.5">
+                                {item.laborHours ? `${item.laborHours}h labor` : ""}
+                                {item.laborHours && item.partsEstimate ? " + " : ""}
+                                {item.partsEstimate ? `${formatCurrency(item.partsEstimate)} parts` : ""}
+                              </p>
+                            )}
+                          </div>
+                          <span className="font-medium text-red-600 shrink-0">{formatCurrency(item.estimatedCostCents)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Labor rate context */}
+                  {reconBreakdown?.laborRateContext && (
+                    <p className="text-[10px] text-text-tertiary mt-1">{reconBreakdown.laborRateContext}</p>
+                  )}
                 </div>
               )}
             </Card>

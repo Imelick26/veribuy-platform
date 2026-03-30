@@ -90,6 +90,12 @@ export const vehicleRouter = router({
               vehicleHistory: true,
               steps: true,
               report: { select: { id: true, number: true } },
+              aiValuationLogs: {
+                where: { module: "recon" },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { output: true },
+              },
             },
           },
         },
