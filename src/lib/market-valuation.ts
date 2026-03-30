@@ -151,7 +151,7 @@ export type ConditionGrade =
   | "GOOD"
   | "FAIR"
   | "POOR"
-  | "SALVAGE";
+  | "SALVAGE"; // Legacy — kept for backward compat
 
 /* ------------------------------------------------------------------ */
 /*  Core Functions                                                     */
@@ -386,10 +386,8 @@ export function evaluateAskingPrice(
  * Map a condition score to a human-readable grade.
  */
 export function getConditionGrade(score: number): ConditionGrade {
-  if (score >= 90) return "EXCELLENT";
-  if (score >= 78) return "VERY_GOOD";
-  if (score >= 65) return "GOOD";
-  if (score >= 50) return "FAIR";
-  if (score >= 35) return "POOR";
-  return "SALVAGE";
+  if (score >= 85) return "EXCELLENT";
+  if (score >= 70) return "GOOD";
+  if (score >= 60) return "FAIR";
+  return "POOR";
 }

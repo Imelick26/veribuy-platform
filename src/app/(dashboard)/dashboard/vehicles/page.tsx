@@ -46,7 +46,7 @@ export default function VehiclesPage() {
                         {score != null && (
                           <span className={cn(
                             "text-xs font-bold",
-                            score >= 70 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600"
+                            score >= 70 ? "text-green-600" : score >= 60 ? "text-amber-600" : "text-red-600"
                           )}>
                             {score}/100
                           </span>
@@ -101,7 +101,7 @@ export default function VehiclesPage() {
                           {score != null ? (
                             <span className={cn(
                               "text-sm font-bold",
-                              score >= 70 ? "text-green-600" : score >= 50 ? "text-amber-600" : "text-red-600"
+                              score >= 70 ? "text-green-600" : score >= 60 ? "text-amber-600" : "text-red-600"
                             )}>
                               {score}
                             </span>

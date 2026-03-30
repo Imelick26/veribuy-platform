@@ -201,32 +201,30 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         {/* 2 Key Metrics */}
         <div className="grid grid-cols-2 gap-3">
           {/* Condition Score */}
-          <Card className="p-4 flex items-center gap-4">
-            {conditionScore != null ? (
-              <div className={cn(
-                "w-14 h-14 rounded-full flex flex-col items-center justify-center shrink-0 border-2",
-                conditionScore >= 70 ? "bg-green-50 border-green-300" :
-                conditionScore >= 50 ? "bg-amber-50 border-amber-300" :
-                "bg-red-50 border-red-300"
-              )}>
-                <span className={cn(
-                  "font-bold text-lg leading-none",
-                  conditionScore >= 70 ? "text-green-700" :
-                  conditionScore >= 50 ? "text-amber-700" : "text-red-700"
-                )}>{conditionScore}</span>
-                <span className="text-[9px] text-text-tertiary">/100</span>
-              </div>
-            ) : (
-              <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 border-2 border-border-default">
-                <span className="text-lg font-bold text-text-tertiary">—</span>
-              </div>
-            )}
+          <Card className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-text-secondary">
+              <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">Condition</p>
+              <p className={cn(
+                "text-xl font-bold",
+                conditionScore != null && conditionScore >= 85 ? "text-green-700" :
+                conditionScore != null && conditionScore >= 70 ? "text-green-600" :
+                conditionScore != null && conditionScore >= 60 ? "text-amber-700" :
+                conditionScore != null ? "text-red-600" : "text-text-tertiary"
+              )}>
                 {conditionGrade ? conditionGrade.replace("_", " ") : "No Score"}
               </p>
-              <p className="text-[10px] text-text-tertiary">Condition</p>
             </div>
+            {conditionScore != null && (
+              <div className={cn(
+                "px-3 py-1.5 rounded-lg font-bold text-lg border-2 border-black",
+                conditionScore >= 85 ? "bg-green-200 text-black" :
+                conditionScore >= 70 ? "bg-green-100 text-black" :
+                conditionScore >= 60 ? "bg-yellow-200 text-black" :
+                "bg-red-200 text-black"
+              )}>
+                {conditionScore}
+              </div>
+            )}
           </Card>
 
           {/* Recommended Buy Price — the one number that matters */}
@@ -398,14 +396,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                         <span className="text-xs font-medium text-text-primary">{label} <span className="text-text-tertiary font-normal">({weight})</span></span>
                         <span className={cn(
                           "text-xs font-bold",
-                          (score || 0) >= 7 ? "text-green-600" : (score || 0) >= 5 ? "text-amber-600" : "text-red-600"
+                          (score || 0) >= 7 ? "text-green-600" : (score || 0) >= 6 ? "text-amber-600" : "text-red-600"
                         )}>
                           {score ?? "—"}/10
                         </span>
                       </div>
                       <Progress
                         value={(score || 0) * 10}
-                        color={(score || 0) >= 7 ? "green" : (score || 0) >= 5 ? "yellow" : "red"}
+                        color={(score || 0) >= 7 ? "green" : (score || 0) >= 6 ? "yellow" : "red"}
                         size="sm"
                       />
                       {areaDetail?.summary && (
@@ -449,7 +447,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   <span className={cn(
                     "text-xs font-bold",
                     tireAssessment.overallTireScore >= 7 ? "text-green-600" :
-                    tireAssessment.overallTireScore >= 5 ? "text-amber-600" : "text-red-600"
+                    tireAssessment.overallTireScore >= 6 ? "text-amber-600" : "text-red-600"
                   )}>
                     {tireAssessment.overallTireScore}/10
                   </span>
