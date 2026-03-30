@@ -212,7 +212,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   conditionScore >= 70 ? "text-green-600" :
                   conditionScore >= 60 ? "text-amber-600" : "text-red-600"
                 )}>
-                  {conditionScore}
+                  {conditionScore}<span className="text-text-tertiary font-normal text-sm">/100</span>
                 </span>
               )}
             </div>
@@ -257,15 +257,15 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <button
                 onClick={() => setShowPriceInput(true)}
                 disabled={showPriceInput}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-text-primary text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-strong text-text-primary hover:bg-surface-hover transition-colors disabled:opacity-50"
               >
-                <Check className="h-3.5 w-3.5" /> I Bought It
+                <ThumbsUp className="h-3.5 w-3.5" /> I Bought It
               </button>
               <button
                 onClick={() => recordOutcome.mutate({ inspectionId: latestInspection.id, outcome: "PASSED" })}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-default text-text-secondary hover:bg-surface-hover transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-strong text-text-primary hover:bg-surface-hover transition-colors"
               >
-                <X className="h-3.5 w-3.5" /> I Passed
+                <ThumbsDown className="h-3.5 w-3.5" /> I Passed
               </button>
               <Link href="/dashboard/inspections/new">
                 <Button variant="ghost" size="sm">
