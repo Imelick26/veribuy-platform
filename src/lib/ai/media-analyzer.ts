@@ -571,6 +571,132 @@ Return JSON: { "mileage": <integer miles or null if unreadable>, "confidence": <
  *
  * Cost: ~$0.40-0.60 per inspection (4 parallel GPT-4o Vision calls).
  */
+
+// ---------------------------------------------------------------------------
+// Tire Tread Depth Assessment
+// ---------------------------------------------------------------------------
+
+const TIRE_PHOTO_TYPES = [
+  "TIRE_FRONT_DRIVER",
+  "TIRE_REAR_DRIVER",
+  "TIRE_FRONT_PASSENGER",
+  "TIRE_REAR_PASSENGER",
+] as const;
+
+/**
+ * Estimates tread depth and condition for each tire using GPT-4o Vision.
+ * Runs as a single call with all 4 tire photos.
+ *
+ * Cost: ~$0.03-0.05 per call.
+ */
+export async function assessTires(
+  vehicle: VehicleInfo,
+  media: MediaForAnalysis[],
+): Promise<import("@/types/risk").TireAssessment | null> {
+  const openai = getOpenAI();
+
+  // Collect tire photos
+  const tirePhotos = TIRE_PHOTO_TYPES
+    .map((type) => media.find((m) => m.captureType === type))
+    .filter((m): m is MediaForAnalysis => !!m && !!m.url);
+
+  if (tirePhotos.length === 0) return null;
+
+  // Validate URLs
+  const validPhotos = tirePhotos.filter((p) => {
+    try { new URL(p.url); return true; } catch { return false; }
+  });
+  if (validPhotos.length === 0) return null;
+
+  const imageContent = validPhotos.map((p) => ({
+    type: "image_url" as const,
+    image_url: { url: p.url, detail: "high" as const },
+  }));
+
+  // Label photos for the AI
+  const photoLabels = validPhotos.map((p) => {
+    const label = p.captureType
+      ?.replace("TIRE_FRONT_DRIVER", "Front Left (Driver)")
+      .replace("TIRE_REAR_DRIVER", "Rear Left (Driver)")
+      .replace("TIRE_FRONT_PASSENGER", "Front Right (Passenger)")
+      .replace("TIRE_REAR_PASSENGER", "Rear Right (Passenger)");
+    return label || p.captureType;
+  }).join(", ");
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an automotive tire condition expert. Analyze tire close-up photos to estimate tread depth and overall condition.
+
+TREAD DEPTH ESTIMATION (in 32nds of an inch — industry standard):
+- NEW: 10-11/32" (just purchased, full tread)
+- GOOD: 7-9/32" (plenty of life remaining)
+- HALF_WORN: 5-6/32" (about half tread remaining, plan for replacement)
+- WORN: 3-4/32" (approaching minimum safe depth, replace soon)
+- REPLACE: 2/32" or less (at or below legal minimum, unsafe, immediate replacement)
+
+WHAT TO LOOK FOR:
+- Tread depth: Look at tread groove depth relative to wear bars. Wear bars become visible at 2/32".
+- Wear pattern: Even wear vs. inner edge wear (alignment) vs. center wear (overinflation) vs. outer edge wear (underinflation)
+- Sidewall: Cracking, dry rot, bulges, weathering, scuffs
+- Tire age: DOT date code if visible (4-digit code on sidewall, e.g., "2419" = week 24 of 2019)
+- Brand/model: Note if tires are mismatched (different brands = concern)
+
+SCORING (1-10):
+- 10: Brand new tires, full tread
+- 8-9: Excellent condition, plenty of life
+- 6-7: Good, normal wear for age
+- 4-5: Half worn, will need replacement within 10-15k miles
+- 2-3: Worn, needs replacement soon
+- 1: Unsafe, needs immediate replacement
+
+Vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.mileage ? `${vehicle.mileage.toLocaleString()} miles` : "unknown mileage"})
+
+Return ONLY valid JSON.`,
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Analyze these ${validPhotos.length} tire photos (${photoLabels}). For each tire, estimate tread depth in 32nds of an inch and assess condition.\n\nReturn JSON:\n{\n  "frontDriver": { "treadDepth32nds": <number>, "condition": "<NEW|GOOD|HALF_WORN|WORN|REPLACE>", "observations": ["<observation>", ...] },\n  "frontPassenger": { "treadDepth32nds": <number>, "condition": "<condition>", "observations": [...] },\n  "rearDriver": { "treadDepth32nds": <number>, "condition": "<condition>", "observations": [...] },\n  "rearPassenger": { "treadDepth32nds": <number>, "condition": "<condition>", "observations": [...] },\n  "overallTireScore": <1-10>,\n  "summary": "<1-2 sentence summary of tire condition and any concerns>"\n}\n\nIf a tire photo is missing, estimate based on the others (same set likely similar). Be specific about what you observe.` },
+            ...imageContent,
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 800,
+      response_format: { type: "json_object" },
+    });
+
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    // Validate and normalize
+    const normalizeTire = (t: Record<string, unknown>): import("@/types/risk").TireCondition => ({
+      treadDepth32nds: Math.max(0, Math.min(12, Math.round(Number(t.treadDepth32nds) || 5))),
+      condition: (["NEW", "GOOD", "HALF_WORN", "WORN", "REPLACE"].includes(String(t.condition))
+        ? String(t.condition) : "GOOD") as import("@/types/risk").TireConditionLevel,
+      observations: Array.isArray(t.observations) ? t.observations.map(String).slice(0, 5) : [],
+    });
+
+    return {
+      frontDriver: normalizeTire(parsed.frontDriver || {}),
+      frontPassenger: normalizeTire(parsed.frontPassenger || {}),
+      rearDriver: normalizeTire(parsed.rearDriver || {}),
+      rearPassenger: normalizeTire(parsed.rearPassenger || {}),
+      overallTireScore: Math.max(1, Math.min(10, Math.round(Number(parsed.overallTireScore) || 5))),
+      summary: String(parsed.summary || "Tire assessment completed"),
+    };
+  } catch (err) {
+    console.error("[assessTires] Failed:", err);
+    return null;
+  }
+}
+
 export async function analyzeVehicleCondition(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],

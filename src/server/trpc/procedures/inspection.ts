@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
-import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
+import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, assessTires, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
 import { fetchMarketData } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
@@ -320,13 +320,19 @@ export const inspectionRouter = router({
       // Run condition assessment + unexpected issues + odometer OCR in parallel
       const odometerPhoto = mediaForAnalysis.find((m) => m.captureType === "ODOMETER");
 
-      const [conditionAssessment, unexpectedResult, odometerResult] = await Promise.all([
+      const [conditionAssessment, unexpectedResult, odometerResult, tireResult] = await Promise.all([
         analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes),
         scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis),
         odometerPhoto && !inspection.odometer
           ? extractOdometerFromPhoto(odometerPhoto.url)
           : Promise.resolve(null),
+        assessTires(vehicleInfo, mediaForAnalysis),
       ]);
+
+      // Merge tire assessment into condition assessment
+      if (tireResult) {
+        conditionAssessment.tireAssessment = tireResult;
+      }
 
       // Persist condition scores to Inspection record
       await persistConditionScores(ctx.db, input.inspectionId, conditionAssessment);

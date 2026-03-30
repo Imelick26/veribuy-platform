@@ -187,6 +187,27 @@ export interface ConditionAssessment {
     mechanicalVisual: number;
     underbodyFrame: number;
   };
+  /** Per-tire tread depth and condition from AI vision analysis */
+  tireAssessment?: TireAssessment;
+}
+
+export type TireConditionLevel = "NEW" | "GOOD" | "HALF_WORN" | "WORN" | "REPLACE";
+
+export interface TireCondition {
+  /** Estimated tread depth in 32nds of an inch (new ~10-11, replace ~2-3) */
+  treadDepth32nds: number;
+  condition: TireConditionLevel;
+  observations: string[];
+}
+
+export interface TireAssessment {
+  frontDriver: TireCondition;
+  frontPassenger: TireCondition;
+  rearDriver: TireCondition;
+  rearPassenger: TireCondition;
+  /** Overall tire condition score 1-10 */
+  overallTireScore: number;
+  summary: string;
 }
 
 export interface AggregatedRiskProfile {

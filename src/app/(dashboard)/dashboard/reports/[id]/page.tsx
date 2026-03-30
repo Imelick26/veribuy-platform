@@ -371,6 +371,54 @@ export default function ReportDetailPage({
             );
           })()}
 
+          {/* Tire Assessment */}
+          {(() => {
+            const rawData = inspection.conditionRawData as { tireAssessment?: {
+              frontDriver: { treadDepth32nds: number; condition: string; observations: string[] };
+              frontPassenger: { treadDepth32nds: number; condition: string; observations: string[] };
+              rearDriver: { treadDepth32nds: number; condition: string; observations: string[] };
+              rearPassenger: { treadDepth32nds: number; condition: string; observations: string[] };
+              overallTireScore: number;
+              summary: string;
+            } } | null;
+            const tires = rawData?.tireAssessment;
+            if (!tires) return null;
+
+            const condColor = (c: string) =>
+              c === "NEW" || c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
+              c === "HALF_WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
+              "text-red-600 bg-red-50 border-red-200";
+
+            const condLabel = (c: string) =>
+              c === "NEW" ? "New" : c === "GOOD" ? "Good" :
+              c === "HALF_WORN" ? "Half Worn" : c === "WORN" ? "Worn" : "Replace";
+
+            return (
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold text-text-primary mb-2">Tire Condition</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { label: "Front Left", data: tires.frontDriver },
+                    { label: "Front Right", data: tires.frontPassenger },
+                    { label: "Rear Left", data: tires.rearDriver },
+                    { label: "Rear Right", data: tires.rearPassenger },
+                  ]).map(({ label, data }) => (
+                    <div key={label} className={cn("p-2 rounded-lg border text-xs", condColor(data.condition))}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{label}</span>
+                        <span className="font-bold">{data.treadDepth32nds}/32&quot;</span>
+                      </div>
+                      <span className="text-[10px]">{condLabel(data.condition)}</span>
+                    </div>
+                  ))}
+                </div>
+                {tires.summary && (
+                  <p className="text-xs text-text-secondary mt-2">{tires.summary}</p>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Total repair estimate */}
           {totalRepairHigh > 0 && (
             <div className="mt-4 p-3 rounded-lg bg-[#fde8e8] border border-red-300">
