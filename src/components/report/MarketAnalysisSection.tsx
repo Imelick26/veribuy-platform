@@ -283,7 +283,7 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
           {/* Dealer Margin */}
           {dealerMargin != null && dealerMargin > 0 && (
             <div className="flex justify-between">
-              <span className="text-text-secondary">Dealer Margin (25%)</span>
+              <span className="text-text-secondary">Dealer Margin</span>
               <span className="font-medium text-red-600">-{formatCurrency(dealerMargin)}</span>
             </div>
           )}

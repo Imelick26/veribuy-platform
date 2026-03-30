@@ -29,6 +29,9 @@ model Organization {
   maxInspectionsPerMonth Int              @default(25)
   bonusInspections       Int              @default(0)
 
+  // Pricing preferences
+  targetMarginPercent  Int      @default(25) // Dealer target margin (e.g., 25 = 25%)
+
   // Stripe subscription billing
   stripeCustomerId     String?  @unique
   stripeSubscriptionId String?  @unique

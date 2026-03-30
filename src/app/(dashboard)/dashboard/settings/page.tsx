@@ -56,6 +56,18 @@ export default function SettingsPage() {
     },
   });
 
+  // Pricing settings
+  const { data: orgSettings } = trpc.auth.getOrgSettings.useQuery();
+  const [marginPercent, setMarginPercent] = useState<number | null>(null);
+  const [marginSaved, setMarginSaved] = useState(false);
+  const updateSettings = trpc.auth.updateOrgSettings.useMutation({
+    onSuccess: () => {
+      setMarginSaved(true);
+      setTimeout(() => setMarginSaved(false), 3000);
+    },
+  });
+  const currentMargin = marginPercent ?? orgSettings?.targetMarginPercent ?? 25;
+
   const hasSubscription = subStatus?.hasSubscription;
   const canUpgrade = !hasSubscription || subStatus?.tier === "BASE";
 
@@ -65,6 +77,57 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-text-primary tracking-tight">Settings</h1>
         <p className="text-text-secondary mt-1">Manage your account and organization</p>
       </div>
+
+      {/* ── Pricing Preferences ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-brand-600" />
+            <CardTitle>Pricing Preferences</CardTitle>
+          </div>
+          <CardDescription>Adjust how vehicle buy prices are calculated</CardDescription>
+        </CardHeader>
+        <div className="px-6 pb-6">
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-text-primary block mb-1">
+                Target Dealer Margin
+              </label>
+              <p className="text-xs text-text-secondary mb-2">
+                The margin percentage used to calculate the recommended buy price. Higher margin = lower buy price.
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  {[15, 20, 25, 30, 35].map((pct) => (
+                    <button
+                      key={pct}
+                      onClick={() => setMarginPercent(pct)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        currentMargin === pct
+                          ? "bg-brand-600 text-white"
+                          : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
+                      }`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => updateSettings.mutate({ targetMarginPercent: currentMargin })}
+                  loading={updateSettings.isPending}
+                  disabled={currentMargin === (orgSettings?.targetMarginPercent ?? 25)}
+                >
+                  {marginSaved ? <><Check className="h-3.5 w-3.5 mr-1" /> Saved</> : "Save"}
+                </Button>
+              </div>
+              <p className="text-[11px] text-text-tertiary mt-2">
+                At {currentMargin}% margin: a $10,000 retail vehicle = ${((10000 * (1 - currentMargin / 100))).toLocaleString()} max buy price (before recon)
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {/* Checkout Success/Cancelled Banners */}
       {checkoutStatus === "success" && (

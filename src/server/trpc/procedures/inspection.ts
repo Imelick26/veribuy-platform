@@ -1005,9 +1005,15 @@ export const inspectionRouter = router({
       const rawRetailDollars = Math.round(marketData.privatePartyValue * 1.15);
       const estRetailDollars = Math.round(rawRetailDollars * aiConditionMultiplier * aiHistoryMultiplier);
 
-      // Max offer = 75% of retail - recon
-      // The 25% covers: detail/prep, holding costs, sales costs, and dealer profit
-      const maxOfferBeforeRecon = Math.round(estRetailDollars * 0.75);
+      // Get org's target margin setting
+      const org = await ctx.db.organization.findUnique({
+        where: { id: ctx.orgId },
+        select: { targetMarginPercent: true },
+      });
+      const marginPercent = (org?.targetMarginPercent ?? 25) / 100;
+
+      // Max offer = (1 - margin%) of retail - recon
+      const maxOfferBeforeRecon = Math.round(estRetailDollars * (1 - marginPercent));
       const maxOfferDollars = Math.max(
         Math.round(estRetailDollars * 0.05), // 5% floor
         maxOfferBeforeRecon - reconDollars,
@@ -1026,11 +1032,11 @@ export const inspectionRouter = router({
           explanation: `Condition ${aiConditionMultiplier.toFixed(2)}x × History ${aiHistoryMultiplier.toFixed(2)}x`,
         },
         {
-          label: "Max Offer (75% of retail)",
+          label: `Max Offer (${Math.round((1 - marginPercent) * 100)}% of retail)`,
           inputDollars: estRetailDollars,
-          operation: `× 0.75`,
+          operation: `× ${(1 - marginPercent).toFixed(2)}`,
           outputDollars: maxOfferBeforeRecon,
-          explanation: `25% covers prep, holding, sales, profit`,
+          explanation: `${Math.round(marginPercent * 100)}% covers prep, holding, sales, profit`,
         },
         {
           label: "Reconditioning",

@@ -197,4 +197,26 @@ export const authRouter = router({
       });
       return { message: "Password changed successfully" };
     }),
+
+  // Get org pricing settings
+  getOrgSettings: protectedProcedure.query(async ({ ctx }) => {
+    const org = await ctx.db.organization.findUnique({
+      where: { id: ctx.orgId },
+      select: { targetMarginPercent: true },
+    });
+    return { targetMarginPercent: org?.targetMarginPercent ?? 25 };
+  }),
+
+  // Update org pricing settings
+  updateOrgSettings: managerProcedure
+    .input(z.object({
+      targetMarginPercent: z.number().int().min(5).max(50),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db.organization.update({
+        where: { id: ctx.orgId },
+        data: { targetMarginPercent: input.targetMarginPercent },
+      });
+      return { success: true };
+    }),
 });
