@@ -744,67 +744,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* ═══ INSPECTION HISTORY ═══ */}
-      {vehicle.inspections.length > 0 && (
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold text-text-primary mb-3">
-            Inspection History ({vehicle.inspections.length})
-          </h3>
-          <div className="space-y-1.5">
-            {vehicle.inspections.map((insp) => (
-              <Link
-                key={insp.id}
-                href={`/dashboard/inspections/${insp.id}`}
-                className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-border-default hover:bg-surface-hover transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-text-tertiary">{insp.number}</span>
-                  <Badge variant={
-                    insp.status === "COMPLETED" ? "success" :
-                    insp.status === "CREATED" ? "default" : "info"
-                  } className="text-[10px]">
-                    {insp.status.replace(/_/g, " ")}
-                  </Badge>
-                  {insp.overallScore != null && (
-                    <span className={cn(
-                      "text-xs font-bold",
-                      insp.overallScore >= 70 ? "text-green-600" :
-                      insp.overallScore >= 50 ? "text-amber-600" : "text-red-600"
-                    )}>
-                      {insp.overallScore}/100
-                    </span>
-                  )}
-                </div>
-                <span className="text-xs text-text-tertiary">{formatDate(insp.createdAt)}</span>
-              </Link>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* ═══ VEHICLE SPECS ═══ */}
-      <Card className="p-5">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">Vehicle Specifications</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2">
-          {[
-            { label: "Year", value: vehicle.year },
-            { label: "Make", value: vehicle.make },
-            { label: "Model", value: vehicle.model },
-            { label: "Trim", value: vehicle.trim },
-            { label: "Body Style", value: vehicle.bodyStyle },
-            { label: "Engine", value: vehicle.engine },
-            { label: "Transmission", value: vehicle.transmission },
-            { label: "Drivetrain", value: vehicle.drivetrain },
-            { label: "Exterior Color", value: vehicle.exteriorColor },
-            { label: "Interior Color", value: vehicle.interiorColor },
-          ].filter(({ value }) => value).map(({ label, value }) => (
-            <div key={label}>
-              <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
-              <p className="text-sm text-text-primary">{value}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }
