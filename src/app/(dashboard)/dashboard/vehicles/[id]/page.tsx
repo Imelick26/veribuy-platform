@@ -97,6 +97,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     }>;
   } | null;
 
+  // Compute avg days on market from comparables
+  const comps = (market?.comparables ?? []) as Array<{ daysOnMarket?: number }>;
+  const compsWithDom = comps.filter((c) => c.daysOnMarket && c.daysOnMarket > 0);
+  const avgDaysOnMarket = compsWithDom.length > 0
+    ? Math.round(compsWithDom.reduce((s, c) => s + (c.daysOnMarket || 0), 0) / compsWithDom.length)
+    : null;
+
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "condition", label: "Condition", icon: <Activity className="h-4 w-4" /> },
     { key: "history", label: "History", icon: <History className="h-4 w-4" /> },
@@ -222,18 +229,19 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       {/* ═══ DEAL STRIP ═══ */}
       {market && (
         <Card className="p-0 overflow-hidden">
-          <div className="grid grid-cols-2 sm:grid-cols-5 divide-y sm:divide-y-0 sm:divide-x divide-border-default">
+          <div className="grid grid-cols-2 sm:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-border-default">
             {[
               { label: "Fair Value", value: fairValue, color: "text-text-primary" },
               { label: "Est. Retail", value: estRetail, color: "text-text-primary" },
               { label: "Wholesale", value: market.tradeInValue || market.wholesaleValue, color: "text-text-secondary" },
               { label: "Recon Cost", value: reconEstimate, color: "text-red-600", prefix: "-" },
               { label: "Net Margin", value: netMargin, color: netMargin > 0 ? "text-green-600" : "text-red-600" },
-            ].map(({ label, value, color, prefix }) => (
+              { label: "Avg. Time on Lot", value: avgDaysOnMarket, color: "text-text-primary", suffix: " days", raw: true },
+            ].map(({ label, value, color, prefix, suffix, raw }) => (
               <div key={label} className="px-4 py-3 text-center">
                 <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
                 <p className={cn("text-sm font-bold mt-0.5", color)}>
-                  {value ? `${prefix || ""}${formatCurrency(typeof value === "number" ? value : 0)}` : "—"}
+                  {value ? `${prefix || ""}${raw ? value : formatCurrency(typeof value === "number" ? value : 0)}${suffix || ""}` : "—"}
                 </p>
               </div>
             ))}

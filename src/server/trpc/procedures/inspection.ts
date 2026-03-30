@@ -863,7 +863,14 @@ export const inspectionRouter = router({
         location: l.location,
         source: l.source,
         url: l.url,
+        daysOnMarket: l.daysOnMarket,
       }));
+
+      // Average days on market from listings that have the data
+      const listingsWithDom = marketData.nearbyListings.filter((l) => l.daysOnMarket && l.daysOnMarket > 0);
+      const avgDaysOnMarket = listingsWithDom.length > 0
+        ? Math.round(listingsWithDom.reduce((s, l) => s + (l.daysOnMarket || 0), 0) / listingsWithDom.length)
+        : null;
 
       // Consensus value is already acquisition-normalized (source normalizer runs pre-consensus)
       const basePriceCents = Math.round(marketData.estimatedValue * 100);
