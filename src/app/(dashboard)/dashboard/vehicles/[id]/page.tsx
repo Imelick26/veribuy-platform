@@ -14,11 +14,11 @@ import { getConditionGrade } from "@/lib/market-valuation";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import {
   ArrowLeft, FileText, RefreshCw, ThumbsUp, ThumbsDown, DollarSign, Check, X,
-  Activity, History, TrendingUp, Camera, ShieldAlert,
+  Activity, History, TrendingUp, Camera, ShieldAlert, CircleDot,
   Car,
 } from "lucide-react";
 
-type Tab = "condition" | "history" | "market" | "photos" | "risks";
+type Tab = "condition" | "tires" | "history" | "market" | "photos" | "risks";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -131,8 +131,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     ? Math.round(compsWithDom.reduce((s, c) => s + (c.daysOnMarket || 0), 0) / compsWithDom.length)
     : null;
 
+  // Tire assessment data (extracted once for reuse across tabs)
+  const rawConditionData = inspection?.conditionRawData as { tireAssessment?: {
+    frontDriver: { condition: string; observations: string[] };
+    frontPassenger: { condition: string; observations: string[] };
+    rearDriver: { condition: string; observations: string[] };
+    rearPassenger: { condition: string; observations: string[] };
+    overallTireScore: number;
+    summary: string;
+  } } | null;
+  const tireAssessment = rawConditionData?.tireAssessment ?? null;
+
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "condition", label: "Condition", icon: <Activity className="h-4 w-4" /> },
+    { key: "tires", label: "Tires", icon: <CircleDot className="h-4 w-4" /> },
     { key: "history", label: "History", icon: <History className="h-4 w-4" /> },
     { key: "market", label: "Market", icon: <TrendingUp className="h-4 w-4" /> },
     { key: "photos", label: "Photos", icon: <Camera className="h-4 w-4" /> },
@@ -212,20 +224,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </Card>
 
-          {/* Max Bid — the one number that matters */}
-          <Card className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">Max Bid</p>
+          {/* Recommended Buy Price — the one number that matters */}
+          <Card className="p-4 flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">Recommended Buy Price</p>
               <p className="text-2xl font-bold text-brand-700">
                 {maxBid > 0 ? formatCurrency(maxBid) : "—"}
               </p>
             </div>
-            {reconEstimate > 0 && (
-              <div className="text-right">
-                <p className="text-[10px] text-text-tertiary">Est. Recon</p>
-                <p className="text-sm font-bold text-red-600">{formatCurrency(reconEstimate)}</p>
-              </div>
-            )}
           </Card>
         </div>
 
@@ -328,7 +334,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border-default">
             {[
               { label: "Est. Retail", value: estRetail, color: "text-text-primary" },
-              { label: "Wholesale", value: market.tradeInValue || market.wholesaleValue, color: "text-text-secondary" },
+              { label: "Est. Recon", value: reconEstimate, color: "text-red-600" },
               { label: "Net Margin", value: netMargin, color: netMargin > 0 ? "text-green-600" : "text-red-600" },
               { label: "Avg. Time on Lot", value: avgDaysOnMarket, color: "text-text-primary", suffix: " days", raw: true },
             ].map(({ label, value, color, suffix, raw }) => (
@@ -371,103 +377,48 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {conditionScore != null && (
             <Card className="p-5">
               <h3 className="text-sm font-semibold text-text-primary mb-3">Condition Assessment</h3>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {[
-                  { label: "Exterior Body", score: inspection?.exteriorBodyScore, weight: "30%" },
-                  { label: "Interior", score: inspection?.interiorScore, weight: "15%" },
-                  { label: "Mechanical / Visual", score: inspection?.mechanicalVisualScore, weight: "35%" },
-                  { label: "Underbody / Frame", score: inspection?.underbodyFrameScore, weight: "20%" },
-                ].map(({ label, score, weight }) => (
-                  <div key={label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-text-secondary">{label} <span className="text-text-tertiary">({weight})</span></span>
-                      <span className={cn(
-                        "text-xs font-bold",
-                        (score || 0) >= 7 ? "text-green-600" : (score || 0) >= 5 ? "text-amber-600" : "text-red-600"
-                      )}>
-                        {score ?? "—"}/10
-                      </span>
-                    </div>
-                    <Progress
-                      value={(score || 0) * 10}
-                      color={(score || 0) >= 7 ? "green" : (score || 0) >= 5 ? "yellow" : "red"}
-                      size="sm"
-                    />
-                  </div>
-                ))}
-              </div>
-              {inspection?.conditionSummary && (
-                <p className="text-xs text-text-secondary mt-3 leading-relaxed">{inspection.conditionSummary}</p>
-              )}
-            </Card>
-          )}
-
-          {/* Tire Assessment */}
-          {(() => {
-            const rawData = inspection?.conditionRawData as { tireAssessment?: {
-              frontDriver: { condition: string; observations: string[] };
-              frontPassenger: { condition: string; observations: string[] };
-              rearDriver: { condition: string; observations: string[] };
-              rearPassenger: { condition: string; observations: string[] };
-              overallTireScore: number;
-              summary: string;
-            } } | null;
-            const tires = rawData?.tireAssessment;
-            if (!tires) return null;
-
-            const condColor = (c: string) =>
-              c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
-              c === "WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
-              "text-red-700 bg-red-50 border-red-300";
-
-            const condLabel = (c: string) =>
-              c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
-
-            const tireEntries = [
-              { label: "Front Left", data: tires.frontDriver },
-              { label: "Front Right", data: tires.frontPassenger },
-              { label: "Rear Left", data: tires.rearDriver },
-              { label: "Rear Right", data: tires.rearPassenger },
-            ];
-
-            return (
-              <Card className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-text-primary">Tire Condition</h3>
-                  <span className={cn(
-                    "text-xs font-bold",
-                    tires.overallTireScore >= 7 ? "text-green-600" :
-                    tires.overallTireScore >= 5 ? "text-amber-600" : "text-red-600"
-                  )}>
-                    {tires.overallTireScore}/10
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {tireEntries.map(({ label, data }) => (
-                    <div key={label} className={cn("p-2.5 rounded-lg border", condColor(data.condition))}>
+                  { label: "Exterior Body", key: "exteriorBody", score: inspection?.exteriorBodyScore, weight: "30%" },
+                  { label: "Interior", key: "interior", score: inspection?.interiorScore, weight: "15%" },
+                  { label: "Mechanical / Visual", key: "mechanicalVisual", score: inspection?.mechanicalVisualScore, weight: "35%" },
+                  { label: "Underbody / Frame", key: "underbodyFrame", score: inspection?.underbodyFrameScore, weight: "20%" },
+                ].map(({ label, key, score, weight }) => {
+                  const areaDetail = rawConditionData?.[key as keyof typeof rawConditionData] as {
+                    summary?: string; keyObservations?: string[]; concerns?: string[]; scoreJustification?: string;
+                  } | undefined;
+                  return (
+                    <div key={label} className="pb-3 border-b border-border-default last:border-0 last:pb-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</span>
-                        <Badge variant={
-                          data.condition === "REPLACE" ? "danger" :
-                          data.condition === "WORN" ? "warning" : "success"
-                        } className="text-[9px]">
-                          {condLabel(data.condition)}
-                        </Badge>
+                        <span className="text-xs font-medium text-text-primary">{label} <span className="text-text-tertiary font-normal">({weight})</span></span>
+                        <span className={cn(
+                          "text-xs font-bold",
+                          (score || 0) >= 7 ? "text-green-600" : (score || 0) >= 5 ? "text-amber-600" : "text-red-600"
+                        )}>
+                          {score ?? "—"}/10
+                        </span>
                       </div>
-                      {data.observations.length > 0 && (
-                        <p className="text-[10px] opacity-70 leading-snug mt-1">
-                          {data.observations.slice(0, 2).join(". ")}
-                        </p>
+                      <Progress
+                        value={(score || 0) * 10}
+                        color={(score || 0) >= 7 ? "green" : (score || 0) >= 5 ? "yellow" : "red"}
+                        size="sm"
+                      />
+                      {areaDetail?.summary && (
+                        <p className="text-xs text-text-secondary mt-1.5 leading-relaxed">{areaDetail.summary}</p>
+                      )}
+                      {areaDetail?.concerns && areaDetail.concerns.length > 0 && (
+                        <div className="mt-1.5">
+                          {areaDetail.concerns.map((c, i) => (
+                            <p key={i} className="text-xs text-red-600 leading-relaxed">• {c}</p>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  ))}
-                </div>
-                {tires.summary && (
-                  <p className="text-xs text-text-secondary mt-2">{tires.summary}</p>
-                )}
-              </Card>
-            );
-          })()}
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           {/* Identified issues */}
           {findings.length > 0 && (
@@ -576,6 +527,113 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             <Card className="p-8 text-center">
               <Activity className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
               <p className="text-sm text-text-secondary">No condition data yet. Complete an inspection to see results.</p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Tires Tab */}
+      {activeTab === "tires" && (
+        <div className="space-y-5">
+          {tireAssessment ? (() => {
+            const condColor = (c: string) =>
+              c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
+              c === "WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
+              "text-red-700 bg-red-50 border-red-300";
+
+            const condLabel = (c: string) =>
+              c === "GOOD" ? "Good" : c === "WORN" ? "Worn — Plan Replacement" : "Replace Before Resale";
+
+            const tireEntries = [
+              { label: "Front Left (Driver)", data: tireAssessment.frontDriver },
+              { label: "Front Right (Passenger)", data: tireAssessment.frontPassenger },
+              { label: "Rear Left (Driver)", data: tireAssessment.rearDriver },
+              { label: "Rear Right (Passenger)", data: tireAssessment.rearPassenger },
+            ];
+
+            const replaceCount = tireEntries.filter((t) => t.data.condition === "REPLACE").length;
+            const wornCount = tireEntries.filter((t) => t.data.condition === "WORN").length;
+
+            return (
+              <>
+                {/* Overall tire status */}
+                <Card className="p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-sm font-semibold text-text-primary">Tire Condition Overview</h3>
+                    <span className={cn(
+                      "text-xs font-bold",
+                      tireAssessment.overallTireScore >= 7 ? "text-green-600" :
+                      tireAssessment.overallTireScore >= 5 ? "text-amber-600" : "text-red-600"
+                    )}>
+                      {tireAssessment.overallTireScore}/10
+                    </span>
+                  </div>
+                  {tireAssessment.summary && (
+                    <p className="text-xs text-text-secondary leading-relaxed">{tireAssessment.summary}</p>
+                  )}
+                  {(replaceCount > 0 || wornCount > 0) && (
+                    <div className="flex gap-3 mt-2">
+                      {replaceCount > 0 && (
+                        <Badge variant="danger" className="text-xs">{replaceCount} need{replaceCount === 1 ? "s" : ""} replacement</Badge>
+                      )}
+                      {wornCount > 0 && (
+                        <Badge variant="warning" className="text-xs">{wornCount} worn</Badge>
+                      )}
+                    </div>
+                  )}
+                </Card>
+
+                {/* Per-tire detail cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {tireEntries.map(({ label, data }) => {
+                    const tirePhoto = media.find((m) =>
+                      m.captureType === (
+                        label.includes("Front Left") ? "TIRE_FRONT_DRIVER" :
+                        label.includes("Front Right") ? "TIRE_FRONT_PASSENGER" :
+                        label.includes("Rear Left") ? "TIRE_REAR_DRIVER" : "TIRE_REAR_PASSENGER"
+                      )
+                    );
+
+                    return (
+                      <Card key={label} className={cn("p-4 border", condColor(data.condition))}>
+                        <div className="flex gap-3">
+                          {/* Tire photo thumbnail */}
+                          {tirePhoto?.url && (
+                            <div className="shrink-0 w-20 h-20 rounded-lg overflow-hidden bg-surface-sunken">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={tirePhoto.url} alt={label} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-text-primary">{label}</span>
+                              <Badge variant={
+                                data.condition === "REPLACE" ? "danger" :
+                                data.condition === "WORN" ? "warning" : "success"
+                              } className="text-[9px]">
+                                {data.condition}
+                              </Badge>
+                            </div>
+                            <p className="text-xs font-medium mb-1">{condLabel(data.condition)}</p>
+                            {data.observations.length > 0 && (
+                              <div className="space-y-0.5">
+                                {data.observations.map((obs, i) => (
+                                  <p key={i} className="text-[11px] text-text-secondary leading-snug">• {obs}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })() : (
+            <Card className="p-8 text-center">
+              <CircleDot className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
+              <p className="text-sm text-text-secondary">No tire data yet. Complete an inspection to assess tire condition.</p>
             </Card>
           )}
         </div>
