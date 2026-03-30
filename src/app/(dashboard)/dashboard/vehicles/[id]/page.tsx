@@ -198,135 +198,118 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        {/* 2 Key Metrics */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Condition Score */}
-          <Card className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">Condition</p>
-              <p className={cn(
-                "text-xl font-bold",
-                conditionScore != null && conditionScore >= 85 ? "text-green-700" :
-                conditionScore != null && conditionScore >= 70 ? "text-green-600" :
-                conditionScore != null && conditionScore >= 60 ? "text-amber-700" :
-                conditionScore != null ? "text-red-600" : "text-text-tertiary"
-              )}>
-                {conditionGrade ? conditionGrade.replace("_", " ") : "No Score"}
-              </p>
+        {/* Key Metrics — clean horizontal layout */}
+        <div className="grid grid-cols-3 gap-4 mt-2">
+          <div>
+            <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Condition</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-bold text-text-primary">
+                {conditionGrade ? conditionGrade.replace("_", " ") : "—"}
+              </span>
+              {conditionScore != null && (
+                <span className={cn(
+                  "text-lg font-bold",
+                  conditionScore >= 70 ? "text-green-600" :
+                  conditionScore >= 60 ? "text-amber-600" : "text-red-600"
+                )}>
+                  {conditionScore}
+                </span>
+              )}
             </div>
-            {conditionScore != null && (
-              <div className={cn(
-                "px-3 py-1.5 rounded-lg font-bold text-lg border-2 border-black",
-                conditionScore >= 85 ? "bg-green-200 text-black" :
-                conditionScore >= 70 ? "bg-green-100 text-black" :
-                conditionScore >= 60 ? "bg-yellow-200 text-black" :
-                "bg-red-200 text-black"
-              )}>
-                {conditionScore}
-              </div>
-            )}
-          </Card>
-
-          {/* Recommended Buy Price — the one number that matters */}
-          <Card className="p-4 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">Recommended Buy Price</p>
-              <p className="text-2xl font-bold text-brand-700">
-                {maxBid > 0 ? formatCurrency(maxBid) : "—"}
-              </p>
-            </div>
-          </Card>
+          </div>
+          <div>
+            <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Recommended Buy Price</p>
+            <p className="text-2xl font-bold text-text-primary mt-1">
+              {maxBid > 0 ? formatCurrency(maxBid) : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Est. Recon</p>
+            <p className={cn("text-2xl font-bold mt-1", reconEstimate > 0 ? "text-red-600" : "text-text-primary")}>
+              {reconEstimate > 0 ? formatCurrency(reconEstimate) : "$0"}
+            </p>
+          </div>
         </div>
 
-        {/* Action buttons + outcome decision */}
-        {latestInspection?.purchaseOutcome ? (
-          /* Already recorded outcome */
-          <div className="flex items-center gap-3 mt-4">
-            <Badge
-              variant={latestInspection.purchaseOutcome === "PURCHASED" ? "success" : "default"}
-              className="text-sm py-1 px-3"
-            >
-              {latestInspection.purchaseOutcome === "PURCHASED" ? (
-                <><ThumbsUp className="h-3.5 w-3.5 mr-1.5 inline" /> Purchased{latestInspection.purchasePrice ? ` for ${formatCurrency(latestInspection.purchasePrice)}` : ""}</>
-              ) : (
-                <><ThumbsDown className="h-3.5 w-3.5 mr-1.5 inline" /> Passed</>
-              )}
-            </Badge>
-            <Link href="/dashboard/inspections/new">
-              <Button variant="secondary" size="sm">
-                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
-              </Button>
-            </Link>
-          </div>
-        ) : latestInspection ? (
-          /* Awaiting decision */
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => setShowPriceInput(true)}
-                disabled={showPriceInput}
-              >
-                <ThumbsUp className="h-3.5 w-3.5 mr-1.5" /> I Bought It
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="text-red-700 border-red-300 hover:bg-red-50"
-                onClick={() => recordOutcome.mutate({ inspectionId: latestInspection.id, outcome: "PASSED" })}
-                loading={recordOutcome.isPending}
-              >
-                <ThumbsDown className="h-3.5 w-3.5 mr-1.5" /> I Passed
-              </Button>
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 mt-5">
+          {latestInspection?.purchaseOutcome ? (
+            <>
+              <div className={cn(
+                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border",
+                latestInspection.purchaseOutcome === "PURCHASED"
+                  ? "border-text-primary bg-text-primary text-white"
+                  : "border-border-default text-text-secondary"
+              )}>
+                {latestInspection.purchaseOutcome === "PURCHASED"
+                  ? <><Check className="h-3.5 w-3.5" /> Purchased{latestInspection.purchasePrice ? ` for ${formatCurrency(latestInspection.purchasePrice)}` : ""}</>
+                  : <><X className="h-3.5 w-3.5" /> Passed</>
+                }
+              </div>
               <Link href="/dashboard/inspections/new">
-                <Button variant="secondary" size="sm">
+                <Button variant="ghost" size="sm">
                   <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
                 </Button>
               </Link>
-            </div>
-
-            {/* Purchase price input */}
-            {showPriceInput && (
-              <div className="flex items-center gap-2 p-3 rounded-lg border border-green-200 bg-green-50">
-                <DollarSign className="h-4 w-4 text-green-600 shrink-0" />
-                <input
-                  type="number"
-                  placeholder="Purchase price"
-                  value={purchasePrice}
-                  onChange={(e) => setPurchasePrice(e.target.value)}
-                  className="flex-1 text-sm bg-white border border-border-default rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
-                  autoFocus
-                />
-                <Button
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                  onClick={() => recordOutcome.mutate({
-                    inspectionId: latestInspection.id,
-                    outcome: "PURCHASED",
-                    purchasePrice: purchasePrice ? Math.round(parseFloat(purchasePrice) * 100) : undefined,
-                  })}
-                  loading={recordOutcome.isPending}
-                >
-                  <Check className="h-3.5 w-3.5 mr-1" /> Confirm
+            </>
+          ) : latestInspection ? (
+            <>
+              <button
+                onClick={() => setShowPriceInput(true)}
+                disabled={showPriceInput}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-text-primary text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                <Check className="h-3.5 w-3.5" /> I Bought It
+              </button>
+              <button
+                onClick={() => recordOutcome.mutate({ inspectionId: latestInspection.id, outcome: "PASSED" })}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-default text-text-secondary hover:bg-surface-hover transition-colors"
+              >
+                <X className="h-3.5 w-3.5" /> I Passed
+              </button>
+              <Link href="/dashboard/inspections/new">
+                <Button variant="ghost" size="sm">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => { setShowPriceInput(false); setPurchasePrice(""); }}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 mt-4">
+              </Link>
+            </>
+          ) : (
             <Link href="/dashboard/inspections/new">
-              <Button variant="secondary" size="sm">
+              <Button variant="ghost" size="sm">
                 <RefreshCw className="h-3.5 w-3.5 mr-1" /> New Inspection
               </Button>
             </Link>
+          )}
+        </div>
+
+        {/* Purchase price input */}
+        {showPriceInput && latestInspection && (
+          <div className="flex items-center gap-2 mt-3 p-3 rounded-lg border border-border-default bg-surface-raised">
+            <span className="text-sm text-text-secondary">$</span>
+            <input
+              type="number"
+              placeholder="Purchase price"
+              value={purchasePrice}
+              onChange={(e) => setPurchasePrice(e.target.value)}
+              className="flex-1 text-sm bg-white border border-border-default rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-text-primary"
+              autoFocus
+            />
+            <button
+              onClick={() => recordOutcome.mutate({
+                inspectionId: latestInspection.id,
+                outcome: "PURCHASED",
+                purchasePrice: purchasePrice ? Math.round(parseFloat(purchasePrice) * 100) : undefined,
+              })}
+              className="px-4 py-1.5 rounded-md text-sm font-medium bg-text-primary text-white hover:opacity-90"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => { setShowPriceInput(false); setPurchasePrice(""); }}
+              className="px-3 py-1.5 rounded-md text-sm text-text-tertiary hover:text-text-primary"
+            >
+              Cancel
+            </button>
           </div>
         )}
       </div>
