@@ -74,6 +74,28 @@ export const vehicleRouter = router({
       });
     }),
 
+  // Get vehicle with full inspection detail (for vehicle detail page)
+  getDetail: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.db.vehicle.findUnique({
+        where: { id: input.id, orgId: ctx.orgId },
+        include: {
+          inspections: {
+            orderBy: { createdAt: "desc" },
+            include: {
+              findings: { include: { media: true } },
+              media: true,
+              marketAnalysis: true,
+              vehicleHistory: true,
+              steps: true,
+              report: { select: { id: true, number: true } },
+            },
+          },
+        },
+      });
+    }),
+
   // List vehicles for the org
   list: protectedProcedure
     .input(
@@ -100,7 +122,14 @@ export const vehicleRouter = router({
         take: input.limit + 1,
         cursor: input.cursor ? { id: input.cursor } : undefined,
         orderBy: { createdAt: "desc" },
-        include: { _count: { select: { inspections: true } } },
+        include: {
+          _count: { select: { inspections: true } },
+          inspections: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { id: true, status: true, overallScore: true, number: true },
+          },
+        },
       });
 
       let nextCursor: string | undefined;
