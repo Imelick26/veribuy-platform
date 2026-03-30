@@ -89,10 +89,6 @@ interface MarketAnalysisSectionProps {
   compact?: boolean;
   /** Hide the hero recommended buy price card (when already shown elsewhere) */
   hideHero?: boolean;
-  /** Override condition score (when the stored market analysis has a stale value) */
-  overrideConditionScore?: number | null;
-  /** Override recon cost in cents (when AI recon log has a newer value) */
-  overrideReconCost?: number | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -121,7 +117,7 @@ const recLabel = (rec: string) =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function MarketAnalysisSection({ data, compact = false, hideHero = false, overrideConditionScore, overrideReconCost }: MarketAnalysisSectionProps) {
+export function MarketAnalysisSection({ data, compact = false, hideHero = false }: MarketAnalysisSectionProps) {
   const comps = (data.comparables ?? []) as MarketAnalysisData["comparables"] & object[];
   const bands = data.priceBands as MarketAnalysisData["priceBands"];
 
@@ -143,10 +139,10 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
     ? Math.round(compsWithDom.reduce((s, c) => s + (c.daysOnMarket || 0), 0) / compsWithDom.length)
     : null;
 
-  // Compute waterfall values — all rounded to whole cents (no decimals in display)
+  // Compute waterfall values — use stored data (shows how buy price was computed)
+  // All rounded to whole cents (no decimals in display)
   const estRetail = data.estRetailPrice || data.baselinePrice;
-  const reconCost = overrideReconCost ?? data.estReconCost ?? 0;
-  const displayConditionScore = overrideConditionScore ?? data.conditionScore;
+  const reconCost = data.estReconCost || 0;
   const conditionDelta = data.conditionMultiplier != null
     ? Math.round(Math.round(estRetail * data.conditionMultiplier) - estRetail)
     : 0;
@@ -253,7 +249,7 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
           {conditionDelta !== 0 && (
             <div className="flex justify-between">
               <span className="text-text-secondary">
-                Condition ({displayConditionScore}/100)
+                Condition ({data.conditionScore}/100)
               </span>
               <span className={cn("font-medium", conditionDelta > 0 ? "text-green-600" : "text-red-600")}>
                 {conditionDelta > 0 ? "+" : ""}{formatCurrency(conditionDelta)}
@@ -288,7 +284,9 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
           {/* Dealer Margin */}
           {dealerMargin != null && dealerMargin > 0 && (
             <div className="flex justify-between">
-              <span className="text-text-secondary">Dealer Margin</span>
+              <span className="text-text-secondary">
+                Dealer Margin{fairMarketValue > 0 ? ` (${Math.round((dealerMargin / fairMarketValue) * 100)}%)` : ""}
+              </span>
               <span className="font-medium text-red-600">-{formatCurrency(dealerMargin)}</span>
             </div>
           )}
