@@ -13,7 +13,7 @@ import { PhotoGallery } from "@/components/report/PhotoGallery";
 import { getConditionGrade } from "@/lib/market-valuation";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import {
-  ArrowLeft, FileText, RefreshCw,
+  ArrowLeft, FileText, RefreshCw, ThumbsUp, ThumbsDown, DollarSign, Check, X,
   Activity, History, TrendingUp, Camera, ShieldAlert,
   Car,
 } from "lucide-react";
@@ -23,7 +23,18 @@ type Tab = "condition" | "history" | "market" | "photos" | "risks";
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: vehicle, isLoading } = trpc.vehicle.getDetail.useQuery({ id });
+  const utils = trpc.useUtils();
   const [activeTab, setActiveTab] = useState<Tab>("condition");
+  const [showPriceInput, setShowPriceInput] = useState(false);
+  const [purchasePrice, setPurchasePrice] = useState("");
+
+  const recordOutcome = trpc.inspection.recordOutcome.useMutation({
+    onSuccess: () => {
+      utils.vehicle.getDetail.invalidate({ id });
+      setShowPriceInput(false);
+      setPurchasePrice("");
+    },
+  });
 
   if (isLoading) {
     return (
@@ -210,21 +221,97 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 mt-4">
-          <Link href="/dashboard/inspections/new">
-            <Button variant="secondary" size="sm">
-              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
-            </Button>
-          </Link>
-          {latestInspection && (
-            <Link href={`/dashboard/inspections/${latestInspection.id}`}>
+        {/* Action buttons + outcome decision */}
+        {latestInspection?.purchaseOutcome ? (
+          /* Already recorded outcome */
+          <div className="flex items-center gap-3 mt-4">
+            <Badge
+              variant={latestInspection.purchaseOutcome === "PURCHASED" ? "success" : "default"}
+              className="text-sm py-1 px-3"
+            >
+              {latestInspection.purchaseOutcome === "PURCHASED" ? (
+                <><ThumbsUp className="h-3.5 w-3.5 mr-1.5 inline" /> Purchased{latestInspection.purchasePrice ? ` for ${formatCurrency(latestInspection.purchasePrice)}` : ""}</>
+              ) : (
+                <><ThumbsDown className="h-3.5 w-3.5 mr-1.5 inline" /> Passed</>
+              )}
+            </Badge>
+            <Link href="/dashboard/inspections/new">
               <Button variant="secondary" size="sm">
-                View Inspection
+                <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
               </Button>
             </Link>
-          )}
-        </div>
+          </div>
+        ) : latestInspection ? (
+          /* Awaiting decision */
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+                onClick={() => setShowPriceInput(true)}
+                disabled={showPriceInput}
+              >
+                <ThumbsUp className="h-3.5 w-3.5 mr-1.5" /> I Bought It
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="text-red-700 border-red-300 hover:bg-red-50"
+                onClick={() => recordOutcome.mutate({ inspectionId: latestInspection.id, outcome: "PASSED" })}
+                loading={recordOutcome.isPending}
+              >
+                <ThumbsDown className="h-3.5 w-3.5 mr-1.5" /> I Passed
+              </Button>
+              <Link href="/dashboard/inspections/new">
+                <Button variant="secondary" size="sm">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
+                </Button>
+              </Link>
+            </div>
+
+            {/* Purchase price input */}
+            {showPriceInput && (
+              <div className="flex items-center gap-2 p-3 rounded-lg border border-green-200 bg-green-50">
+                <DollarSign className="h-4 w-4 text-green-600 shrink-0" />
+                <input
+                  type="number"
+                  placeholder="Purchase price"
+                  value={purchasePrice}
+                  onChange={(e) => setPurchasePrice(e.target.value)}
+                  className="flex-1 text-sm bg-white border border-border-default rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
+                  autoFocus
+                />
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => recordOutcome.mutate({
+                    inspectionId: latestInspection.id,
+                    outcome: "PURCHASED",
+                    purchasePrice: purchasePrice ? Math.round(parseFloat(purchasePrice) * 100) : undefined,
+                  })}
+                  loading={recordOutcome.isPending}
+                >
+                  <Check className="h-3.5 w-3.5 mr-1" /> Confirm
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => { setShowPriceInput(false); setPurchasePrice(""); }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mt-4">
+            <Link href="/dashboard/inspections/new">
+              <Button variant="secondary" size="sm">
+                <RefreshCw className="h-3.5 w-3.5 mr-1" /> New Inspection
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* ═══ DEAL STRIP ═══ */}
