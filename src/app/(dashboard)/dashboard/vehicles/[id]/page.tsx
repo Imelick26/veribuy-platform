@@ -84,15 +84,19 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const confirmedFindings = findings.filter((f) => f.repairCostLow || f.repairCostHigh);
   const reconLow = confirmedFindings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
   const reconHigh = confirmedFindings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
-  const reconEstimate = market?.estReconCost || (reconLow > 0 ? Math.round((reconLow + reconHigh) / 2) : 0);
-
   // Recon breakdown from AI valuation log
   const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> })?.aiValuationLogs?.[0];
   const reconBreakdown = reconLog?.output as {
+    totalReconCost?: number;
     itemizedCosts?: Array<{ finding: string; estimatedCostCents: number; laborHours?: number; partsEstimate?: number; shopType: string; reasoning: string }>;
     laborRateContext?: string;
     totalReasoning?: string;
   } | null;
+
+  // Single source of truth for recon: prefer breakdown total, fall back to market analysis, then findings
+  const reconEstimate = reconBreakdown?.totalReconCost
+    || market?.estReconCost
+    || (reconLow > 0 ? Math.round((reconLow + reconHigh) / 2) : 0);
 
   // Max bid = recommended buy price from market analysis
   const maxBid = market?.fairBuyMax || market?.adjustedPrice || 0;
@@ -172,69 +176,54 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <span className="font-mono text-xs">{vehicle.vin}</span>
               {odometer && <span>{odometer.toLocaleString()} mi</span>}
               {vehicle.drivetrain && <span>{vehicle.drivetrain}</span>}
-              {vehicle.engine && <span>{vehicle.engine}</span>}
+              {vehicle.engine && <span>{vehicle.engine.replace(/(\d+\.\d{1})\d+L/, "$1L")}</span>}
             </div>
           </div>
         </div>
 
-        {/* 3 Key Metrics */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* 2 Key Metrics */}
+        <div className="grid grid-cols-2 gap-3">
           {/* Condition Score */}
-          <Card className="p-4 text-center">
+          <Card className="p-4 flex items-center gap-4">
             {conditionScore != null ? (
-              <>
-                <div className={cn(
-                  "w-14 h-14 rounded-full flex flex-col items-center justify-center mx-auto border-2",
-                  conditionScore >= 70 ? "bg-green-50 border-green-300" :
-                  conditionScore >= 50 ? "bg-amber-50 border-amber-300" :
-                  "bg-red-50 border-red-300"
-                )}>
-                  <span className={cn(
-                    "font-bold text-lg leading-none",
-                    conditionScore >= 70 ? "text-green-700" :
-                    conditionScore >= 50 ? "text-amber-700" : "text-red-700"
-                  )}>{conditionScore}</span>
-                  <span className="text-[9px] text-text-tertiary">/100</span>
-                </div>
-                <p className="text-xs font-semibold text-text-secondary mt-1.5">
-                  {conditionGrade?.replace("_", " ")}
-                </p>
-              </>
+              <div className={cn(
+                "w-14 h-14 rounded-full flex flex-col items-center justify-center shrink-0 border-2",
+                conditionScore >= 70 ? "bg-green-50 border-green-300" :
+                conditionScore >= 50 ? "bg-amber-50 border-amber-300" :
+                "bg-red-50 border-red-300"
+              )}>
+                <span className={cn(
+                  "font-bold text-lg leading-none",
+                  conditionScore >= 70 ? "text-green-700" :
+                  conditionScore >= 50 ? "text-amber-700" : "text-red-700"
+                )}>{conditionScore}</span>
+                <span className="text-[9px] text-text-tertiary">/100</span>
+              </div>
             ) : (
-              <div className="py-2">
-                <p className="text-2xl font-bold text-text-tertiary">—</p>
-                <p className="text-xs text-text-tertiary mt-1">No inspection</p>
+              <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 border-2 border-border-default">
+                <span className="text-lg font-bold text-text-tertiary">—</span>
               </div>
             )}
-            <p className="text-[10px] text-text-tertiary mt-0.5">Condition</p>
+            <div>
+              <p className="text-xs font-semibold text-text-secondary">
+                {conditionGrade ? conditionGrade.replace("_", " ") : "No Score"}
+              </p>
+              <p className="text-[10px] text-text-tertiary">Condition</p>
+            </div>
           </Card>
 
-          {/* Recon Cost */}
-          <Card className="p-4 text-center">
-            {reconEstimate > 0 ? (
-              <>
-                <p className="text-2xl font-bold text-red-600">{formatCurrency(reconEstimate)}</p>
-                <p className="text-[10px] text-text-tertiary mt-1">Est. Recon</p>
-              </>
-            ) : (
-              <div className="py-2">
-                <p className="text-2xl font-bold text-green-600">$0</p>
-                <p className="text-[10px] text-text-tertiary mt-1">No issues found</p>
-              </div>
-            )}
-          </Card>
-
-          {/* Max Bid */}
-          <Card className="p-4 text-center">
-            {maxBid > 0 ? (
-              <>
-                <p className="text-2xl font-bold text-brand-700">{formatCurrency(maxBid)}</p>
-                <p className="text-[10px] text-text-tertiary mt-1">Max Bid</p>
-              </>
-            ) : (
-              <div className="py-2">
-                <p className="text-2xl font-bold text-text-tertiary">—</p>
-                <p className="text-[10px] text-text-tertiary mt-1">No valuation</p>
+          {/* Max Bid — the one number that matters */}
+          <Card className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">Max Bid</p>
+              <p className="text-2xl font-bold text-brand-700">
+                {maxBid > 0 ? formatCurrency(maxBid) : "—"}
+              </p>
+            </div>
+            {reconEstimate > 0 && (
+              <div className="text-right">
+                <p className="text-[10px] text-text-tertiary">Est. Recon</p>
+                <p className="text-sm font-bold text-red-600">{formatCurrency(reconEstimate)}</p>
               </div>
             )}
           </Card>
@@ -336,19 +325,17 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       {/* ═══ DEAL STRIP ═══ */}
       {market && (
         <Card className="p-0 overflow-hidden">
-          <div className="grid grid-cols-2 sm:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-border-default">
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border-default">
             {[
-              { label: "Fair Value", value: fairValue, color: "text-text-primary" },
               { label: "Est. Retail", value: estRetail, color: "text-text-primary" },
               { label: "Wholesale", value: market.tradeInValue || market.wholesaleValue, color: "text-text-secondary" },
-              { label: "Recon Cost", value: reconEstimate, color: "text-red-600", prefix: "-" },
               { label: "Net Margin", value: netMargin, color: netMargin > 0 ? "text-green-600" : "text-red-600" },
               { label: "Avg. Time on Lot", value: avgDaysOnMarket, color: "text-text-primary", suffix: " days", raw: true },
-            ].map(({ label, value, color, prefix, suffix, raw }) => (
+            ].map(({ label, value, color, suffix, raw }) => (
               <div key={label} className="px-4 py-3 text-center">
                 <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
                 <p className={cn("text-sm font-bold mt-0.5", color)}>
-                  {value ? `${prefix || ""}${raw ? value : formatCurrency(typeof value === "number" ? value : 0)}${suffix || ""}` : "—"}
+                  {value ? `${raw ? value : formatCurrency(typeof value === "number" ? value : 0)}${suffix || ""}` : "—"}
                 </p>
               </div>
             ))}
