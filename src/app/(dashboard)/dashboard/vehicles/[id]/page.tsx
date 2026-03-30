@@ -69,7 +69,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const confirmedFindings = findings.filter((f) => f.repairCostLow || f.repairCostHigh);
   const reconLow = confirmedFindings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
   const reconHigh = confirmedFindings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
-  const reconEstimate = reconLow > 0 ? Math.round((reconLow + reconHigh) / 2) : (market?.estReconCost || 0);
+  // Prefer AI-computed recon from market analysis; fall back to findings sum
+  const reconEstimate = market?.estReconCost || (reconLow > 0 ? Math.round((reconLow + reconHigh) / 2) : 0);
 
   // Max bid = recommended buy price from market analysis
   const maxBid = market?.fairBuyMax || market?.adjustedPrice || 0;

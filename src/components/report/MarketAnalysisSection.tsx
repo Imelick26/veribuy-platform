@@ -124,13 +124,17 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
   // Color is always green/amber (it's a recommended price, never overpaying)
   const rc = recColor("FAIR_BUY");
 
-  // Compute avg comp price + mileage
+  // Compute avg comp price + mileage + days on market
   const avgCompPrice = comps && comps.length > 0
     ? Math.round(comps.reduce((s, c) => s + c.price, 0) / comps.length)
     : null;
   const compsWithMileage = comps?.filter((c) => c.mileage > 0) ?? [];
   const avgCompMileage = compsWithMileage.length > 0
     ? Math.round(compsWithMileage.reduce((s, c) => s + c.mileage, 0) / compsWithMileage.length)
+    : null;
+  const compsWithDom = (comps as Array<{ daysOnMarket?: number }>)?.filter((c) => c.daysOnMarket && c.daysOnMarket > 0) ?? [];
+  const avgDaysOnMarket = compsWithDom.length > 0
+    ? Math.round(compsWithDom.reduce((s, c) => s + (c.daysOnMarket || 0), 0) / compsWithDom.length)
     : null;
 
   // Compute waterfall values — start from Est. Retail (what dealer lists it for)
@@ -199,7 +203,7 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
       {/* SECTION 2: HOW WE GOT HERE                                     */}
       {/* ═══════════════════════════════════════════════════════════════ */}
 
-      {/* ── Avg Comparable Price ── */}
+      {/* ── Avg Comparable Price + Time on Lot ── */}
       {avgCompPrice != null && (
         <div className="p-3 rounded-lg bg-surface-overlay border border-border-default">
           <div className="flex justify-between items-center">
@@ -210,9 +214,20 @@ export function MarketAnalysisSection({ data, compact = false }: MarketAnalysisS
                 {avgCompMileage != null && ` · Avg. ${avgCompMileage.toLocaleString()} mi`}
               </p>
             </div>
-            <p className="text-lg font-bold text-text-primary">
-              ${avgCompPrice.toLocaleString()}
-            </p>
+            <div className="flex items-center gap-4">
+              {avgDaysOnMarket != null && (
+                <div className="text-right">
+                  <p className="text-lg font-bold text-text-primary">{avgDaysOnMarket} days</p>
+                  <p className="text-[10px] text-text-tertiary">Avg. Time on Lot</p>
+                </div>
+              )}
+              <div className="text-right">
+                <p className="text-lg font-bold text-text-primary">
+                  ${avgCompPrice.toLocaleString()}
+                </p>
+                <p className="text-[10px] text-text-tertiary">Avg. Price</p>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -351,10 +366,11 @@ function OfferGuide({ bands }: { bands: NonNullable<MarketAnalysisData["priceBan
   const recommendedPrice = fairBuyBand?.maxPriceCents || 0;
   if (recommendedPrice <= 0) return null;
 
-  // Build sensible ranges anchored to recommended buy price
-  const greatMax = Math.round(recommendedPrice * 0.85);
-  const goodMax = recommendedPrice;
-  const fairMax = Math.round(recommendedPrice * 1.15);
+  // Build sensible ranges anchored to recommended buy price (round to nearest $100)
+  const roundTo100 = (v: number) => Math.round(v / 10000) * 10000;
+  const greatMax = roundTo100(recommendedPrice * 0.85);
+  const goodMax = roundTo100(recommendedPrice);
+  const fairMax = roundTo100(recommendedPrice * 1.15);
 
   const tiers = [
     { key: "GREAT", label: "Great Buy", desc: "Well below recommended — strong margin", icon: "bg-green-500", text: "text-green-700", bg: "bg-green-100", border: "border-green-300", rangeText: `Under ${formatCurrency(greatMax)}` },
