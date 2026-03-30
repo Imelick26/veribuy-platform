@@ -104,11 +104,11 @@ export default function DashboardPage() {
 
       {/* Pending outcomes nudge */}
       {pendingOutcomes && pendingOutcomes.count > 0 && (
-        <Card className="border-amber-200 bg-amber-50/30">
+        <Card className="border-l-4 border-l-amber-500">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center">
-                <TrendingUp className="h-4 w-4 text-amber-700" />
+              <div className="h-8 w-8 rounded-full bg-surface-overlay flex items-center justify-center">
+                <TrendingUp className="h-4 w-4 text-amber-600" />
               </div>
               <div>
                 <p className="text-sm font-medium text-amber-800">

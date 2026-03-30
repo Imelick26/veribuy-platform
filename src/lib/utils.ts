@@ -23,11 +23,11 @@ export function formatDate(date: Date | string): string {
 
 export function severityColor(severity: string): string {
   switch (severity) {
-    case "CRITICAL": return "text-red-700 bg-[#fde8e8] border-red-300";
-    case "MAJOR": return "text-red-700 bg-[#fde8e8] border-red-300";
-    case "MODERATE": return "text-text-secondary bg-surface-overlay border-border-strong";
-    case "MINOR": return "text-brand-700 bg-[#fce8f3] border-brand-300";
-    default: return "text-text-secondary bg-surface-overlay border-border-default";
+    case "CRITICAL": return "border-l-4 border-l-red-500 border-border-default bg-surface-raised";
+    case "MAJOR": return "border-l-4 border-l-red-500 border-border-default bg-surface-raised";
+    case "MODERATE": return "border-border-default bg-surface-raised";
+    case "MINOR": return "border-border-default bg-surface-raised";
+    default: return "border-border-default bg-surface-raised";
   }
 }
 

@@ -131,7 +131,7 @@ export default function SettingsPage() {
 
       {/* Checkout Success/Cancelled Banners */}
       {checkoutStatus === "success" && (
-        <Card className="border-green-300 bg-green-50">
+        <Card className="border-border-default border-l-4 border-l-green-500">
           <div className="flex items-center gap-2">
             <Check className="h-4 w-4 text-green-600" />
             <p className="text-sm text-green-700 font-medium">
@@ -141,7 +141,7 @@ export default function SettingsPage() {
         </Card>
       )}
       {checkoutStatus === "subscription_success" && (
-        <Card className="border-green-300 bg-green-50">
+        <Card className="border-border-default border-l-4 border-l-green-500">
           <div className="flex items-center gap-2">
             <Check className="h-4 w-4 text-green-600" />
             <p className="text-sm text-green-700 font-medium">
@@ -151,7 +151,7 @@ export default function SettingsPage() {
         </Card>
       )}
       {checkoutStatus === "cancelled" && (
-        <Card className="border-yellow-300 bg-yellow-50">
+        <Card className="border-border-default border-l-4 border-l-amber-500">
           <p className="text-sm text-yellow-700">Payment was cancelled. No charges were made.</p>
         </Card>
       )}
@@ -251,7 +251,7 @@ export default function SettingsPage() {
                 Change plan, update payment method, view invoices, or cancel
               </p>
               {portal.error && (
-                <div className="rounded-lg bg-[#fde8e8] px-3 py-2 text-sm text-red-700 ring-1 ring-red-300">
+                <div className="rounded-lg border border-border-default px-3 py-2 text-sm text-red-600">
                   {portal.error.message}
                 </div>
               )}
@@ -272,13 +272,13 @@ export default function SettingsPage() {
                       className="flex flex-col items-center gap-1.5 rounded-lg border border-border-default p-5 hover:border-brand-500 hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50"
                     >
                       <span className="text-base font-bold text-text-primary">{plan.label}</span>
-                      <span className="text-sm font-semibold text-brand-gradient">{plan.inspections}</span>
+                      <span className="text-sm font-semibold text-text-primary">{plan.inspections}</span>
                       <span className="text-xs text-text-tertiary">{plan.description}</span>
                     </button>
                   ))}
                 </div>
                 {subscribe.error && (
-                  <div className="rounded-lg bg-[#fde8e8] px-3 py-2 text-sm text-red-700 ring-1 ring-red-300 mt-2">
+                  <div className="rounded-lg border border-border-default px-3 py-2 text-sm text-red-600 mt-2">
                     {subscribe.error.message}
                   </div>
                 )}
@@ -353,13 +353,13 @@ export default function SettingsPage() {
                     className="flex flex-col items-center gap-1 rounded-lg border border-border-default p-4 hover:border-brand-500 hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50"
                   >
                     <span className="text-sm font-semibold text-text-primary">{pack.label}</span>
-                    <span className="text-lg font-bold text-brand-gradient">{pack.price}</span>
+                    <span className="text-lg font-bold text-text-primary">{pack.price}</span>
                     <span className="text-xs text-text-tertiary">{pack.perUnit}</span>
                   </button>
                 ))}
               </div>
               {checkout.error && (
-                <div className="rounded-lg bg-[#fde8e8] px-3 py-2 text-sm text-red-700 ring-1 ring-red-300">
+                <div className="rounded-lg border border-border-default px-3 py-2 text-sm text-red-600">
                   {checkout.error.message}
                 </div>
               )}
@@ -444,12 +444,12 @@ export default function SettingsPage() {
             <p className="text-sm text-red-600">Passwords do not match</p>
           )}
           {changePw.error && (
-            <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
+            <div className="rounded-lg border border-border-default px-4 py-3 text-sm text-red-600">
               {changePw.error.message}
             </div>
           )}
           {pwSuccess && (
-            <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 ring-1 ring-green-300">
+            <div className="rounded-lg border border-border-default px-4 py-3 text-sm text-green-600">
               Password changed successfully
             </div>
           )}

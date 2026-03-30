@@ -52,7 +52,7 @@ export default function ReportsPage() {
                   <p className="font-medium text-text-primary text-sm">
                     {r.inspection.vehicle ? `${r.inspection.vehicle.year} ${r.inspection.vehicle.make} ${r.inspection.vehicle.model}` : "Vehicle pending"}
                   </p>
-                  <Badge variant="info">{r.inspection._count.findings} additional findings</Badge>
+                  <Badge variant="default">{r.inspection._count.findings} additional findings</Badge>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-text-secondary">
                   <span className="font-mono">{r.number}</span>
@@ -86,7 +86,7 @@ export default function ReportsPage() {
                     </p>
                   </td>
                   <td className="px-5 py-3">
-                    <Badge variant="info">{r.inspection._count.findings}</Badge>
+                    <Badge variant="default">{r.inspection._count.findings}</Badge>
                   </td>
                   <td className="px-5 py-3 text-sm text-text-secondary">{r.viewCount}</td>
                   <td className="px-5 py-3 text-sm text-text-secondary">{formatDate(r.generatedAt)}</td>

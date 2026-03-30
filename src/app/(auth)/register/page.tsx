@@ -128,7 +128,7 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
+          <div className="rounded-xl border border-border-default px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -145,7 +145,7 @@ export default function RegisterPage() {
 
       <p className="mt-6 text-center text-sm text-text-secondary">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-brand-gradient hover:opacity-80 transition-opacity">
+        <Link href="/login" className="font-semibold text-text-primary underline hover:opacity-80 transition-opacity">
           Sign in
         </Link>
       </p>

@@ -134,7 +134,7 @@ export function Sidebar() {
       <div className="border-t border-border-default px-2 py-2">
         <button
           onClick={() => { close(); signOut({ callbackUrl: "/login" }); }}
-          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-text-secondary hover:bg-[#fde8e8] hover:text-red-700 transition-colors cursor-pointer"
+          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium text-text-tertiary hover:text-red-600 transition-colors cursor-pointer"
         >
           <LogOut className="h-4 w-4" />
           Sign Out

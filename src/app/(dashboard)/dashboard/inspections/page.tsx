@@ -65,7 +65,7 @@ export default function InspectionsPage() {
                     </span>
                   )}
                   {insp._count.media > 0 && (
-                    <span className="inline-flex items-center gap-1 text-brand-600">
+                    <span className="inline-flex items-center gap-1 text-text-secondary">
                       <Camera className="h-3 w-3" />
                       {insp._count.media}
                     </span>
@@ -123,7 +123,7 @@ export default function InspectionsPage() {
                     {insp._count.media > 0 ? (
                       <Link
                         href={`/dashboard/inspections/${insp.id}#photos`}
-                        className="inline-flex items-center gap-1.5 text-brand-600 hover:text-brand-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-text-secondary hover:text-brand-700 transition-colors"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Camera className="h-3.5 w-3.5" />

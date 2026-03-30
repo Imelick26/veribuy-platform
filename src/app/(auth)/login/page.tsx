@@ -59,7 +59,7 @@ export default function LoginPage() {
         />
 
         {error && (
-          <div className="rounded-xl bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
+          <div className="rounded-xl border border-border-default px-4 py-3 text-sm text-red-600">
             {error}
           </div>
         )}
@@ -71,7 +71,7 @@ export default function LoginPage() {
 
       <p className="mt-6 text-center text-sm text-text-secondary">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-brand-gradient hover:opacity-80 transition-opacity">
+        <Link href="/register" className="font-semibold text-text-primary underline hover:opacity-80 transition-opacity">
           Create one
         </Link>
       </p>

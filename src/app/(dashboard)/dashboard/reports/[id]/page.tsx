@@ -180,10 +180,12 @@ export default function ReportDetailPage({
           <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
             <h3 className="text-lg font-bold text-text-primary mb-4">
               <BarChart3 className="inline h-5 w-5 mr-1" />
-              Market Analysis
+              Vehicle Valuation
             </h3>
             <MarketAnalysisSection
               data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
+              audience="seller"
+              findings={allFindings}
             />
           </div>
         )}
@@ -419,7 +421,7 @@ export default function ReportDetailPage({
 
           {/* Total repair estimate */}
           {totalRepairHigh > 0 && (
-            <div className="mt-4 p-3 rounded-lg bg-[#fde8e8] border border-red-300">
+            <div className="mt-4 p-3 rounded-lg border border-border-default border-l-4 border-l-red-500">
               <p className="text-sm font-semibold text-red-700">
                 <AlertTriangle className="inline h-4 w-4 mr-1" />
                 Total Estimated Repair Cost: {formatCurrency(totalRepairLow)} – {formatCurrency(totalRepairHigh)}

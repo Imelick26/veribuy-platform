@@ -51,7 +51,7 @@ export default function VehiclesPage() {
                             {score}/100
                           </span>
                         )}
-                        <Badge variant="info">{v._count.inspections} insp.</Badge>
+                        <Badge variant="default">{v._count.inspections} insp.</Badge>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-text-secondary">
@@ -119,7 +119,7 @@ export default function VehiclesPage() {
                           )}
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <Badge variant="info">{v._count.inspections}</Badge>
+                          <Badge variant="default">{v._count.inspections}</Badge>
                         </td>
                         <td className="px-5 py-3 text-sm text-text-tertiary">{formatDate(v.createdAt)}</td>
                       </tr>
