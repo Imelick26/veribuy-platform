@@ -629,29 +629,21 @@ export async function assessTires(
       messages: [
         {
           role: "system",
-          content: `You are an automotive tire condition expert. Analyze tire close-up photos to estimate tread depth and overall condition.
+          content: `You are an automotive tire condition expert. Analyze tire close-up photos and classify each tire into one of 3 condition tiers.
 
-TREAD DEPTH ESTIMATION (in 32nds of an inch — industry standard):
-- NEW: 10-11/32" (just purchased, full tread)
-- GOOD: 7-9/32" (plenty of life remaining)
-- HALF_WORN: 5-6/32" (about half tread remaining, plan for replacement)
-- WORN: 3-4/32" (approaching minimum safe depth, replace soon)
-- REPLACE: 2/32" or less (at or below legal minimum, unsafe, immediate replacement)
+CONDITION TIERS (3 tiers only — pick one per tire):
+- GOOD: Plenty of tread remaining (roughly 7/32" or more). Grooves are deep, wear bars not visible, even wear pattern. No immediate action needed.
+- WORN: Tread is noticeably reduced (roughly 3-6/32"). Grooves are shallow but still visible, may see uneven wear. Plan for replacement within the next 10-15k miles.
+- REPLACE: Tread is at or near minimum safe depth (less than 3/32"), wear bars are flush with tread surface, OR the tire has heavily uneven wear (bald spots, severe inner/outer edge wear indicating alignment issues), OR significant sidewall damage (bulges, deep cracks, dry rot). Needs replacement before resale.
 
 WHAT TO LOOK FOR:
-- Tread depth: Look at tread groove depth relative to wear bars. Wear bars become visible at 2/32".
-- Wear pattern: Even wear vs. inner edge wear (alignment) vs. center wear (overinflation) vs. outer edge wear (underinflation)
-- Sidewall: Cracking, dry rot, bulges, weathering, scuffs
-- Tire age: DOT date code if visible (4-digit code on sidewall, e.g., "2419" = week 24 of 2019)
-- Brand/model: Note if tires are mismatched (different brands = concern)
+- Tread groove depth relative to wear indicator bars
+- Wear pattern: Even (normal) vs. inner edge (alignment) vs. center (overinflation) vs. outer edge (underinflation) vs. cupping (suspension)
+- Sidewall: Cracking, dry rot, bulges, scuffs
+- Brand/model: Mismatched tires across the vehicle = concern
+- DOT date code if visible (tire age — tires over 6 years old are a concern regardless of tread)
 
-SCORING (1-10):
-- 10: Brand new tires, full tread
-- 8-9: Excellent condition, plenty of life
-- 6-7: Good, normal wear for age
-- 4-5: Half worn, will need replacement within 10-15k miles
-- 2-3: Worn, needs replacement soon
-- 1: Unsafe, needs immediate replacement
+IMPORTANT: A tire with heavy uneven wear should be classified as REPLACE even if tread depth is adequate in some areas — the worn spots are what matter.
 
 Vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.mileage ? `${vehicle.mileage.toLocaleString()} miles` : "unknown mileage"})
 
@@ -660,7 +652,7 @@ Return ONLY valid JSON.`,
         {
           role: "user",
           content: [
-            { type: "text", text: `Analyze these ${validPhotos.length} tire photos (${photoLabels}). For each tire, estimate tread depth in 32nds of an inch and assess condition.\n\nReturn JSON:\n{\n  "frontDriver": { "treadDepth32nds": <number>, "condition": "<NEW|GOOD|HALF_WORN|WORN|REPLACE>", "observations": ["<observation>", ...] },\n  "frontPassenger": { "treadDepth32nds": <number>, "condition": "<condition>", "observations": [...] },\n  "rearDriver": { "treadDepth32nds": <number>, "condition": "<condition>", "observations": [...] },\n  "rearPassenger": { "treadDepth32nds": <number>, "condition": "<condition>", "observations": [...] },\n  "overallTireScore": <1-10>,\n  "summary": "<1-2 sentence summary of tire condition and any concerns>"\n}\n\nIf a tire photo is missing, estimate based on the others (same set likely similar). Be specific about what you observe.` },
+            { type: "text", text: `Analyze these ${validPhotos.length} tire photos (${photoLabels}). Classify each tire as GOOD, WORN, or REPLACE.\n\nReturn JSON:\n{\n  "frontDriver": { "condition": "GOOD|WORN|REPLACE", "observations": ["<what you see>", ...] },\n  "frontPassenger": { "condition": "GOOD|WORN|REPLACE", "observations": [...] },\n  "rearDriver": { "condition": "GOOD|WORN|REPLACE", "observations": [...] },\n  "rearPassenger": { "condition": "GOOD|WORN|REPLACE", "observations": [...] },\n  "overallTireScore": <1-10>,\n  "summary": "<1-2 sentence summary for the dealer — focus on whether tires need replacement before resale>"\n}\n\nIf a tire photo is missing, estimate based on the others (same set likely similar). Be specific about what you observe — wear patterns, sidewall condition, brand consistency.` },
             ...imageContent,
           ],
         },
@@ -675,13 +667,18 @@ Return ONLY valid JSON.`,
 
     const parsed = JSON.parse(raw);
 
-    // Validate and normalize
-    const normalizeTire = (t: Record<string, unknown>): import("@/types/risk").TireCondition => ({
-      treadDepth32nds: Math.max(0, Math.min(12, Math.round(Number(t.treadDepth32nds) || 5))),
-      condition: (["NEW", "GOOD", "HALF_WORN", "WORN", "REPLACE"].includes(String(t.condition))
-        ? String(t.condition) : "GOOD") as import("@/types/risk").TireConditionLevel,
-      observations: Array.isArray(t.observations) ? t.observations.map(String).slice(0, 5) : [],
-    });
+    // Validate and normalize to 3 tiers
+    const normalizeTire = (t: Record<string, unknown>): import("@/types/risk").TireCondition => {
+      let condition = String(t.condition || "GOOD").toUpperCase();
+      // Map legacy 5-tier to 3-tier
+      if (condition === "NEW") condition = "GOOD";
+      if (condition === "HALF_WORN") condition = "WORN";
+      if (!["GOOD", "WORN", "REPLACE"].includes(condition)) condition = "GOOD";
+      return {
+        condition: condition as import("@/types/risk").TireConditionLevel,
+        observations: Array.isArray(t.observations) ? t.observations.map(String).slice(0, 5) : [],
+      };
+    };
 
     return {
       frontDriver: normalizeTire(parsed.frontDriver || {}),

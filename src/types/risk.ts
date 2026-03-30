@@ -191,11 +191,10 @@ export interface ConditionAssessment {
   tireAssessment?: TireAssessment;
 }
 
-export type TireConditionLevel = "NEW" | "GOOD" | "HALF_WORN" | "WORN" | "REPLACE";
+export type TireConditionLevel = "GOOD" | "WORN" | "REPLACE";
 
 export interface TireCondition {
-  /** Estimated tread depth in 32nds of an inch (new ~10-11, replace ~2-3) */
-  treadDepth32nds: number;
+  /** Condition tier: GOOD (7+/32), WORN (3-6/32), REPLACE (<3/32 or heavily uneven) */
   condition: TireConditionLevel;
   observations: string[];
 }

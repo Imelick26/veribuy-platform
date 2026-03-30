@@ -374,10 +374,10 @@ export default function ReportDetailPage({
           {/* Tire Assessment */}
           {(() => {
             const rawData = inspection.conditionRawData as { tireAssessment?: {
-              frontDriver: { treadDepth32nds: number; condition: string; observations: string[] };
-              frontPassenger: { treadDepth32nds: number; condition: string; observations: string[] };
-              rearDriver: { treadDepth32nds: number; condition: string; observations: string[] };
-              rearPassenger: { treadDepth32nds: number; condition: string; observations: string[] };
+              frontDriver: { condition: string; observations: string[] };
+              frontPassenger: { condition: string; observations: string[] };
+              rearDriver: { condition: string; observations: string[] };
+              rearPassenger: { condition: string; observations: string[] };
               overallTireScore: number;
               summary: string;
             } } | null;
@@ -385,13 +385,12 @@ export default function ReportDetailPage({
             if (!tires) return null;
 
             const condColor = (c: string) =>
-              c === "NEW" || c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
-              c === "HALF_WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
+              c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
+              c === "WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
               "text-red-600 bg-red-50 border-red-200";
 
             const condLabel = (c: string) =>
-              c === "NEW" ? "New" : c === "GOOD" ? "Good" :
-              c === "HALF_WORN" ? "Half Worn" : c === "WORN" ? "Worn" : "Replace";
+              c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
 
             return (
               <div className="mt-4">
@@ -406,9 +405,8 @@ export default function ReportDetailPage({
                     <div key={label} className={cn("p-2 rounded-lg border text-xs", condColor(data.condition))}>
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{label}</span>
-                        <span className="font-bold">{data.treadDepth32nds}/32&quot;</span>
+                        <span className="font-bold text-[10px]">{condLabel(data.condition)}</span>
                       </div>
-                      <span className="text-[10px]">{condLabel(data.condition)}</span>
                     </div>
                   ))}
                 </div>

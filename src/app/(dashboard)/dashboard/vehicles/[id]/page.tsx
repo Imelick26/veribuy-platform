@@ -405,10 +405,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           {/* Tire Assessment */}
           {(() => {
             const rawData = inspection?.conditionRawData as { tireAssessment?: {
-              frontDriver: { treadDepth32nds: number; condition: string; observations: string[] };
-              frontPassenger: { treadDepth32nds: number; condition: string; observations: string[] };
-              rearDriver: { treadDepth32nds: number; condition: string; observations: string[] };
-              rearPassenger: { treadDepth32nds: number; condition: string; observations: string[] };
+              frontDriver: { condition: string; observations: string[] };
+              frontPassenger: { condition: string; observations: string[] };
+              rearDriver: { condition: string; observations: string[] };
+              rearPassenger: { condition: string; observations: string[] };
               overallTireScore: number;
               summary: string;
             } } | null;
@@ -416,15 +416,12 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             if (!tires) return null;
 
             const condColor = (c: string) =>
-              c === "NEW" ? "text-green-700 bg-green-50 border-green-200" :
-              c === "GOOD" ? "text-green-600 bg-green-50 border-green-200" :
-              c === "HALF_WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
-              c === "WORN" ? "text-red-600 bg-red-50 border-red-200" :
-              "text-red-700 bg-red-100 border-red-300";
+              c === "GOOD" ? "text-green-700 bg-green-50 border-green-200" :
+              c === "WORN" ? "text-amber-600 bg-amber-50 border-amber-200" :
+              "text-red-700 bg-red-50 border-red-300";
 
             const condLabel = (c: string) =>
-              c === "NEW" ? "New" : c === "GOOD" ? "Good" :
-              c === "HALF_WORN" ? "Half Worn" : c === "WORN" ? "Worn" : "Replace";
+              c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
 
             const tireEntries = [
               { label: "Front Left", data: tires.frontDriver },
@@ -450,14 +447,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                     <div key={label} className={cn("p-2.5 rounded-lg border", condColor(data.condition))}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-medium uppercase tracking-wider opacity-70">{label}</span>
-                        <span className="text-lg font-bold">{data.treadDepth32nds}<span className="text-[10px] font-normal">/32</span></span>
+                        <Badge variant={
+                          data.condition === "REPLACE" ? "danger" :
+                          data.condition === "WORN" ? "warning" : "success"
+                        } className="text-[9px]">
+                          {condLabel(data.condition)}
+                        </Badge>
                       </div>
-                      <Badge variant={
-                        data.condition === "REPLACE" ? "danger" :
-                        data.condition === "WORN" ? "warning" : "default"
-                      } className="text-[9px] mb-1">
-                        {condLabel(data.condition)}
-                      </Badge>
                       {data.observations.length > 0 && (
                         <p className="text-[10px] opacity-70 leading-snug mt-1">
                           {data.observations.slice(0, 2).join(". ")}
