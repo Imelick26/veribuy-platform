@@ -439,34 +439,32 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                         "bg-surface-raised border-border-default"
                       )}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-text-primary">{f.title}</span>
-                            <Badge variant={f.severity === "CRITICAL" ? "danger" : f.severity === "MAJOR" ? "warning" : "default"} className="text-[10px]">
-                              {f.severity}
-                            </Badge>
-                          </div>
-                        </div>
-                        {repairCost && (
-                          <span className="text-sm font-bold text-red-600 shrink-0 ml-3">
-                            {formatCurrency(repairCost)}
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-text-primary">{f.title}</span>
+                        <Badge variant={f.severity === "CRITICAL" ? "danger" : f.severity === "MAJOR" ? "warning" : "default"} className="text-[10px] shrink-0">
+                          {f.severity}
+                        </Badge>
                       </div>
                       {/* Repair action — what needs to be done */}
                       {tierLabel && (
                         <p className="text-xs font-medium text-red-700 mt-1">
-                          {tierLabel}
+                          Repair: {tierLabel}
                         </p>
                       )}
                       {f.description && (
-                        <p className="text-xs text-text-secondary mt-0.5">{f.description}</p>
+                        <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{f.description}</p>
                       )}
                     </div>
                   );
                 })}
               </div>
+              {/* Total recon — AI-computed, single authoritative number */}
+              {reconEstimate > 0 && (
+                <div className="flex items-center justify-between pt-3 mt-3 border-t border-border-default">
+                  <span className="text-sm font-semibold text-text-primary">Total Est. Reconditioning</span>
+                  <span className="text-sm font-bold text-red-600">{formatCurrency(reconEstimate)}</span>
+                </div>
+              )}
             </Card>
           )}
 
