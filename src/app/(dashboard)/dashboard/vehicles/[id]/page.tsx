@@ -396,41 +396,76 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </Card>
           )}
 
-          {/* Confirmed findings */}
+          {/* Identified issues */}
           {findings.length > 0 && (
             <Card className="p-5">
               <h3 className="text-sm font-semibold text-text-primary mb-3">
-                Confirmed Issues ({findings.length})
+                Identified Issues ({findings.length})
               </h3>
               <div className="space-y-2">
-                {findings.map((f) => (
-                  <div
-                    key={f.id}
-                    className={cn(
-                      "flex items-start justify-between p-3 rounded-lg border",
-                      f.severity === "CRITICAL" ? "bg-red-50 border-red-200" :
-                      f.severity === "MAJOR" ? "bg-amber-50 border-amber-200" :
-                      "bg-surface-raised border-border-default"
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-text-primary">{f.title}</span>
-                        <Badge variant={f.severity === "CRITICAL" ? "danger" : f.severity === "MAJOR" ? "warning" : "default"} className="text-[10px]">
-                          {f.severity}
-                        </Badge>
+                {findings.map((f) => {
+                  // Cross-reference with risk data to get tier label (repair action)
+                  const matchingRisk = riskData?.aggregatedRisks?.find((r) => r.title === f.title);
+                  const check = matchingRisk ? riskData?.checkStatuses?.[matchingRisk.id] : null;
+
+                  // Determine which tier applies based on question answers
+                  let tierLabel: string | null = null;
+                  let tierCost: number | null = null;
+                  if (matchingRisk?.costTiers && matchingRisk.costTiers.length === 3 && check?.questionAnswers) {
+                    const failureCount = check.questionAnswers.filter((qa) => {
+                      const q = matchingRisk.inspectionQuestions?.find((iq) => iq.id === qa.questionId);
+                      return q && qa.answer === q.failureAnswer;
+                    }).length;
+                    const tierIndex = Math.min(Math.max(failureCount - 1, 0), 2);
+                    const tier = matchingRisk.costTiers[tierIndex];
+                    if (tier) {
+                      tierLabel = tier.label;
+                      tierCost = Math.round((tier.costLow + tier.costHigh) / 2);
+                    }
+                  }
+
+                  // Fall back to finding cost midpoint if no tier data
+                  const repairCost = tierCost || (f.repairCostLow && f.repairCostHigh
+                    ? Math.round((f.repairCostLow + f.repairCostHigh) / 2)
+                    : f.repairCostLow || f.repairCostHigh || null);
+
+                  return (
+                    <div
+                      key={f.id}
+                      className={cn(
+                        "p-3 rounded-lg border",
+                        f.severity === "CRITICAL" ? "bg-red-50 border-red-200" :
+                        f.severity === "MAJOR" ? "bg-amber-50 border-amber-200" :
+                        "bg-surface-raised border-border-default"
+                      )}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-text-primary">{f.title}</span>
+                            <Badge variant={f.severity === "CRITICAL" ? "danger" : f.severity === "MAJOR" ? "warning" : "default"} className="text-[10px]">
+                              {f.severity}
+                            </Badge>
+                          </div>
+                        </div>
+                        {repairCost && (
+                          <span className="text-sm font-bold text-red-600 shrink-0 ml-3">
+                            {formatCurrency(repairCost)}
+                          </span>
+                        )}
                       </div>
+                      {/* Repair action — what needs to be done */}
+                      {tierLabel && (
+                        <p className="text-xs font-medium text-red-700 mt-1">
+                          {tierLabel}
+                        </p>
+                      )}
                       {f.description && (
                         <p className="text-xs text-text-secondary mt-0.5">{f.description}</p>
                       )}
                     </div>
-                    {(f.repairCostLow || f.repairCostHigh) && (
-                      <span className="text-xs font-semibold text-red-600 shrink-0 ml-3">
-                        {formatCurrency(f.repairCostLow || 0)} – {formatCurrency(f.repairCostHigh || 0)}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </Card>
           )}

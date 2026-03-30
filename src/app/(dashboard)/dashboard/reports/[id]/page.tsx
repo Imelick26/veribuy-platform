@@ -277,9 +277,9 @@ export default function ReportDetailPage({
                 <div className="space-y-1.5">
                   {checkedRisks.map((r) => {
                     const statusStyle = r.status === "CONFIRMED"
-                      ? { bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500", text: "text-red-600", label: "Observed" }
+                      ? { bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500", text: "text-red-600", label: "Identified" }
                       : r.status === "NOT_FOUND"
-                      ? { bg: "bg-green-50", border: "border-green-200", dot: "bg-green-500", text: "text-green-600", label: "Not Observed" }
+                      ? { bg: "bg-green-50", border: "border-green-200", dot: "bg-green-500", text: "text-green-600", label: "Clear" }
                       : r.status === "UNABLE_TO_INSPECT"
                       ? { bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-400", text: "text-amber-600", label: "Unable to Inspect" }
                       : { bg: "bg-gray-50", border: "border-gray-200", dot: "bg-gray-400", text: "text-gray-500", label: "Not Checked" };
@@ -295,8 +295,8 @@ export default function ReportDetailPage({
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {r.status === "CONFIRMED" && r.cost && (
-                            <span className="text-red-600 font-medium">
-                              {formatCurrency(r.cost.low)} – {formatCurrency(r.cost.high)}
+                            <span className="text-red-600 font-bold">
+                              {formatCurrency(Math.round((r.cost.low + r.cost.high) / 2))}
                             </span>
                           )}
                           <span className={cn("font-semibold", statusStyle.text)}>
@@ -412,7 +412,7 @@ export default function ReportDetailPage({
         <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-border-default">
           <h3 className="text-lg font-bold text-text-primary mb-4">
             <Wrench className="inline h-5 w-5 mr-1" />
-            Additional Findings ({findings.length})
+            Identified Issues ({findings.length})
           </h3>
           {findings.length === 0 ? (
             <div className="text-center py-8 text-text-tertiary">
@@ -421,7 +421,11 @@ export default function ReportDetailPage({
             </div>
           ) : (
             <div className="space-y-3">
-              {findings.map((f) => (
+              {findings.map((f) => {
+                const repairCost = f.repairCostLow && f.repairCostHigh
+                  ? Math.round((f.repairCostLow + f.repairCostHigh) / 2)
+                  : f.repairCostLow || f.repairCostHigh || null;
+                return (
                 <div
                   key={f.id}
                   className={`p-4 rounded-xl border ${severityColor(f.severity)}`}
@@ -429,23 +433,22 @@ export default function ReportDetailPage({
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-semibold text-text-primary">{f.title}</h4>
                     <div className="flex items-center gap-2">
+                      {repairCost && (
+                        <span className="text-sm font-bold text-red-600">
+                          {formatCurrency(repairCost)}
+                        </span>
+                      )}
                       <Badge variant={
                         f.severity === "CRITICAL" ? "danger" :
                         f.severity === "MAJOR" ? "warning" : "default"
                       }>
                         {f.severity}
                       </Badge>
-                      <Badge>{f.category.replace(/_/g, " ")}</Badge>
                     </div>
                   </div>
                   <p className="text-sm text-text-secondary">{f.description}</p>
                   {f.evidence && (
                     <p className="text-sm text-text-secondary mt-1 italic">Evidence: {f.evidence}</p>
-                  )}
-                  {(f.repairCostLow || f.repairCostHigh) && (
-                    <p className="text-sm font-medium mt-2">
-                      Estimated repair: {formatCurrency(f.repairCostLow || 0)} – {formatCurrency(f.repairCostHigh || 0)}
-                    </p>
                   )}
                   {/* Finding media */}
                   {f.media && f.media.length > 0 && (
@@ -461,7 +464,8 @@ export default function ReportDetailPage({
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
