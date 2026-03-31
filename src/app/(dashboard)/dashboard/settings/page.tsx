@@ -99,22 +99,22 @@ export default function SettingsPage() {
                 Pricing Strategy
               </label>
               <p className="text-xs text-text-secondary mb-3">
-                Controls how aggressively you bid. More aggressive = thinner margins, win more deals. More conservative = higher margins, more profit per unit.
+                Controls your margin on each vehicle. More aggressive = higher margins, more profit per car. More conservative = thinner margins, easier to close deals.
               </p>
               <div className="flex items-center gap-1">
                 {([
-                  { label: "Aggressive", pct: 15, desc: "Win deals" },
-                  { label: "Moderate", pct: 20, desc: "Balanced" },
-                  { label: "Standard", pct: 25, desc: "Default" },
-                  { label: "Conservative", pct: 30, desc: "Max profit" },
-                  { label: "Very Conservative", pct: 35, desc: "Cherry pick" },
+                  { label: "Aggressive", pct: 35, desc: "Max profit" },
+                  { label: "Moderate", pct: 30, desc: "Strong margins" },
+                  { label: "Standard", pct: 25, desc: "Balanced" },
+                  { label: "Conservative", pct: 20, desc: "Competitive" },
+                  { label: "Very Conservative", pct: 15, desc: "Win deals" },
                 ] as const).map(({ label, pct, desc }) => (
                   <button
                     key={pct}
                     onClick={() => setMarginPercent(pct)}
                     className={`flex-1 px-2 py-2.5 rounded-lg text-center transition-colors ${
                       currentMargin === pct
-                        ? "bg-brand-600 text-white"
+                        ? "bg-text-primary text-white"
                         : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
                     }`}
                   >
