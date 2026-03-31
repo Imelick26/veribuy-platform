@@ -64,7 +64,9 @@ body {
 
 /* === Brand Gradient Utilities === */
 .bg-brand-gradient {
-  background: linear-gradient(135deg, #ff4289 0%, #1a3a7a 100%);
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 40%, rgba(255,255,255,0.08) 70%, rgba(255,255,255,0) 100%),
+    linear-gradient(135deg, #ff4289 0%, #1a3a7a 100%);
 }
 
 .bg-brand-gradient-subtle {

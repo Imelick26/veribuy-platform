@@ -42,29 +42,51 @@ export const reportRouter = router({
       // Generate share token
       const shareToken = crypto.randomBytes(16).toString("hex");
 
-      // Extract risk checklist data from AI_ANALYSIS step
-      const physicalStep = inspection.steps.find(
-        (s) => s.step === "AI_ANALYSIS"
+      // Extract risk data from RISK_INSPECTION step
+      const riskStep = inspection.steps.find(
+        (s) => s.step === "RISK_INSPECTION" || s.step === "RISK_REVIEW"
       );
+      const riskStepData = riskStep?.data as {
+        aggregatedRisks?: Array<{
+          id: string; title: string; description?: string; severity: string; whyItMatters?: string;
+        }>;
+        checkStatuses?: Record<string, { status: string }>;
+      } | null;
+
       let riskChecklist: ReportData["riskChecklist"] = undefined;
-      if (physicalStep?.data && typeof physicalStep.data === "object") {
-        const stepData = physicalStep.data as Record<string, unknown>;
-        const checkStatuses = stepData.checkStatuses as
-          | Record<string, RiskCheckStatus>
-          | undefined;
-        if (checkStatuses) {
-          // Exclude skipped items from report — silent omission
-          const inspected = Object.values(checkStatuses).filter(
-            (v) => v.status !== "UNABLE_TO_INSPECT"
-          );
-          riskChecklist = {
-            total: inspected.length,
-            confirmed: inspected.filter((v) => v.status === "CONFIRMED").length,
-            cleared: inspected.filter((v) => v.status === "NOT_FOUND").length,
-            unableToInspect: 0,
-          };
-        }
+      let riskItems: ReportData["riskItems"] = undefined;
+      if (riskStepData?.aggregatedRisks && riskStepData.checkStatuses) {
+        const checks = riskStepData.checkStatuses;
+        const checked = riskStepData.aggregatedRisks
+          .filter((r) => checks[r.id] && (checks[r.id].status === "CONFIRMED" || checks[r.id].status === "NOT_FOUND"));
+        riskItems = checked.map((r) => ({
+          title: r.title,
+          description: r.description,
+          severity: r.severity,
+          status: checks[r.id].status,
+          whyItMatters: r.whyItMatters,
+        }));
+        riskChecklist = {
+          total: checked.length,
+          confirmed: checked.filter((r) => checks[r.id].status === "CONFIRMED").length,
+          cleared: checked.filter((r) => checks[r.id].status === "NOT_FOUND").length,
+          unableToInspect: 0,
+        };
       }
+
+      // Extract AI recon breakdown
+      const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> }).aiValuationLogs?.[0];
+      const reconOutput = reconLog?.output as {
+        totalReconCost?: number;
+        itemizedCosts?: Array<{ finding: string; estimatedCostCents: number; laborHours?: number; partsEstimate?: number; reasoning?: string }>;
+        laborRateContext?: string;
+      } | null;
+      const reconBreakdown: ReportData["reconBreakdown"] = reconOutput?.itemizedCosts
+        ? { totalReconCost: reconOutput.totalReconCost || 0, itemizedCosts: reconOutput.itemizedCosts, laborRateContext: reconOutput.laborRateContext }
+        : null;
+
+      // Extract condition details for 4-area breakdown
+      const conditionRaw = inspection.conditionRawData as Record<string, { summary?: string; concerns?: string[] }> | null;
 
       // Categorize media for the report
       const STANDARD_CAPTURES = new Set([
@@ -110,6 +132,12 @@ export const reportRouter = router({
           mechanicalVisual: inspection.mechanicalVisualScore,
           underbodyFrame: inspection.underbodyFrameScore,
         },
+        conditionDetails: conditionRaw ? {
+          exteriorBody: conditionRaw.exteriorBody,
+          interior: conditionRaw.interior,
+          mechanicalVisual: conditionRaw.mechanicalVisual,
+          underbodyFrame: conditionRaw.underbodyFrame,
+        } : null,
         findings: inspection.findings.map((f) => ({
           title: f.title,
           description: f.description || "",
@@ -121,6 +149,8 @@ export const reportRouter = router({
             ?.filter((m) => m.url)
             .map((m) => ({ url: m.url!, captureType: m.captureType || "FINDING_EVIDENCE" })),
         })),
+        riskItems,
+        reconBreakdown,
         riskChecklist,
         mediaCount: inspection.media.length,
         standardPhotos,

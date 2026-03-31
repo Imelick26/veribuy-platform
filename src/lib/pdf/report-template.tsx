@@ -70,6 +70,22 @@ interface ReportMarketAnalysis {
   privatePartyValue?: number | null;
 }
 
+interface ReportRiskItem {
+  title: string;
+  description?: string;
+  severity: string;
+  status: string; // CONFIRMED | NOT_FOUND
+  whyItMatters?: string;
+}
+
+interface ReportReconItem {
+  finding: string;
+  estimatedCostCents: number;
+  laborHours?: number;
+  partsEstimate?: number;
+  reasoning?: string;
+}
+
 export interface ReportData {
   number: string;
   generatedAt: Date | string;
@@ -90,7 +106,17 @@ export interface ReportData {
     mechanicalVisual: number | null;
     underbodyFrame: number | null;
   };
+  conditionDetails?: Record<string, {
+    summary?: string;
+    concerns?: string[];
+  }> | null;
   findings: ReportFinding[];
+  riskItems?: ReportRiskItem[];
+  reconBreakdown?: {
+    totalReconCost: number;
+    itemizedCosts: ReportReconItem[];
+    laborRateContext?: string;
+  } | null;
   riskChecklist?: {
     total: number;
     confirmed: number;
@@ -390,14 +416,13 @@ const styles = StyleSheet.create({
 /* ------------------------------------------------------------------ */
 
 export function ReportDocument({ data }: { data: ReportData }) {
-  const criticalCount = data.findings.filter((f) => f.severity === "CRITICAL").length;
-  const majorCount = data.findings.filter((f) => f.severity === "MAJOR").length;
-  const totalRepairLow = data.findings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
-  const totalRepairHigh = data.findings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
+  const footerText = `Report #${data.number} — ${data.vehicle.year} ${data.vehicle.make} ${data.vehicle.model} — VeriBuy`;
 
   return (
     <Document title={`Report ${data.number}`} author="VeriBuy">
-      {/* ---- Page 1: Summary ---- */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 1: Header + Condition Assessment                          */}
+      {/* ════════════════════════════════════════════════════════════════ */}
       <Page size="LETTER" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
@@ -416,138 +441,90 @@ export function ReportDocument({ data }: { data: ReportData }) {
           </View>
         </View>
 
-        {/* Executive Summary */}
+        {/* Condition Assessment — matches web report layout */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Executive Summary</Text>
+          <Text style={styles.sectionTitle}>Condition Assessment</Text>
 
-          <View style={styles.scoreRow}>
-            <View style={styles.scoreCard}>
-              <Text style={[styles.scoreValue, { color: scoreColor(data.scores.overall) }]}>
-                {data.scores.overall ?? "—"}
+          {/* Known Risk Areas */}
+          {data.riskItems && data.riskItems.length > 0 && (
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>
+                Known Risk Areas Inspected
               </Text>
-              <Text style={styles.scoreLabel}>OVERALL</Text>
+              {data.riskItems.map((risk, i) => {
+                const isConfirmed = risk.status === "CONFIRMED";
+                return (
+                  <View key={i} style={{
+                    paddingVertical: 4,
+                    paddingHorizontal: 6,
+                    marginBottom: 3,
+                    borderRadius: 4,
+                    backgroundColor: isConfirmed ? "#fef2f2" : "#f0fdf4",
+                    borderWidth: 0.5,
+                    borderColor: isConfirmed ? "#fecaca" : "#bbf7d0",
+                  }} wrap={false}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>{risk.title}</Text>
+                      <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", color: isConfirmed ? "#dc2626" : "#16a34a" }}>
+                        {isConfirmed ? "Identified" : "Clear"}
+                      </Text>
+                    </View>
+                    {isConfirmed && risk.description && (
+                      <Text style={{ fontSize: 8, color: "#4b5563", marginTop: 2 }}>{risk.description}</Text>
+                    )}
+                    {isConfirmed && risk.whyItMatters && (
+                      <Text style={{ fontSize: 8, color: "#dc2626", marginTop: 2 }}>{risk.whyItMatters}</Text>
+                    )}
+                  </View>
+                );
+              })}
             </View>
-            <View style={styles.scoreCard}>
-              <Text style={[styles.scoreValue, { color: "#dc2626" }]}>
-                {criticalCount + majorCount}
-              </Text>
-              <Text style={styles.scoreLabel}>CRITICAL / MAJOR</Text>
-            </View>
-            <View style={styles.scoreCard}>
-              <Text style={[styles.scoreValue, { color: "#1a3a7a" }]}>
-                {data.findings.length}
-              </Text>
-              <Text style={styles.scoreLabel}>TOTAL FINDINGS</Text>
-            </View>
-            <View style={styles.scoreCard}>
-              <Text style={[styles.scoreValue, { color: "#16a34a" }]}>
-                {data.mediaCount}
-              </Text>
-              <Text style={styles.scoreLabel}>PHOTOS</Text>
-            </View>
-          </View>
+          )}
 
-          {/* Sub-scores (4-area, each 1-10) */}
+          {/* 4-area condition scores with dot + summary + concerns */}
           {data.scores.overall != null && (
-            <View style={styles.scoreRow}>
-              <View style={styles.scoreCard}>
-                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.exteriorBody ? data.scores.exteriorBody * 10 : null) }]}>
-                  {data.scores.exteriorBody ?? "—"}/10
-                </Text>
-                <Text style={styles.scoreLabel}>EXTERIOR</Text>
-              </View>
-              <View style={styles.scoreCard}>
-                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.interior ? data.scores.interior * 10 : null) }]}>
-                  {data.scores.interior ?? "—"}/10
-                </Text>
-                <Text style={styles.scoreLabel}>INTERIOR</Text>
-              </View>
-              <View style={styles.scoreCard}>
-                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.mechanicalVisual ? data.scores.mechanicalVisual * 10 : null) }]}>
-                  {data.scores.mechanicalVisual ?? "—"}/10
-                </Text>
-                <Text style={styles.scoreLabel}>MECHANICAL</Text>
-              </View>
-              <View style={styles.scoreCard}>
-                <Text style={[styles.scoreValue, { fontSize: 16, color: scoreColor(data.scores.underbodyFrame ? data.scores.underbodyFrame * 10 : null) }]}>
-                  {data.scores.underbodyFrame ?? "—"}/10
-                </Text>
-                <Text style={styles.scoreLabel}>UNDERBODY</Text>
-              </View>
-            </View>
-          )}
-
-          {/* Repair cost total */}
-          {totalRepairHigh > 0 && (
-            <View style={styles.repairTotal}>
-              <Text style={styles.repairTotalText}>
-                Total Estimated Repair Cost: {fmtCurrency(totalRepairLow)} – {fmtCurrency(totalRepairHigh)}
-              </Text>
+            <View>
+              {([
+                { label: "Exterior Body", key: "exteriorBody", score: data.scores.exteriorBody },
+                { label: "Interior", key: "interior", score: data.scores.interior },
+                { label: "Mechanical / Visual", key: "mechanicalVisual", score: data.scores.mechanicalVisual },
+                { label: "Underbody / Frame", key: "underbodyFrame", score: data.scores.underbodyFrame },
+              ] as const).map((area) => {
+                const detail = data.conditionDetails?.[area.key];
+                const dotColor = (area.score || 0) >= 7 ? "#16a34a" : (area.score || 0) >= 6 ? "#eab308" : "#dc2626";
+                return (
+                  <View key={area.key} style={{ paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: "#e5e7eb" }} wrap={false}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: dotColor }} />
+                        <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>{area.label}</Text>
+                      </View>
+                      <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>{area.score ?? "—"}/10</Text>
+                    </View>
+                    {detail?.summary && (
+                      <Text style={{ fontSize: 8, color: "#4b5563", marginTop: 3, marginLeft: 13 }}>{detail.summary}</Text>
+                    )}
+                    {detail?.concerns && detail.concerns.length > 0 && detail.concerns.map((c, ci) => (
+                      <Text key={ci} style={{ fontSize: 8, color: "#dc2626", marginTop: 1, marginLeft: 13 }}>{"\u2022"} {c}</Text>
+                    ))}
+                  </View>
+                );
+              })}
             </View>
           )}
         </View>
 
-        {/* Vehicle Details */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vehicle Details</Text>
-          {[
-            { label: "VIN", value: data.vehicle.vin },
-            { label: "Year / Make / Model", value: `${data.vehicle.year} ${data.vehicle.make} ${data.vehicle.model}` },
-            data.vehicle.trim && { label: "Trim", value: data.vehicle.trim },
-            data.vehicle.exteriorColor && { label: "Exterior Color", value: data.vehicle.exteriorColor },
-          ]
-            .filter(Boolean)
-            .map((row, i) => (
-              <View key={i} style={styles.detailRow}>
-                <Text style={styles.detailLabel}>{(row as { label: string; value: string }).label}</Text>
-                <Text style={styles.detailValue}>{(row as { label: string; value: string }).value}</Text>
-              </View>
-            ))}
-        </View>
-
-        {/* Risk Checklist Summary */}
-        {data.riskChecklist && data.riskChecklist.total > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Risk Checklist Summary</Text>
-            <View style={styles.checklistRow}>
-              <View style={styles.checklistCard}>
-                <Text style={[styles.checklistValue, { color: "#1f2937" }]}>
-                  {data.riskChecklist.total}
-                </Text>
-                <Text style={styles.checklistLabel}>RISKS EVALUATED</Text>
-              </View>
-              <View style={styles.checklistCard}>
-                <Text style={[styles.checklistValue, { color: "#dc2626" }]}>
-                  {data.riskChecklist.confirmed}
-                </Text>
-                <Text style={styles.checklistLabel}>CONFIRMED</Text>
-              </View>
-              <View style={styles.checklistCard}>
-                <Text style={[styles.checklistValue, { color: "#16a34a" }]}>
-                  {data.riskChecklist.cleared}
-                </Text>
-                <Text style={styles.checklistLabel}>CLEARED</Text>
-              </View>
-              <View style={styles.checklistCard}>
-                <Text style={[styles.checklistValue, { color: "#6b7280" }]}>
-                  {data.riskChecklist.unableToInspect}
-                </Text>
-                <Text style={styles.checklistLabel}>UNABLE TO INSPECT</Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        <Text style={styles.footer}>
-          Report generated by VeriBuy on {fmtDate(data.generatedAt)} — For informational purposes only.
-        </Text>
+        <Text style={styles.footer}>{footerText}</Text>
       </Page>
 
-      {/* ---- Page 2+: Findings ---- */}
-      {data.findings.length > 0 && (
-        <Page size="LETTER" style={styles.page}>
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 2: Identified Issues + Estimated Repair Costs             */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <Page size="LETTER" style={styles.page}>
+        {/* Identified Issues */}
+        {data.findings.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Additional Findings ({data.findings.length})</Text>
+            <Text style={styles.sectionTitle}>Identified Issues ({data.findings.length})</Text>
             {data.findings.map((f, i) => {
               const sev = severityLabel(f.severity);
               return (
@@ -559,11 +536,6 @@ export function ReportDocument({ data }: { data: ReportData }) {
                     </Text>
                   </View>
                   <Text style={styles.findingDesc}>{f.description}</Text>
-                  {(f.repairCostLow || f.repairCostHigh) ? (
-                    <Text style={styles.findingCost}>
-                      Estimated repair: {fmtCurrency(f.repairCostLow || 0)} – {fmtCurrency(f.repairCostHigh || 0)}
-                    </Text>
-                  ) : null}
                   {f.media && f.media.length > 0 && (
                     <View style={styles.findingPhotoRow}>
                       {f.media.slice(0, 4).map((m, mi) => (
@@ -575,13 +547,46 @@ export function ReportDocument({ data }: { data: ReportData }) {
               );
             })}
           </View>
+        )}
 
-          <Text style={styles.footer}>
-            Report #{data.number} — {data.vehicle.year} {data.vehicle.make} {data.vehicle.model} — VeriBuy
-          </Text>
-        </Page>
-      )}
-      {/* ---- Vehicle Photos Page ---- */}
+        {/* Estimated Repair Costs — AI recon breakdown */}
+        {data.reconBreakdown && data.reconBreakdown.itemizedCosts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Estimated Repair Costs</Text>
+            {data.reconBreakdown.itemizedCosts.map((item, i) => (
+              <View key={i} style={{ paddingVertical: 4, paddingHorizontal: 6, marginBottom: 4, borderRadius: 4, backgroundColor: "#f9fafb" }} wrap={false}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                  <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1f2937", flex: 1 }}>{item.finding}</Text>
+                  <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#dc2626" }}>{fmtCurrency(item.estimatedCostCents)}</Text>
+                </View>
+                {item.reasoning && (
+                  <Text style={{ fontSize: 8, color: "#4b5563", marginTop: 2 }}>{item.reasoning}</Text>
+                )}
+                {(item.laborHours || item.partsEstimate) && (
+                  <Text style={{ fontSize: 7, color: "#9ca3af", marginTop: 1 }}>
+                    {item.laborHours ? `${item.laborHours}h labor` : ""}
+                    {item.laborHours && item.partsEstimate ? " + " : ""}
+                    {item.partsEstimate ? `${fmtCurrency(item.partsEstimate)} parts` : ""}
+                  </Text>
+                )}
+              </View>
+            ))}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 6, borderTopWidth: 1, borderTopColor: "#e5e7eb", marginTop: 4 }}>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>Total Estimated Repairs</Text>
+              <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#dc2626" }}>{fmtCurrency(data.reconBreakdown.totalReconCost)}</Text>
+            </View>
+            {data.reconBreakdown.laborRateContext && (
+              <Text style={{ fontSize: 7, color: "#9ca3af", marginTop: 4 }}>{data.reconBreakdown.laborRateContext}</Text>
+            )}
+          </View>
+        )}
+
+        <Text style={styles.footer}>{footerText}</Text>
+      </Page>
+
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* PAGE 3: Vehicle Photos                                         */}
+      {/* ════════════════════════════════════════════════════════════════ */}
       {data.standardPhotos && data.standardPhotos.length > 0 && (
         <Page size="LETTER" style={styles.page}>
           <View style={styles.section}>
@@ -596,9 +601,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
             </View>
           </View>
 
-          <Text style={styles.footer}>
-            Report #{data.number} — {data.vehicle.year} {data.vehicle.make} {data.vehicle.model} — VeriBuy
-          </Text>
+          <Text style={styles.footer}>{footerText}</Text>
         </Page>
       )}
 
