@@ -16,15 +16,17 @@ import { estimateReconCosts } from "@/lib/ai/recon-estimator";
 import { rateDeal } from "@/lib/ai/deal-rater";
 import { auditPrice } from "@/lib/ai/price-auditor";
 
-// Generate sequential inspection number
+// Generate sequential inspection number (uses max to avoid collisions after deletions)
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
   const year = new Date().getFullYear();
-  const count = await db.inspection.count({
-    where: {
-      number: { startsWith: `VB-${year}-` },
-    },
+  const prefix = `VB-${year}-`;
+  const latest = await db.inspection.findFirst({
+    where: { number: { startsWith: prefix } },
+    orderBy: { number: "desc" },
+    select: { number: true },
   });
-  return `VB-${year}-${String(count + 1).padStart(5, "0")}`;
+  const lastNum = latest ? parseInt(latest.number.replace(prefix, ""), 10) : 0;
+  return `${prefix}${String(lastNum + 1).padStart(5, "0")}`;
 }
 
 export const inspectionRouter = router({
