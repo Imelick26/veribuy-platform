@@ -28,6 +28,7 @@ export default function ReportDetailPage({
 }) {
   const { id } = use(params);
   const { data: report, isLoading } = trpc.report.get.useQuery({ id });
+  const { data: orgSettings } = trpc.auth.getOrgSettings.useQuery();
   const utils = trpc.useUtils();
   const [pdfLoading, setPdfLoading] = useState(false);
 
@@ -574,6 +575,8 @@ export default function ReportDetailPage({
               audience="seller"
               overallScore={inspection.overallScore}
               reconCostOverride={aiReconCost}
+              targetMarginPercent={orgSettings?.targetMarginPercent}
+              minProfitPerUnit={orgSettings?.minProfitPerUnit}
             />
           </div>
         )}

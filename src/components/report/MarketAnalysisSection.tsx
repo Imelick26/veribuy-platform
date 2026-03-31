@@ -210,9 +210,10 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
   // We want clean dollar amounts, so round trade-in to nearest $100.
   // Then compute condition/history deltas from it, and let a small
   // "rounding adjustment" line absorb any residual.
+  const sellerOffer = dealerBuyPrice; // Use margin-computed price, not stored fairBuyMax
   const rawTradeIn = combinedMult > 0
-    ? (recommendedPrice + sellerReconCost) / combinedMult
-    : recommendedPrice + sellerReconCost;
+    ? (sellerOffer + sellerReconCost) / combinedMult
+    : sellerOffer + sellerReconCost;
   const tradeInBase = Math.round(rawTradeIn / 10000) * 10000; // nearest $100
   const sellerAfterCondition = Math.round(tradeInBase * condMult);
   const sellerConditionDelta = sellerAfterCondition - tradeInBase;
@@ -222,7 +223,7 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
   const sellerHistoryDelta = sellerAfterHistory - sellerAfterCondition;
   // Residual from rounding — fold into the condition delta so it all balances
   const sellerExpected = tradeInBase + sellerConditionDelta + sellerHistoryDelta - sellerReconCost;
-  const sellerRoundingAdj = recommendedPrice - sellerExpected;
+  const sellerRoundingAdj = sellerOffer - sellerExpected;
   // Adjust condition delta to absorb rounding (small, invisible to seller)
   const sellerConditionDeltaAdj = sellerConditionDelta + sellerRoundingAdj;
 
@@ -247,7 +248,7 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
               Our Offer
             </p>
             <p className="text-2xl font-bold text-text-primary mt-0.5">
-              {formatCurrency(recommendedPrice)}
+              {formatCurrency(sellerOffer)}
             </p>
           </div>
           <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border-default text-xs">
@@ -398,7 +399,7 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
             <div className="flex justify-between border-t-2 pt-2 mt-1 border-green-300">
               <span className="font-bold text-green-700">Our Offer</span>
               <span className="font-bold text-lg text-green-700">
-                {formatCurrency(recommendedPrice)}
+                {formatCurrency(sellerOffer)}
               </span>
             </div>
           </div>
