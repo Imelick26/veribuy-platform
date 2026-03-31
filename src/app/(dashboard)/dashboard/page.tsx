@@ -104,22 +104,22 @@ export default function DashboardPage() {
 
       {/* Pending outcomes nudge */}
       {pendingOutcomes && pendingOutcomes.count > 0 && (
-        <Card className="border-l-4 border-l-amber-500">
+        <Card className="border-l-4 border-l-yellow-400">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-surface-overlay flex items-center justify-center">
-                <TrendingUp className="h-4 w-4 text-amber-600" />
+              <div className="h-8 w-8 rounded-full bg-yellow-50 flex items-center justify-center">
+                <TrendingUp className="h-4 w-4 text-yellow-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-amber-800">
+                <p className="text-sm font-medium text-text-primary">
                   {pendingOutcomes.count} inspection{pendingOutcomes.count !== 1 ? "s" : ""} awaiting outcome
                 </p>
-                <p className="text-xs text-amber-600">
+                <p className="text-xs text-text-secondary">
                   Did you buy these vehicles? Your feedback improves pricing accuracy.
                 </p>
               </div>
             </div>
-            <Link href="/dashboard/inspections" className="text-xs text-amber-700 font-semibold hover:underline">
+            <Link href="/dashboard/inspections" className="text-xs text-text-primary font-semibold hover:underline">
               Review
             </Link>
           </div>
