@@ -341,10 +341,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                 <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(openAt)}</p>
                 <p className="text-[10px] text-green-500 mt-1">Start here</p>
               </div>
-              <div className="p-4 rounded-lg bg-brand-900 text-center">
-                <p className="text-xs text-white/60 uppercase tracking-wider font-medium">Target</p>
-                <p className="text-2xl font-bold text-white mt-1">{formatCurrency(maxBid)}</p>
-                <p className="text-[10px] text-white/50 mt-1">Recommended buy</p>
+              <div className="p-4 rounded-lg bg-white border-2 border-text-primary text-center">
+                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Target</p>
+                <p className="text-2xl font-bold text-text-primary mt-1">{formatCurrency(maxBid)}</p>
+                <p className="text-[10px] text-text-tertiary mt-1">Recommended buy</p>
               </div>
               <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-center">
                 <p className="text-xs text-red-500 uppercase tracking-wider font-medium">Walk Away</p>
