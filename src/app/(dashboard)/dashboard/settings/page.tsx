@@ -107,7 +107,7 @@ export default function SettingsPage() {
                   { label: "Moderate", pct: 30, desc: "Strong margins" },
                   { label: "Standard", pct: 25, desc: "Balanced" },
                   { label: "Conservative", pct: 20, desc: "Competitive" },
-                  { label: "Very Conservative", pct: 15, desc: "Win deals" },
+                  { label: "Minimal", pct: 15, desc: "Win deals" },
                 ] as const).map(({ label, pct, desc }) => (
                   <button
                     key={pct}
