@@ -93,36 +93,69 @@ export default function SettingsPage() {
         </CardHeader>
         <div className="px-6 pb-6">
           <div className="space-y-5">
+            {/* Pricing Strategy */}
             <div>
               <label className="text-sm font-medium text-text-primary block mb-1">
-                Target Dealer Margin
+                Pricing Strategy
               </label>
-              <p className="text-xs text-text-secondary mb-2">
-                The margin percentage used to calculate the recommended buy price. Higher margin = lower buy price.
+              <p className="text-xs text-text-secondary mb-3">
+                Controls how aggressively you bid. More aggressive = thinner margins, win more deals. More conservative = higher margins, more profit per unit.
               </p>
-              <div className="flex items-center gap-2">
-                {[15, 20, 25, 30, 35].map((pct) => (
+              <div className="flex items-center gap-1">
+                {([
+                  { label: "Aggressive", pct: 15, desc: "Win deals" },
+                  { label: "Moderate", pct: 20, desc: "Balanced" },
+                  { label: "Standard", pct: 25, desc: "Default" },
+                  { label: "Conservative", pct: 30, desc: "Max profit" },
+                  { label: "Very Conservative", pct: 35, desc: "Cherry pick" },
+                ] as const).map(({ label, pct, desc }) => (
                   <button
                     key={pct}
                     onClick={() => setMarginPercent(pct)}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    className={`flex-1 px-2 py-2.5 rounded-lg text-center transition-colors ${
                       currentMargin === pct
                         ? "bg-brand-600 text-white"
                         : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
                     }`}
                   >
-                    {pct}%
+                    <p className={`text-xs font-semibold ${currentMargin === pct ? "text-white" : "text-text-primary"}`}>{label}</p>
+                    <p className={`text-[10px] mt-0.5 ${currentMargin === pct ? "text-white/70" : "text-text-tertiary"}`}>{desc}</p>
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* Condition → Margin Preview */}
+            <div>
+              <p className="text-xs text-text-secondary mb-2">
+                Margin scales automatically based on vehicle condition score. Easy flips get thinner margins, project cars get wider margins.
+              </p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {([
+                  { label: "Excellent", score: "85+", color: "bg-green-50 border-green-200 text-green-700", example: "Clean, low miles" },
+                  { label: "Good", score: "70-84", color: "bg-blue-50 border-blue-200 text-blue-700", example: "Solid, minor wear" },
+                  { label: "Fair", score: "60-69", color: "bg-amber-50 border-amber-200 text-amber-700", example: "Needs work" },
+                  { label: "Poor", score: "<60", color: "bg-red-50 border-red-200 text-red-700", example: "Heavy recon" },
+                ] as const).map(({ label, score, color, example }) => {
+                  const pct = getConditionMarginPct(currentMargin, label === "Excellent" ? 90 : label === "Good" ? 75 : label === "Fair" ? 65 : 50);
+                  return (
+                    <div key={label} className={`rounded-lg border px-2.5 py-2 text-center ${color}`}>
+                      <p className="font-bold text-lg">{pct}%</p>
+                      <p className="text-[10px] font-semibold">{label}</p>
+                      <p className="text-[9px] opacity-60">{example}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Minimum Profit Floor */}
             <div>
               <label className="text-sm font-medium text-text-primary block mb-1">
                 Minimum Profit Per Vehicle
               </label>
               <p className="text-xs text-text-secondary mb-2">
-                The minimum gross profit per unit. Ensures low-value vehicles are still worth buying. Whichever is greater — the percentage or this floor — is used.
+                Safety net for low-value vehicles. If the condition-based margin produces less than this amount, this floor is used instead.
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-text-secondary">$</span>
@@ -137,45 +170,20 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button
-                size="sm"
-                onClick={() => updateSettings.mutate({
-                  targetMarginPercent: currentMargin,
-                  minProfitPerUnit: currentMinProfit,
-                })}
-                loading={updateSettings.isPending}
-                disabled={
-                  currentMargin === (orgSettings?.targetMarginPercent ?? 20) &&
-                  currentMinProfit === (orgSettings?.minProfitPerUnit ?? 150000)
-                }
-              >
-                {marginSaved ? <><Check className="h-3.5 w-3.5 mr-1" /> Saved</> : "Save"}
-              </Button>
-            </div>
-            {/* Condition-based tier table */}
-            <div className="mt-1">
-              <p className="text-[11px] text-text-tertiary mb-2">
-                Margin adjusts automatically based on vehicle condition. Base rate ({currentMargin}%) applies to &quot;Good&quot; condition. Minimum profit floor: ${currentMinProfitDollars.toLocaleString()}/unit.
-              </p>
-              <div className="grid grid-cols-4 gap-1 text-[10px]">
-                {([
-                  { label: "Excellent", score: "85+", color: "bg-green-50 text-green-700" },
-                  { label: "Good", score: "70-84", color: "bg-blue-50 text-blue-700" },
-                  { label: "Fair", score: "60-69", color: "bg-amber-50 text-amber-700" },
-                  { label: "Poor", score: "<60", color: "bg-red-50 text-red-700" },
-                ] as const).map(({ label, score, color }) => {
-                  const pct = getConditionMarginPct(currentMargin, label === "Excellent" ? 90 : label === "Good" ? 75 : label === "Fair" ? 65 : 50);
-                  return (
-                    <div key={label} className={`rounded-md px-2 py-1.5 text-center ${color}`}>
-                      <p className="font-bold text-sm">{pct}%</p>
-                      <p className="font-medium">{label}</p>
-                      <p className="opacity-70">{score}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <Button
+              size="sm"
+              onClick={() => updateSettings.mutate({
+                targetMarginPercent: currentMargin,
+                minProfitPerUnit: currentMinProfit,
+              })}
+              loading={updateSettings.isPending}
+              disabled={
+                currentMargin === (orgSettings?.targetMarginPercent ?? 20) &&
+                currentMinProfit === (orgSettings?.minProfitPerUnit ?? 150000)
+              }
+            >
+              {marginSaved ? <><Check className="h-3.5 w-3.5 mr-1" /> Saved</> : "Save"}
+            </Button>
           </div>
         </div>
       </Card>

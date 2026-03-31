@@ -179,16 +179,31 @@ export const reportRouter = router({
         console.error("PDF generation error:", err);
       }
 
-      const report = await ctx.db.report.create({
-        data: {
-          number,
-          shareToken,
-          inspectionId: input.inspectionId,
-          orgId: ctx.orgId,
-          pdfS3Key,
-          pdfUrl,
-        },
+      // Check if report already exists (regeneration)
+      const existingReport = await ctx.db.report.findFirst({
+        where: { inspectionId: input.inspectionId },
       });
+
+      let report;
+      if (existingReport) {
+        // Regenerate: update PDF only, keep report number + share token
+        report = await ctx.db.report.update({
+          where: { id: existingReport.id },
+          data: { pdfS3Key, pdfUrl, generatedAt: new Date() },
+        });
+      } else {
+        // First generation
+        report = await ctx.db.report.create({
+          data: {
+            number,
+            shareToken,
+            inspectionId: input.inspectionId,
+            orgId: ctx.orgId,
+            pdfS3Key,
+            pdfUrl,
+          },
+        });
+      }
 
       // Mark inspection as completed
       await ctx.db.inspection.update({

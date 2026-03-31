@@ -28,7 +28,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const [activeTab, setActiveTab] = useState<Tab>("risks");
   const [showPriceInput, setShowPriceInput] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
-  const [marginOverride, setMarginOverride] = useState<number | null>(null);
+  const [marginMode, setMarginMode] = useState<"pct" | "flat">("pct");
+  const [marginOverride, setMarginOverride] = useState<number | null>(null); // pct override
+  const [flatMarginOverride, setFlatMarginOverride] = useState<string>(""); // flat $ override
 
   const recordOutcome = trpc.inspection.recordOutcome.useMutation({
     onSuccess: () => {
@@ -112,12 +114,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const fmv = Math.round(estRetail * condMult * histMult) - reconEstimate;
   const basePct = orgSettings?.targetMarginPercent ?? 20;
   const condScore = inspection?.overallScore ?? null;
-  const effectiveMarginPct = marginOverride ?? getConditionMarginPct(basePct, condScore);
+  const aiMarginPct = getConditionMarginPct(basePct, condScore);
   const tierLabel = getConditionTierLabel(condScore);
   const minProfit = orgSettings?.minProfitPerUnit ?? 150000;
-  const pctMargin = Math.round(estRetail * (effectiveMarginPct / 100));
-  const dealerMarginAmount = Math.max(pctMargin, minProfit);
+
+  // Margin: flat $ override, pct override, or AI-recommended
+  const flatParsed = flatMarginOverride !== "" ? Math.round(parseFloat(flatMarginOverride) * 100) : null;
+  const effectiveMarginPct = marginMode === "pct" ? (marginOverride ?? aiMarginPct) : aiMarginPct;
+  const dealerMarginAmount = marginMode === "flat" && flatParsed != null
+    ? Math.max(flatParsed, minProfit)
+    : Math.max(Math.round(estRetail * (effectiveMarginPct / 100)), minProfit);
   const maxBid = Math.max(0, Math.round((estRetail - dealerMarginAmount - reconEstimate) / 100) * 100);
+  const effectiveMarginDisplay = marginMode === "flat" && flatParsed != null
+    ? `$${(dealerMarginAmount / 100).toLocaleString()}`
+    : `${effectiveMarginPct}%`;
   const netMargin = estRetail > 0 && maxBid > 0 ? estRetail - maxBid - reconEstimate : 0;
 
   // Odometer
@@ -181,22 +191,23 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             <ArrowLeft className="h-4 w-4" /> Vehicles
           </Link>
           <div className="flex items-center gap-2">
-            {inspection?.report ? (
+            {inspection?.report && (
               <Link href={`/dashboard/reports/${inspection.report.id}`}>
                 <Button variant="secondary" size="sm">
                   <FileText className="h-3.5 w-3.5 mr-1" /> View Report
                 </Button>
               </Link>
-            ) : inspection?.status === "COMPLETED" ? (
+            )}
+            {inspection && (inspection.status === "COMPLETED" || inspection.status === "MARKET_PRICED") && (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => generateReport.mutate({ inspectionId: inspection.id })}
                 loading={generateReport.isPending}
               >
-                <FileText className="h-3.5 w-3.5 mr-1" /> Generate Report
+                <FileText className="h-3.5 w-3.5 mr-1" /> {inspection.report ? "Regenerate Report" : "Generate Report"}
               </Button>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -248,28 +259,73 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
         {/* Margin Adjuster */}
         {estRetail > 0 && (
-          <div className="flex items-center gap-3 mt-4 px-3 py-2 rounded-lg bg-surface-overlay border border-border-default">
-            <span className="text-xs font-medium text-text-secondary shrink-0">Margin</span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setMarginOverride(Math.max(5, effectiveMarginPct - 5))}
-                className="w-6 h-6 rounded text-xs font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
-              >-</button>
-              <span className="text-sm font-bold text-text-primary w-10 text-center">{effectiveMarginPct}%</span>
-              <button
-                onClick={() => setMarginOverride(Math.min(50, effectiveMarginPct + 5))}
-                className="w-6 h-6 rounded text-xs font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
-              >+</button>
+          <div className="mt-4 p-3 rounded-lg bg-surface-overlay border border-border-default">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-text-primary">Dealer Margin</span>
+              <div className="flex items-center gap-0.5 bg-surface-sunken rounded-md p-0.5">
+                <button
+                  onClick={() => setMarginMode("pct")}
+                  className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                    marginMode === "pct" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                  )}
+                >%</button>
+                <button
+                  onClick={() => setMarginMode("flat")}
+                  className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                    marginMode === "flat" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                  )}
+                >$</button>
+              </div>
             </div>
-            <span className="text-[10px] text-text-tertiary">
-              {marginOverride != null ? (
-                <button onClick={() => setMarginOverride(null)} className="text-brand-600 hover:underline">
-                  Reset to {getConditionMarginPct(basePct, condScore)}% ({tierLabel})
-                </button>
-              ) : (
-                <>{tierLabel} condition</>
-              )}
-            </span>
+            {marginMode === "pct" ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setMarginOverride(Math.max(5, effectiveMarginPct - 1))}
+                    className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+                  >-</button>
+                  <span className="text-lg font-bold text-text-primary w-12 text-center">{effectiveMarginPct}%</span>
+                  <button
+                    onClick={() => setMarginOverride(Math.min(50, effectiveMarginPct + 1))}
+                    className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+                  >+</button>
+                </div>
+                <span className="text-[10px] text-text-tertiary ml-1">
+                  {marginOverride != null ? (
+                    <button onClick={() => setMarginOverride(null)} className="text-brand-600 hover:underline">
+                      Reset to {aiMarginPct}% ({tierLabel})
+                    </button>
+                  ) : (
+                    <>AI recommended ({tierLabel} condition)</>
+                  )}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-text-secondary">$</span>
+                <input
+                  type="number"
+                  value={flatMarginOverride !== "" ? flatMarginOverride : (dealerMarginAmount / 100).toString()}
+                  onChange={(e) => setFlatMarginOverride(e.target.value)}
+                  className="w-24 text-lg font-bold bg-white border border-border-default rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                  min={0}
+                  step={100}
+                />
+                <span className="text-[10px] text-text-tertiary">
+                  {flatMarginOverride !== "" ? (
+                    <button onClick={() => { setFlatMarginOverride(""); setMarginMode("pct"); }} className="text-brand-600 hover:underline">
+                      Reset to {aiMarginPct}% ({tierLabel})
+                    </button>
+                  ) : (
+                    <>Min floor: ${(minProfit / 100).toLocaleString()}</>
+                  )}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-default text-xs">
+              <span className="text-text-tertiary">Margin: {formatCurrency(dealerMarginAmount)}</span>
+              <span className="text-text-tertiary">Buy Price: <span className="font-semibold text-text-primary">{formatCurrency(maxBid)}</span></span>
+            </div>
           </div>
         )}
 

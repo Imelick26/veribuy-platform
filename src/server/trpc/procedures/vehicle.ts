@@ -82,6 +82,7 @@ export const vehicleRouter = router({
         where: { id: input.id, orgId: ctx.orgId },
         include: {
           inspections: {
+            where: { status: "COMPLETED" },
             orderBy: { createdAt: "desc" },
             include: {
               findings: { include: { media: true } },
@@ -115,6 +116,8 @@ export const vehicleRouter = router({
       const vehicles = await ctx.db.vehicle.findMany({
         where: {
           orgId: ctx.orgId,
+          // Only show vehicles with at least one completed inspection
+          inspections: { some: { status: "COMPLETED" } },
           ...(input.search
             ? {
                 OR: [

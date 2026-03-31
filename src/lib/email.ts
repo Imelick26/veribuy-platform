@@ -41,6 +41,30 @@ export async function sendWelcomeEmail(opts: {
   });
 }
 
+export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string) {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — skipping password reset email");
+    console.log(`Password reset URL: ${resetUrl}`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: "Reset your VeriBuy password",
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
+        <h2 style="margin: 0 0 8px;">Reset your password</h2>
+        <p style="color: #555; margin: 0 0 24px;">Hi ${name}, we received a request to reset your VeriBuy password. Click the button below to set a new one.</p>
+        <a href="${resetUrl}" style="display: inline-block; background: #7c3aed; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">Reset Password</a>
+        <p style="color: #999; font-size: 13px; margin: 24px 0 0;">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+        <p style="color: #999; font-size: 12px; margin: 24px 0 0;">&mdash; VeriBuy Vehicle Inspection Intelligence</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendOutcomeEmail(opts: {
   to: string;
   inspectorName: string;

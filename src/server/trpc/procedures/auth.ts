@@ -1,7 +1,8 @@
 import { z } from "zod/v4";
 import { router, publicProcedure, protectedProcedure, managerProcedure } from "../init";
 import bcrypt from "bcryptjs";
-import { sendWelcomeEmail } from "@/lib/email";
+import crypto from "crypto";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email";
 
 export const authRouter = router({
   // Register a new user + organization
@@ -224,6 +225,73 @@ export const authRouter = router({
           ...(input.minProfitPerUnit != null && { minProfitPerUnit: input.minProfitPerUnit }),
         },
       });
+      return { success: true };
+    }),
+
+  // Request password reset — sends email with token
+  requestPasswordReset: publicProcedure
+    .input(z.object({ email: z.email() }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.user.findUnique({
+        where: { email: input.email.toLowerCase() },
+      });
+
+      // Always return success (don't reveal if email exists)
+      if (!user) return { success: true };
+
+      // Delete any existing reset tokens for this email
+      await ctx.db.verificationToken.deleteMany({
+        where: { identifier: input.email.toLowerCase() },
+      });
+
+      // Create a new token (expires in 1 hour)
+      const token = crypto.randomBytes(32).toString("hex");
+      await ctx.db.verificationToken.create({
+        data: {
+          identifier: input.email.toLowerCase(),
+          token,
+          expires: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      });
+
+      const resetUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/reset-password/${token}`;
+      await sendPasswordResetEmail(input.email.toLowerCase(), user.name || "there", resetUrl);
+
+      return { success: true };
+    }),
+
+  // Reset password with token
+  resetPassword: publicProcedure
+    .input(z.object({
+      token: z.string(),
+      newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const record = await ctx.db.verificationToken.findUnique({
+        where: { token: input.token },
+      });
+
+      if (!record || record.expires < new Date()) {
+        throw new Error("Invalid or expired reset link. Please request a new one.");
+      }
+
+      const user = await ctx.db.user.findUnique({
+        where: { email: record.identifier },
+      });
+
+      if (!user) throw new Error("User not found");
+
+      const passwordHash = await bcrypt.hash(input.newPassword, 12);
+      await ctx.db.user.update({
+        where: { id: user.id },
+        data: { passwordHash },
+      });
+
+      // Clean up the token
+      await ctx.db.verificationToken.delete({
+        where: { token: input.token },
+      });
+
       return { success: true };
     }),
 });
