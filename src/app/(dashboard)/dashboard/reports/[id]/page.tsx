@@ -163,7 +163,7 @@ export default function ReportDetailPage({
             <div className="sm:text-right flex sm:flex-col items-center sm:items-end gap-3 sm:gap-1">
               {inspection.overallScore != null && (
                 <div className={cn(
-                  "w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 bg-white",
+                  "w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 bg-white ring-1 ring-white/40",
                   (inspection.overallScore || 0) >= 70 ? "border-green-400 text-green-700" :
                   (inspection.overallScore || 0) >= 50 ? "border-yellow-400 text-yellow-700" :
                   "border-red-400 text-red-700"
