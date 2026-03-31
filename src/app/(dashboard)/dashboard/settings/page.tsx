@@ -133,7 +133,7 @@ export default function SettingsPage() {
               <div className="grid grid-cols-4 gap-1.5">
                 {([
                   { label: "Excellent", score: "85+", color: "bg-green-50 border-green-200 text-green-700", example: "Clean, low miles" },
-                  { label: "Good", score: "70-84", color: "bg-blue-50 border-blue-200 text-blue-700", example: "Solid, minor wear" },
+                  { label: "Good", score: "70-84", color: "bg-green-50 border-green-200 text-green-700", example: "Solid, minor wear" },
                   { label: "Fair", score: "60-69", color: "bg-amber-50 border-amber-200 text-amber-700", example: "Needs work" },
                   { label: "Poor", score: "<60", color: "bg-red-50 border-red-200 text-red-700", example: "Heavy recon" },
                 ] as const).map(({ label, score, color, example }) => {

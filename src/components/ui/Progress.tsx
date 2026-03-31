@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 interface ProgressProps {
   value: number; // 0-100
-  color?: "blue" | "green" | "yellow" | "red" | "brand";
+  color?: "green" | "yellow" | "red" | "brand";
   size?: "sm" | "md";
   className?: string;
 }
@@ -18,9 +18,8 @@ export function Progress({ value, color = "brand", size = "md", className }: Pro
     >
       <div
         className={cn("h-full rounded-full transition-all duration-500", {
-          "bg-blue-500": color === "blue",
           "bg-green-500": color === "green",
-          "bg-gray-500": color === "yellow",
+          "bg-yellow-400": color === "yellow",
           "bg-red-500": color === "red",
           "bg-gradient-progress": color === "brand",
         })}

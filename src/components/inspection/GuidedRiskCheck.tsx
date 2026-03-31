@@ -135,21 +135,21 @@ export function GuidedRiskCheck({
   return (
     <div className="space-y-3">
       {/* ─── SECTION 1: GUIDANCE — What This Is + How to Locate ─── */}
-      <div className="rounded-lg border border-blue-200 bg-blue-50/40 overflow-hidden">
+      <div className="rounded-lg border border-border-default bg-surface-overlay overflow-hidden">
         {/* What This Is — collapsible */}
         {risk.whatThisIs && (
           <button
             onClick={() => setGuidanceExpanded(!guidanceExpanded)}
-            className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-blue-50/60 transition-colors"
+            className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-surface-hover transition-colors"
           >
-            <Info className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-            <span className="text-xs font-semibold text-blue-700 flex-1">What is this?</span>
-            <ChevronDown className={cn("h-3.5 w-3.5 text-blue-400 transition-transform", guidanceExpanded && "rotate-180")} />
+            <Info className="h-3.5 w-3.5 text-text-tertiary shrink-0" />
+            <span className="text-xs font-semibold text-text-primary flex-1">What is this?</span>
+            <ChevronDown className={cn("h-3.5 w-3.5 text-text-tertiary transition-transform", guidanceExpanded && "rotate-180")} />
           </button>
         )}
         {risk.whatThisIs && guidanceExpanded && (
           <div className="px-2.5 pb-2.5 -mt-1">
-            <p className="text-xs text-blue-800 leading-relaxed ml-5.5">
+            <p className="text-xs text-text-secondary leading-relaxed ml-5.5">
               {risk.whatThisIs}
             </p>
           </div>
@@ -159,13 +159,13 @@ export function GuidedRiskCheck({
         {locationGuide && (
           <div className={cn(
             "p-2.5",
-            risk.whatThisIs ? "border-t border-blue-200/60" : ""
+            risk.whatThisIs ? "border-t border-border-default" : ""
           )}>
             <div className="flex items-start gap-2">
-              <MapPin className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />
+              <MapPin className="h-3.5 w-3.5 text-text-tertiary shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-xs font-semibold text-blue-700 mb-1">How to find it</p>
-                <div className="text-xs text-blue-800 leading-relaxed whitespace-pre-line">
+                <p className="text-xs font-semibold text-text-primary mb-1">How to find it</p>
+                <div className="text-xs text-text-secondary leading-relaxed whitespace-pre-line">
                   {locationGuide}
                 </div>
               </div>

@@ -299,7 +299,7 @@ export function VehicleViewer({
             onClick={() => setCameraPreset(name)}
             className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
               cameraPreset === name
-                ? "bg-blue-600/80 text-white"
+                ? "bg-brand-600/80 text-white"
                 : "bg-slate-800/60 text-slate-400 hover:bg-slate-700/70 hover:text-slate-200"
             } backdrop-blur-sm`}
           >
@@ -315,7 +315,7 @@ export function VehicleViewer({
         fallback={
           <div className="flex items-center justify-center h-full min-h-[400px] rounded-xl bg-[#1a1f2e]">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600 mx-auto mb-2" />
               <p className="text-xs text-slate-400">Loading vehicle model...</p>
             </div>
           </div>
