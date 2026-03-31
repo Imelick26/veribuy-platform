@@ -69,20 +69,20 @@ export default function SharedReportPage({
         <div className="bg-surface-raised rounded-xl border border-border-default shadow-sm overflow-hidden">
 
           {/* Report Header */}
-          <div className="bg-brand-900 px-4 sm:px-8 py-5 sm:py-6 text-white">
+          <div className="bg-brand-gradient px-4 sm:px-8 py-5 sm:py-6 text-white">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                {org && <p className="text-brand-200 text-sm font-medium">{org.name}</p>}
-                <p className="text-brand-200 text-xs mt-0.5">Powered by VeriBuy</p>
+                {org && <p className="text-white/80 text-sm font-medium">{org.name}</p>}
+                <p className="text-white/80 text-xs mt-0.5">Powered by VeriBuy</p>
                 <h2 className="text-xl sm:text-2xl font-bold mt-2">
                   {vehicle.year} {vehicle.make} {vehicle.model}
                 </h2>
-                <p className="text-brand-200 font-mono text-xs sm:text-sm mt-1">VIN: {vehicle.vin}</p>
+                <p className="text-white/80 font-mono text-xs sm:text-sm mt-1">VIN: {vehicle.vin}</p>
               </div>
               <div className="sm:text-right">
-                <p className="text-brand-200 text-sm">Report #{report.number}</p>
-                <p className="text-brand-200 text-sm">{formatDate(report.generatedAt)}</p>
-                {inspector && <p className="text-brand-200 text-sm mt-1">Inspector: {inspector.name}</p>}
+                <p className="text-white/80 text-sm">Report #{report.number}</p>
+                <p className="text-white/80 text-sm">{formatDate(report.generatedAt)}</p>
+                {inspector && <p className="text-white/80 text-sm mt-1">Inspector: {inspector.name}</p>}
               </div>
             </div>
           </div>

@@ -147,14 +147,14 @@ export default function ReportDetailPage({
       <div className="bg-surface-raised rounded-xl border border-border-default shadow-sm overflow-hidden print:shadow-none print:border-none">
 
         {/* Report Header — Vehicle identity + key facts */}
-        <div className="bg-brand-900 px-4 sm:px-8 py-5 sm:py-6 text-white">
+        <div className="bg-brand-gradient px-4 sm:px-8 py-5 sm:py-6 text-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
-              <p className="text-brand-200 text-sm font-medium">VeriBuy Inspection Report</p>
+              <p className="text-white/80 text-sm font-medium">VeriBuy Inspection Report</p>
               <h2 className="text-xl sm:text-2xl font-bold mt-1">
                 {vehicle.year} {vehicle.make} {vehicle.model}
               </h2>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-brand-200 text-xs sm:text-sm mt-1.5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-white/80 text-xs sm:text-sm mt-1.5">
                 <span className="font-mono">VIN: {vehicle.vin}</span>
                 {inspection.odometer && <span>{inspection.odometer.toLocaleString()} mi</span>}
                 {inspection.location && <span>{inspection.location}</span>}
@@ -163,18 +163,18 @@ export default function ReportDetailPage({
             <div className="sm:text-right flex sm:flex-col items-center sm:items-end gap-3 sm:gap-1">
               {inspection.overallScore != null && (
                 <div className={cn(
-                  "w-16 h-16 rounded-full flex flex-col items-center justify-center border-2",
-                  (inspection.overallScore || 0) >= 70 ? "bg-green-500/20 border-green-300 text-green-100" :
-                  (inspection.overallScore || 0) >= 50 ? "bg-amber-500/20 border-amber-300 text-amber-100" :
-                  "bg-red-500/20 border-red-300 text-red-100"
+                  "w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 bg-white",
+                  (inspection.overallScore || 0) >= 70 ? "border-green-400 text-green-700" :
+                  (inspection.overallScore || 0) >= 50 ? "border-yellow-400 text-yellow-700" :
+                  "border-red-400 text-red-700"
                 )}>
                   <span className="font-bold text-lg leading-none">{inspection.overallScore}</span>
-                  <span className="text-[9px] opacity-70">/100</span>
+                  <span className="text-[9px] text-text-tertiary">/100</span>
                 </div>
               )}
               <div>
-                <p className="text-brand-200 text-sm">Report #{report.number}</p>
-                <p className="text-brand-200 text-sm">{formatDate(report.generatedAt)}</p>
+                <p className="text-white/80 text-sm">Report #{report.number}</p>
+                <p className="text-white/80 text-sm">{formatDate(report.generatedAt)}</p>
               </div>
             </div>
           </div>
