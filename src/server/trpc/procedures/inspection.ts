@@ -20,13 +20,22 @@ import { auditPrice } from "@/lib/ai/price-auditor";
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
   const year = new Date().getFullYear();
   const prefix = `VB-${year}-`;
+
+  // Find the highest existing number
   const latest = await db.inspection.findFirst({
     where: { number: { startsWith: prefix } },
     orderBy: { number: "desc" },
     select: { number: true },
   });
   const lastNum = latest ? parseInt(latest.number.replace(prefix, ""), 10) : 0;
-  return `${prefix}${String(lastNum + 1).padStart(5, "0")}`;
+  const candidate = `${prefix}${String(lastNum + 1).padStart(5, "0")}`;
+
+  // Safety check: if it still exists (shouldn't happen), use timestamp
+  const exists = await db.inspection.findFirst({ where: { number: candidate }, select: { id: true } });
+  if (exists) {
+    return `${prefix}${String(lastNum + 2).padStart(5, "0")}`;
+  }
+  return candidate;
 }
 
 export const inspectionRouter = router({
