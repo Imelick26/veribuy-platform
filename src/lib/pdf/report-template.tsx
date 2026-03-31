@@ -128,7 +128,7 @@ function severityLabel(s: string) {
     case "MODERATE":
       return { text: "MODERATE", color: "#ca8a04" };
     case "MINOR":
-      return { text: "MINOR", color: "#7c3aed" };
+      return { text: "MINOR", color: "#1a3a7a" };
     default:
       return { text: s, color: "#6b7280" };
   }
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   },
   /* ---- Cover / Header ---- */
   header: {
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#1a3a7a",
     marginHorizontal: -40,
     marginTop: -40,
     paddingHorizontal: 40,
@@ -434,7 +434,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
               <Text style={styles.scoreLabel}>CRITICAL / MAJOR</Text>
             </View>
             <View style={styles.scoreCard}>
-              <Text style={[styles.scoreValue, { color: "#7c3aed" }]}>
+              <Text style={[styles.scoreValue, { color: "#1a3a7a" }]}>
                 {data.findings.length}
               </Text>
               <Text style={styles.scoreLabel}>TOTAL FINDINGS</Text>
@@ -609,7 +609,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
             <Text style={styles.sectionTitle}>Vehicle Valuation</Text>
 
             {/* Offer banner */}
-            <View style={[styles.marketBanner, { backgroundColor: "#7c3aed" }]}>
+            <View style={[styles.marketBanner, { backgroundColor: "#1a3a7a" }]}>
               <Text style={styles.marketBannerLabel}>Our Offer</Text>
               <Text style={styles.marketBannerValue}>
                 {fmtCurrency(data.marketAnalysis.fairBuyMax || data.marketAnalysis.adjustedPrice)}

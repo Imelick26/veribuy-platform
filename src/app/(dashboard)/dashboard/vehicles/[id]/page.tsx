@@ -336,20 +336,20 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
           const walkAway = roundTo50(Math.round(maxBid * 1.12));
           return (
             <div className="grid grid-cols-3 gap-3 mt-4">
-              <div className="p-4 rounded-lg border border-border-default bg-surface-raised text-center">
-                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Open At</p>
-                <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(openAt)}</p>
-                <p className="text-[10px] text-text-tertiary mt-1">Start here</p>
+              <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-center">
+                <p className="text-xs text-green-600 uppercase tracking-wider font-medium">Open At</p>
+                <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(openAt)}</p>
+                <p className="text-[10px] text-green-500 mt-1">Start here</p>
               </div>
-              <div className="p-4 rounded-lg border-2 border-text-primary bg-surface-raised text-center">
-                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Target</p>
-                <p className="text-2xl font-bold text-text-primary mt-1">{formatCurrency(maxBid)}</p>
-                <p className="text-[10px] text-text-tertiary mt-1">Recommended buy</p>
+              <div className="p-4 rounded-lg bg-brand-900 text-center">
+                <p className="text-xs text-white/60 uppercase tracking-wider font-medium">Target</p>
+                <p className="text-2xl font-bold text-white mt-1">{formatCurrency(maxBid)}</p>
+                <p className="text-[10px] text-white/50 mt-1">Recommended buy</p>
               </div>
-              <div className="p-4 rounded-lg border border-border-default bg-surface-raised text-center">
-                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Walk Away</p>
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-center">
+                <p className="text-xs text-red-500 uppercase tracking-wider font-medium">Walk Away</p>
                 <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(walkAway)}</p>
-                <p className="text-[10px] text-text-tertiary mt-1">Don&apos;t exceed</p>
+                <p className="text-[10px] text-red-400 mt-1">Don&apos;t exceed</p>
               </div>
             </div>
           );

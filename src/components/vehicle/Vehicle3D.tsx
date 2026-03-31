@@ -23,8 +23,8 @@ const SEVERITY_COLORS: Record<string, string> = {
   CRITICAL: "#b91c1c",
   MAJOR: "#dc2626",
   MODERATE: "#9898b0",
-  MINOR: "#ab6dd9",
-  INFO: "#2563eb",
+  MINOR: "#1a3a7a",
+  INFO: "#1a3a7a",
 };
 
 function CarBody() {
@@ -33,7 +33,7 @@ function CarBody() {
       {/* Main body */}
       <mesh position={[0, 0.35, 0]}>
         <boxGeometry args={[2.4, 0.5, 1.1]} />
-        <meshStandardMaterial color="#5c0099" transparent opacity={0.2} />
+        <meshStandardMaterial color="#1a3a7a" transparent opacity={0.2} />
       </mesh>
       <mesh position={[0, 0.35, 0]}>
         <boxGeometry args={[2.4, 0.5, 1.1]} />
@@ -43,7 +43,7 @@ function CarBody() {
       {/* Cabin */}
       <mesh position={[0.1, 0.72, 0]}>
         <boxGeometry args={[1.4, 0.4, 1.0]} />
-        <meshStandardMaterial color="#5c0099" transparent opacity={0.15} />
+        <meshStandardMaterial color="#1a3a7a" transparent opacity={0.15} />
       </mesh>
       <mesh position={[0.1, 0.72, 0]}>
         <boxGeometry args={[1.4, 0.4, 1.0]} />
@@ -53,7 +53,7 @@ function CarBody() {
       {/* Hood */}
       <mesh position={[0.95, 0.45, 0]} rotation={[0, 0, -0.15]}>
         <boxGeometry args={[0.7, 0.08, 1.05]} />
-        <meshStandardMaterial color="#d4bfe8" transparent opacity={0.3} />
+        <meshStandardMaterial color="#b8cce8" transparent opacity={0.3} />
       </mesh>
 
       {/* Wheels */}
