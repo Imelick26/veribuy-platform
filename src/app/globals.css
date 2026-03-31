@@ -64,11 +64,7 @@ body {
 
 /* === Brand Gradient Utilities === */
 .bg-brand-gradient {
-  background-image:
-    radial-gradient(ellipse 35% 25% at 15% 20%, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0) 100%),
-    radial-gradient(ellipse 50% 40% at 30% 15%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0) 100%),
-    linear-gradient(170deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 35%),
-    linear-gradient(135deg, #ff4289 0%, #1a3a7a 100%) !important;
+  background: linear-gradient(135deg, #ff4289 0%, #1a3a7a 100%) !important;
 }
 
 .bg-brand-gradient-subtle {
