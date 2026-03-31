@@ -69,7 +69,7 @@ export default function SharedReportPage({
         <div className="bg-surface-raised rounded-xl border border-border-default shadow-sm overflow-hidden">
 
           {/* Report Header */}
-          <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-4 sm:px-8 py-5 sm:py-6 text-white">
+          <div className="bg-brand-gradient px-4 sm:px-8 py-5 sm:py-6 text-white">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
                 {org && <p className="text-brand-200 text-sm font-medium">{org.name}</p>}
