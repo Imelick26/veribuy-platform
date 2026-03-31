@@ -75,11 +75,8 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-text-secondary">
-        Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-text-primary underline hover:opacity-80 transition-opacity">
-          Create one
-        </Link>
+      <p className="mt-6 text-center text-sm text-text-tertiary">
+        Need access? Contact your team admin.
       </p>
     </div>
   );

@@ -9,7 +9,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl;
 
   // Public routes that don't require auth
-  const publicRoutes = ["/login", "/register", "/api/auth", "/api/trpc", "/api/webhooks", "/reports/shared"];
+  const publicRoutes = ["/login", "/register", "/forgot-password", "/reset-password", "/api/auth", "/api/trpc", "/api/webhooks", "/reports/shared"];
   const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
 
   const isLoggedIn = !!req.auth;
@@ -17,7 +17,7 @@ export default auth((req) => {
   // Allow public routes
   if (isPublicRoute) {
     // Redirect logged-in users away from auth pages
-    if (isLoggedIn && (pathname === "/login" || pathname === "/register")) {
+    if (isLoggedIn && (pathname === "/login" || pathname === "/register") && !pathname.startsWith("/forgot-password") && !pathname.startsWith("/reset-password")) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
     return NextResponse.next();
