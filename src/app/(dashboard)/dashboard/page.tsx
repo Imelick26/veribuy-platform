@@ -48,7 +48,7 @@ export default function DashboardPage() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card>
+        <Card className="cursor-pointer hover:border-border-strong transition-colors" onClick={() => router.push("/dashboard/inspections")}>
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 mb-1">
@@ -61,7 +61,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:border-border-strong transition-colors" onClick={() => router.push("/dashboard/vehicles")}>
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 mb-1">
@@ -74,7 +74,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:border-border-strong transition-colors" onClick={() => router.push("/dashboard/settings")}>
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 mb-1">
@@ -89,7 +89,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:border-border-strong transition-colors" onClick={() => router.push("/dashboard/reports")}>
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 mb-1">
