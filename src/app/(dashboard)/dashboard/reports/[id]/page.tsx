@@ -147,7 +147,7 @@ export default function ReportDetailPage({
       <div className="bg-surface-raised rounded-xl border border-border-default shadow-sm overflow-hidden print:shadow-none print:border-none">
 
         {/* Report Header — Vehicle identity + key facts */}
-        <div className="bg-brand-gradient px-4 sm:px-8 py-5 sm:py-6 text-white">
+        <div className="bg-brand-900 px-4 sm:px-8 py-5 sm:py-6 text-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
               <p className="text-brand-200 text-sm font-medium">VeriBuy Inspection Report</p>
