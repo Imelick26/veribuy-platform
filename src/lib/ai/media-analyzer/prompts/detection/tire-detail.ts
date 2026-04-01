@@ -15,41 +15,51 @@ export function buildTireDetailChecklist(
 ): string {
   const positionLabel = position.replace("-", " ");
 
-  return `TIRE & WHEEL DETAIL (${positionLabel.toUpperCase()}) — Inspect the ${positionLabel} tire and wheel of this ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
+  return `TIRE & WHEEL DETAIL (${positionLabel.toUpperCase()}) — ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
 
-THIS IS CRITICAL — tread condition directly affects safety and recon cost. Examine the tread surface in THREE separate zones and report each independently.
+TREAD ANALYSIS — You MUST analyze the tread in three zones and provide a separate rating for each BEFORE giving an overall classification. This is required.
 
-TREAD — EXAMINE THREE ZONES SEPARATELY:
-1. INNER EDGE tread (closest to vehicle): Look at the innermost ribs/grooves. Is tread still present? Are grooves deep or worn smooth? Inner edge wear indicates alignment problems.
-2. CENTER tread (middle of the tire face): Look at the center ribs specifically. Is the center worn smooth or bald while the edges still have tread? Center baldness = chronic overinflation. This is easy to miss — look carefully at whether the CENTER grooves are as deep as the edge grooves.
-3. OUTER EDGE tread (farthest from vehicle): Look at the outermost ribs. Outer edge wear indicates underinflation or aggressive cornering.
+Your response MUST include a "treadAnalysis" object with per-zone ratings:
 
-TREAD DEPTH CLASSIFICATION (apply per zone, then overall — ALWAYS err on the side of caution, round DOWN not up):
-- GOOD: 7+/32" — deep, well-defined grooves with clearly visible depth. Only classify as GOOD if you are CERTAIN the tread is deep across all three zones.
-- WORN: 3-6/32" — grooves visible but shallow, wear bars starting to appear. If you're unsure whether a tire is GOOD or WORN, classify it as WORN.
-- REPLACE: <3/32" — tread is flush with wear bars, grooves are gone, rubber is smooth, or bald patches visible. ANY bald zone = REPLACE regardless of other zones. If you're unsure whether a tire is WORN or REPLACE, classify it as REPLACE.
+"treadAnalysis": {
+  "innerEdge": { "rating": "GOOD|WORN|REPLACE", "grooveDepth": "deep|shallow|flush|bald", "notes": "what you see" },
+  "center": { "rating": "GOOD|WORN|REPLACE", "grooveDepth": "deep|shallow|flush|bald", "notes": "what you see" },
+  "outerEdge": { "rating": "GOOD|WORN|REPLACE", "grooveDepth": "deep|shallow|flush|bald", "notes": "what you see" },
+  "overall": "GOOD|WORN|REPLACE"
+}
 
-4. Bald spots or patches — ANY area where tread is completely gone, rubber is smooth, or you can see wear bars flush with the surface. A tire bald in the center but with tread on edges is STILL a REPLACE tire.
-5. Cupping or scalloping — wavy, uneven wear pattern across the tread face (suspension issue)
+HOW TO EXAMINE EACH ZONE:
+- INNER EDGE (ribs closest to the vehicle body): Are the innermost grooves deep or worn smooth?
+- CENTER (middle ribs of the tread face): COMPARE the center groove depth to the edge groove depth. On all-terrain and mud-terrain tires, the aggressive outer lugs can mask severe center wear — the edges look chunky while the center row is worn flat. If the center grooves are shallower than the edge grooves, the center is worn faster.
+- OUTER EDGE (ribs farthest from vehicle): Are the outermost grooves deep or worn smooth?
 
-SIDEWALL:
-6. Sidewall cracks — surface cracking from age or UV (dry rot precursor)
-7. Dry rot — deep, connected cracking pattern indicating rubber deterioration
-8. Tire bulges — outward swelling indicating internal damage (SAFETY HAZARD — REPLACE immediately)
-9. Sidewall scuffs or gouges from curb contact
+GROOVE DEPTH GUIDE — measure by comparing groove depth to lug/block height:
+- "deep": Grooves are deep channels — the bottom of the groove is far below the top of the tread block. Significant rubber remains. You could easily see the depth between blocks.
+- "shallow": Grooves exist but the blocks have worn partway down. Less than half the original depth remains. The surface is starting to flatten.
+- "flush": The tread blocks have worn down nearly level with the groove bottoms. The surface appears almost flat or smooth in this zone. The transition from block to groove is minimal. Wear indicators/bars may be level with the tread.
+- "bald": The surface is flat smooth rubber. No groove structure remains. No distinction between tread blocks and grooves.
 
-WHEEL:
-10. Curb rash — scrapes on rim lip from curb contact
-11. Wheel scratches, gouges, or corrosion on wheel face
-12. Bent or cracked rim (check edge for waviness or fractures)
-13. Missing lug nuts
+KEY TEST: Compare the center groove depth to the outer edge groove depth.
+- If center grooves are LESS THAN HALF the depth of the edge grooves → center is "flush" → REPLACE.
+- If the center tread blocks appear almost level with the groove floor while edges still have deep channels → center is "flush" → REPLACE.
+- On all-terrain tires: if the aggressive outer lugs stand tall but the center row has been ground flat from highway use, that center is "flush" even though the edges look fine. This is the #1 missed defect on AT tires.
 
-TIRE INFO (read from sidewall if visible):
-14. Tire brand and model
-15. Tire size (e.g., 275/65R18)
-16. DOT date code (last 4 digits = week + year, e.g., 2321 = week 23 of 2021; tires over 6 years old are a concern regardless of tread)
+CLASSIFICATION RULES:
+- The OVERALL rating equals the WORST zone rating. If center is REPLACE but edges are GOOD, overall = REPLACE.
+- GOOD: All three zones have deep grooves (7+/32")
+- WORN: Any zone has shallow grooves (3-6/32") but none are flush/bald
+- REPLACE: Any zone has flush or bald grooves (<3/32"), OR wear bars are visible, OR any bald patches exist
 
-IMPORTANT: If the center of the tread is noticeably smoother or more worn than the edges, this tire needs replacement even if the edges look fine. Report it clearly.
+ALSO CHECK:
+1. Uneven wear pattern — center wear = overinflation, edge wear = alignment/underinflation, cupping = suspension
+2. Sidewall cracks or dry rot (surface cracking from age/UV)
+3. Tire bulges (SAFETY HAZARD)
+4. Sidewall scuffs from curb contact
+5. Wheel curb rash, scratches, corrosion
+6. Bent or cracked rim
+7. Missing lug nuts
+8. Tire brand, model, size (read from sidewall if visible)
+9. DOT date code (tires over 6 years old are a concern regardless of tread)
 
-BIAS: You are protecting a dealer from buying a vehicle with bad tires. A missed bad tire costs them $200-400. A false flag on a good tire costs nothing — they verify on the lot. ALWAYS err toward the worse classification when uncertain.`;
+When uncertain between WORN and REPLACE, choose REPLACE — a dealer can verify on the lot.`;
 }
