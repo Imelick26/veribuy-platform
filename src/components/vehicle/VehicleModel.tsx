@@ -68,7 +68,8 @@ function GltfModel({ config }: VehicleModelProps) {
   }, [scene, setModelLoaded]);
 
   if (!scene) {
-    return <ProceduralFallback archetypeId={config.archetypeId} />;
+    // Scene parsed but empty — show nothing rather than crude wireframe fallback
+    return null;
   }
 
   return (
