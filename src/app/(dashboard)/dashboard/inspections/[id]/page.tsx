@@ -188,7 +188,7 @@ export default function InspectionDetailPage({
     { enabled: !!inspection }
   );
   const aiAnalysisResults = aiAnalysisData?.aiResults;
-  const overallConditionResult = aiAnalysisData?.overallCondition;
+  // overallCondition data available but not shown in inspection workflow — shown in vehicle dashboard
 
   // Vehicle History
   const fetchHistory = trpc.inspection.fetchHistory.useMutation({
@@ -199,6 +199,27 @@ export default function InspectionDetailPage({
   const fetchMarket = trpc.inspection.fetchMarket.useMutation({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
+
+  // "Complete Inspection" — auto-chains: history → advance → market
+  const [isCompleting, setIsCompleting] = useState(false);
+  async function handleCompleteInspection() {
+    setIsCompleting(true);
+    try {
+      // Auto-fetch history if not already done
+      const historyStep = inspection?.steps.find((s) => s.step === "VEHICLE_HISTORY");
+      if (historyStep && historyStep.status !== "COMPLETED") {
+        await fetchHistory.mutateAsync({ inspectionId: id });
+        await advanceStep.mutateAsync({ inspectionId: id, step: "VEHICLE_HISTORY" as never });
+      }
+      // Run market analysis
+      await fetchMarket.mutateAsync({ inspectionId: id });
+      await utils.inspection.get.invalidate({ id });
+    } catch (err) {
+      console.error("[CompleteInspection] Failed:", err);
+    } finally {
+      setIsCompleting(false);
+    }
+  }
 
   // VIN Detection (server-side GPT-4o Vision OCR)
   const [detectedVin, setDetectedVin] = useState<string | null>(null);
@@ -344,7 +365,15 @@ export default function InspectionDetailPage({
     const s = inspection.steps.find((is) => is.step === step);
     return s && s.status !== "COMPLETED";
   });
-  const currentStep = currentStepIndex >= 0 ? STEP_ORDER[currentStepIndex] : "COMPLETED";
+  let currentStep = currentStepIndex >= 0 ? STEP_ORDER[currentStepIndex] : "COMPLETED";
+  // Skip steps that are now handled automatically (not shown in UI)
+  const AUTO_SKIP_STEPS = new Set(["VEHICLE_HISTORY", "REPORT_GENERATION"]);
+  if (AUTO_SKIP_STEPS.has(currentStep)) {
+    // Find the next non-skipped step
+    let idx = currentStepIndex + 1;
+    while (idx < STEP_ORDER.length && AUTO_SKIP_STEPS.has(STEP_ORDER[idx])) idx++;
+    currentStep = idx < STEP_ORDER.length ? STEP_ORDER[idx] : "COMPLETED";
+  }
   const isCompleted = inspection.status === "COMPLETED";
   const isCancelled = inspection.status === "CANCELLED";
 
@@ -453,16 +482,7 @@ export default function InspectionDetailPage({
     }
   }
 
-  // Extract photo-discovered risks from AI_CONDITION_SCAN step data
-  const conditionScanStep = inspection.steps.find((s) => s.step === "AI_CONDITION_SCAN");
-  const conditionScanData = (conditionScanStep?.data as Record<string, unknown>) || {};
-  const photoDiscoveredRisks = (conditionScanData.unexpectedFindings as Array<{
-    title: string;
-    description: string;
-    severity: string;
-    category: string;
-    confidence: number;
-  }>) || [];
+  // Condition scan data (pipeline findings shown in vehicle dashboard, not here)
 
   // Compute inspection confidence for StepPanel (not a hook — after early returns)
   const inspectionConfidence = riskProfile
@@ -584,7 +604,6 @@ export default function InspectionDetailPage({
               onAnswerQuestion={handleAnswerQuestion}
               onUploadQuestionMedia={handleUploadQuestionMedia}
               uploadingQuestionId={mediaUpload.currentCaptureType?.startsWith("RISK_Q_") ? mediaUpload.currentCaptureType : null}
-              photoDiscoveredRisks={photoDiscoveredRisks}
             />
           </Card>
         </div>
@@ -600,7 +619,7 @@ export default function InspectionDetailPage({
             <div>
               <h3 className="text-lg font-bold text-green-800">Inspection Complete</h3>
               <p className="text-sm text-green-700">
-                All {inspection.steps.length} steps finished
+                All steps finished
                 {inspection.report ? ` · Report ${inspection.report.number}` : ""}
               </p>
             </div>
@@ -624,18 +643,16 @@ export default function InspectionDetailPage({
                 </Button>
               )}
             </div>
-          ) : (
+          ) : inspection.vehicle ? (
             <Button
-              onClick={() => generateReport.mutate({ inspectionId: id })}
-              loading={generateReport.isPending}
+              onClick={() => router.push(`/dashboard/vehicles/${inspection.vehicle!.id}`)}
               className="w-full bg-brand-gradient text-white hover:opacity-90"
             >
-              <FileText className="h-4 w-4" />
-              {generateReport.isPending ? "Generating..." : "Generate Report"}
+              View in Vehicle Dashboard
             </Button>
-          )}
+          ) : null}
 
-          {/* Outcome capture — non-intrusive card below report buttons */}
+          {/* Outcome capture */}
           <OutcomeCapture
             inspectionId={id}
             currentOutcome={inspection.purchaseOutcome as string | null}
@@ -680,7 +697,7 @@ export default function InspectionDetailPage({
           onRunAIAnalysis={() => runAIAnalysis.mutate({ inspectionId: id })}
           isRunningAIAnalysis={runAIAnalysis.isPending}
           aiAnalysisResults={aiAnalysisResults || undefined}
-          overallConditionResult={overallConditionResult || undefined}
+          overallConditionResult={undefined}
           onRunConditionScan={() => runConditionScan.mutate({ inspectionId: id, inspectorNotes })}
           isRunningConditionScan={runConditionScan.isPending}
           conditionScanComplete={inspection.steps.some((s) => s.step === "AI_CONDITION_SCAN" && s.status === "COMPLETED")}
@@ -692,8 +709,8 @@ export default function InspectionDetailPage({
           isConfirmingOdometer={confirmOdometer.isPending}
           onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
           isFetchingHistory={fetchHistory.isPending}
-          onFetchMarket={() => fetchMarket.mutate({ inspectionId: id })}
-          isFetchingMarket={fetchMarket.isPending}
+          onFetchMarket={handleCompleteInspection}
+          isFetchingMarket={isCompleting || fetchMarket.isPending}
           onViewReport={() => setShowReportModal(true)}
           inspectionConfidence={inspectionConfidence}
         />

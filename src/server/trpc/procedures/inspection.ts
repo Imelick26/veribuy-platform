@@ -559,6 +559,25 @@ export const inspectionRouter = router({
         },
       });
 
+      // When MARKET_ANALYSIS is advanced, also auto-advance REPORT_GENERATION
+      // so the inspection is fully completed (report is generated from vehicle dashboard)
+      if (input.step === "MARKET_ANALYSIS") {
+        await ctx.db.inspectionStep.update({
+          where: {
+            inspectionId_step: {
+              inspectionId: input.inspectionId,
+              step: "REPORT_GENERATION",
+            },
+          },
+          data: {
+            status: "COMPLETED",
+            completedAt: new Date(),
+          },
+        }).catch(() => {
+          // REPORT_GENERATION step might not exist on older inspections
+        });
+      }
+
       return { success: true };
     }),
 

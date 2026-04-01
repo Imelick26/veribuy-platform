@@ -492,108 +492,10 @@ export function StepPanel({
         </Card>
       );
 
-    case "VEHICLE_HISTORY": {
-      const history = inspection.vehicleHistory;
-      return (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-brand-600" />
-              <CardTitle>Vehicle History</CardTitle>
-            </div>
-          </CardHeader>
-
-          {!history ? (
-            <div className="space-y-4">
-              <div className="text-center py-6">
-                <Clock className="h-6 w-6 mx-auto text-brand-600 mb-3" />
-                <h4 className="font-semibold text-text-primary mb-1">Pull Vehicle History Report</h4>
-                <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
-                  Fetch recall status from NHTSA and initialize vehicle history.
-                </p>
-              </div>
-              <Button
-                onClick={onFetchHistory}
-                loading={isFetchingHistory}
-                className="w-full bg-brand-gradient text-white hover:opacity-90"
-              >
-                {isFetchingHistory ? "Fetching History..." : "Fetch Vehicle History"}
-              </Button>
-              <div className="text-center">
-                <button
-                  onClick={() => onAdvanceStep("VEHICLE_HISTORY")}
-                  className="text-xs text-text-tertiary hover:text-text-secondary underline"
-                >
-                  Skip this step
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className={cn(
-                "p-3 rounded-lg border",
-                history.titleStatus === "CLEAN"
-                  ? "bg-[#dcfce7] border-green-300"
-                  : "bg-[#fde8e8] border-red-300"
-              )}>
-                <div className="flex items-center gap-2">
-                  {history.titleStatus === "CLEAN" ? (
-                    <CheckCircle className="h-5 w-5 text-green-700" />
-                  ) : (
-                    <AlertTriangle className="h-5 w-5 text-red-700" />
-                  )}
-                  <span className={cn(
-                    "font-semibold text-sm",
-                    history.titleStatus === "CLEAN" ? "text-green-700" : "text-red-700"
-                  )}>
-                    Title: {history.titleStatus}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { label: "Owners", value: history.ownerCount, icon: "👤" },
-                  { label: "Accidents", value: history.accidentCount, icon: history.accidentCount > 0 ? "⚠️" : "✅" },
-                  { label: "Service Records", value: history.serviceRecords, icon: "🔧" },
-                  { label: "Open Recalls", value: history.openRecallCount, icon: history.openRecallCount > 0 ? "🔴" : "✅" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-2 p-2 rounded-lg bg-surface-sunken text-sm">
-                    <span>{item.icon}</span>
-                    <div>
-                      <p className="font-semibold text-text-primary">{item.value}</p>
-                      <p className="text-xs text-text-secondary">{item.label}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {(history.structuralDamage || history.floodDamage) && (
-                <div className="p-3 rounded-lg bg-[#fde8e8] border border-red-300">
-                  <p className="text-xs font-semibold text-red-700 mb-1">
-                    <AlertTriangle className="inline h-3 w-3 mr-1" /> Damage Flags
-                  </p>
-                  {history.structuralDamage && <p className="text-xs text-red-700">Structural damage reported</p>}
-                  {history.floodDamage && <p className="text-xs text-red-700">Flood damage reported</p>}
-                </div>
-              )}
-
-              <p className="text-[10px] text-text-tertiary text-center">
-                Data provided by {history.provider}
-              </p>
-
-              <Button
-                onClick={() => onAdvanceStep("VEHICLE_HISTORY")}
-                loading={isAdvancingStep}
-                className="w-full bg-brand-gradient text-white mt-2"
-              >
-                Continue to Market Analysis
-              </Button>
-            </div>
-          )}
-        </Card>
-      );
-    }
+    case "VEHICLE_HISTORY":
+      // Vehicle history is now auto-fetched as part of "Complete Inspection"
+      // (triggered from the MARKET_ANALYSIS step). Skip to market analysis.
+      return null;
 
     case "MARKET_ANALYSIS": {
       const market = inspection.marketAnalysis;
@@ -602,7 +504,7 @@ export function StepPanel({
           <CardHeader>
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-brand-600" />
-              <CardTitle>Market Analysis</CardTitle>
+              <CardTitle>Complete Inspection</CardTitle>
             </div>
           </CardHeader>
 
@@ -610,9 +512,9 @@ export function StepPanel({
             <div className="space-y-4">
               <div className="text-center py-6">
                 <BarChart3 className="h-6 w-6 mx-auto text-brand-600 mb-3" />
-                <h4 className="font-semibold text-text-primary mb-1">Run Market Analysis</h4>
+                <h4 className="font-semibold text-text-primary mb-1">Run Market Analysis & Valuation</h4>
                 <p className="text-sm text-text-secondary mb-4 max-w-md mx-auto">
-                  Fetch comparable listings and estimate fair market value adjusted for vehicle condition.
+                  Fetch comparable listings and estimate fair acquisition price adjusted for vehicle condition, history, and recon costs.
                 </p>
               </div>
               <Button
@@ -620,16 +522,8 @@ export function StepPanel({
                 loading={isFetchingMarket}
                 className="w-full bg-brand-gradient text-white hover:opacity-90"
               >
-                {isFetchingMarket ? "Analyzing Market..." : "Run Market Analysis"}
+                {isFetchingMarket ? "Running Market Analysis..." : "Complete Inspection"}
               </Button>
-              <div className="text-center">
-                <button
-                  onClick={() => onAdvanceStep("MARKET_ANALYSIS")}
-                  className="text-xs text-text-tertiary hover:text-text-secondary underline"
-                >
-                  Skip this step
-                </button>
-              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -643,7 +537,7 @@ export function StepPanel({
                 loading={isAdvancingStep}
                 className="w-full bg-brand-gradient text-white mt-2"
               >
-                Continue to Report Generation
+                View in Vehicle Dashboard
               </Button>
             </div>
           )}
@@ -652,60 +546,9 @@ export function StepPanel({
     }
 
     case "REPORT_GENERATION":
-      return (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-brand-600" />
-              <CardTitle>Report Generation</CardTitle>
-            </div>
-          </CardHeader>
-          {inspection.report ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-[#dcfce7] border border-green-300">
-                <CheckCircle className="h-6 w-6 text-green-700" />
-                <div>
-                  <p className="font-semibold text-green-700">Report Generated</p>
-                  <p className="text-sm text-green-700">{inspection.report.number}</p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1 bg-brand-gradient text-white hover:opacity-90"
-                  onClick={onViewReport}
-                >
-                  <FileText className="h-4 w-4" /> View Report
-                </Button>
-                {inspection.report.pdfUrl && (
-                  <Button
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => window.open(inspection.report!.pdfUrl!, "_blank")}
-                  >
-                    <Download className="h-4 w-4" /> PDF
-                  </Button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-8">
-              <FileText className="h-6 w-6 mx-auto text-brand-600 mb-3" />
-              <h4 className="font-semibold text-text-primary mb-1">Ready to Generate Report</h4>
-              <p className="text-sm text-text-secondary mb-4">
-                Compile all findings, media, and risk data into a comprehensive inspection report.
-              </p>
-              <Button
-                onClick={onGenerateReport}
-                loading={isGeneratingReport}
-                className="bg-brand-gradient text-white hover:opacity-90"
-              >
-                <FileText className="h-4 w-4" />
-                {isGeneratingReport ? "Generating..." : "Generate Report"}
-              </Button>
-            </div>
-          )}
-        </Card>
-      );
+      // Report generation is handled from the vehicle dashboard, not the inspection flow.
+      // Auto-advance past this step silently.
+      return null;
 
     default:
       return null;
