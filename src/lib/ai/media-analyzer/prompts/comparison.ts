@@ -113,7 +113,9 @@ RESPOND WITH EXACTLY THIS JSON (no markdown):
 Condition tiers — A tire is only as good as its WORST zone:
 - GOOD: 7+/32" tread across the full face (inner, center, outer all have deep grooves)
 - WORN: 3-6/32" in any zone. Shallow grooves, wear bars starting to show
-- REPLACE: <3/32" in ANY zone — bald center, bald edges, or bald patches anywhere. A tire that is bald in the center but has tread on the edges is REPLACE. Wear bars flush, smooth rubber, or visible cord = REPLACE.`,
+- REPLACE: <3/32" in ANY zone — bald center, bald edges, or bald patches anywhere. A tire that is bald in the center but has tread on the edges is REPLACE. Wear bars flush, smooth rubber, or visible cord = REPLACE.
+
+When uncertain between tiers, classify as the worse tier — a dealer can verify on the lot.`,
 
     user: `Compare all 4 tires on this ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
 
