@@ -110,22 +110,28 @@ RESPOND WITH EXACTLY THIS JSON (no markdown):
   "notes": "overall tire comparison notes"
 }
 
-Condition tiers:
-- GOOD: 7+/32" tread, deep grooves, no wear bars visible, even wear
-- WORN: 3-6/32" tread, shallow grooves, possibly uneven. Plan replacement within 10-15K miles
-- REPLACE: <3/32" tread, wear bars flush, heavy uneven wear, bald spots, or significant sidewall damage. Needs replacement before resale.`,
+Condition tiers — A tire is only as good as its WORST zone:
+- GOOD: 7+/32" tread across the full face (inner, center, outer all have deep grooves)
+- WORN: 3-6/32" in any zone. Shallow grooves, wear bars starting to show
+- REPLACE: <3/32" in ANY zone — bald center, bald edges, or bald patches anywhere. A tire that is bald in the center but has tread on the edges is REPLACE. Wear bars flush, smooth rubber, or visible cord = REPLACE.`,
 
     user: `Compare all 4 tires on this ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
 
 Photos are: Front-Left (Driver), Front-Right (Passenger), Rear-Left (Driver), Rear-Right (Passenger).
 
-CHECK FOR:
+FOR EACH TIRE — examine the tread in three zones:
+- INNER edge (closest to vehicle body)
+- CENTER of tread face
+- OUTER edge (farthest from vehicle)
+If ANY zone is bald or smooth, that tire is REPLACE regardless of the other zones.
+
+THEN COMPARE ACROSS ALL 4:
 1. Mismatched tire brands or models between tires
 2. Mismatched tire sizes (read sidewall markings if visible)
-3. Significantly different tread depths between tires — indicates uneven wear or partial replacement
-4. Different tire age/DOT codes if visible (more than 2 years difference = concern)
-5. Inconsistent wear patterns — inside edge wear on front but not rear = alignment issue
-6. One tire significantly more worn than others
+3. Significantly different tread depths between tires (partial replacement indicator)
+4. Different tire age/DOT codes if visible (>2 year difference = concern)
+5. Inconsistent wear patterns — center wear on fronts but not rears = overinflation on front axle; inside edge wear = alignment issue
+6. One tire dramatically more worn than the others
 
 Rate each tire individually AND as a set. Mismatched tires across an axle = safety concern.`,
   };

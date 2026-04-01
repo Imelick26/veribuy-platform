@@ -17,6 +17,7 @@ import type {
 } from "../types";
 import { getPhotoChecklist, buildPhase1SystemPrompt } from "../prompts/detection";
 import { callVision, validatePhotoUrls, processWithConcurrency, buildPhotoLabels } from "../utils";
+import { cropImageIntoZones, TIRE_ZONES } from "../image-crop";
 
 const MAX_CONCURRENT = 6;
 
@@ -94,6 +95,12 @@ export async function runPhase1(
 //  Single photo inspection
 // ---------------------------------------------------------------------------
 
+/** Capture types that should get zone-cropped analysis */
+const TIRE_CAPTURE_TYPES = new Set([
+  "TIRE_FRONT_DRIVER", "TIRE_REAR_DRIVER",
+  "TIRE_FRONT_PASSENGER", "TIRE_REAR_PASSENGER",
+]);
+
 async function inspectSinglePhoto(
   vehicle: VehicleInfo,
   photo: MediaForAnalysis,
@@ -109,13 +116,29 @@ async function inspectSinglePhoto(
   const checklist = getPhotoChecklist(photo.captureType, vehicle, isTruck);
   const photoLabel = buildPhotoLabels(validPhotos);
 
-  const userPrompt = `Inspect this photo using the checklist below. For each defect found, provide full quantification (dimensions, repair approach, cost estimate).\n\nPHOTO: ${photoLabel}\n\n${checklist}`;
+  // For tire photos: crop into zones (inner/center/outer/sidewall) so the AI
+  // examines each tread zone independently instead of making a holistic judgment
+  let extraImageUrls: { url: string; label: string }[] | undefined;
+  let zoneContext = "";
+
+  if (TIRE_CAPTURE_TYPES.has(photo.captureType)) {
+    const crops = await cropImageIntoZones(photo.url, TIRE_ZONES);
+    if (crops && crops.length > 0) {
+      extraImageUrls = crops.map((c) => ({ url: c.dataUrl, label: c.label }));
+      zoneContext = `\n\nZONE CROPS PROVIDED: In addition to the full tire photo, you are receiving ${crops.length} cropped zones:\n` +
+        crops.map((c, i) => `- Image ${i + 2}: ${c.label}`).join("\n") +
+        "\n\nExamine EACH cropped zone independently. A tire that is bald in the center crop but has tread in the edge crops is REPLACE — the worst zone determines the classification.";
+    }
+  }
+
+  const userPrompt = `Inspect this photo using the checklist below. For each defect found, provide full quantification (dimensions, repair approach, cost estimate).\n\nPHOTO: ${photoLabel}${zoneContext}\n\n${checklist}`;
 
   const response = await callVision<Phase1Response>({
     model: "gpt-4o",
     systemPrompt,
     userText: userPrompt,
     photos: validPhotos,
+    extraImageUrls,
     temperature: 0.2,
     maxTokens: 1500,
     label: `phase1:${photo.captureType}`,

@@ -82,6 +82,8 @@ interface VisionCallOptions {
   systemPrompt: string;
   userText: string;
   photos: MediaForAnalysis[];
+  /** Additional images as data URLs (e.g., cropped zones). Sent after photos. */
+  extraImageUrls?: { url: string; label: string }[];
   temperature?: number;
   maxTokens?: number;
   label: string;
@@ -99,6 +101,7 @@ export async function callVision<T = Record<string, unknown>>(
     systemPrompt,
     userText,
     photos,
+    extraImageUrls,
     temperature = 0.2,
     maxTokens = 1000,
     label,
@@ -106,10 +109,16 @@ export async function callVision<T = Record<string, unknown>>(
 
   const openai = getOpenAI();
 
-  const imageBlocks = photos.map((m) => ({
-    type: "image_url" as const,
-    image_url: { url: m.url, detail: "high" as const },
-  }));
+  const imageBlocks = [
+    ...photos.map((m) => ({
+      type: "image_url" as const,
+      image_url: { url: m.url, detail: "high" as const },
+    })),
+    ...(extraImageUrls || []).map((img) => ({
+      type: "image_url" as const,
+      image_url: { url: img.url, detail: "high" as const },
+    })),
+  ];
 
   try {
     const response = await openai.chat.completions.create({
