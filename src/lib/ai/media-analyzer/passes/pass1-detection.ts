@@ -227,9 +227,10 @@ RESPOND WITH EXACTLY THIS JSON:
 }
 
 RULES:
+- Compare the CENTER zone groove depth to the EDGE zone groove depth.
 - If center grooves are less than HALF the depth of the edge grooves → centerGrooveDepth = "flush" → shouldUpgrade to REPLACE.
-- On all-terrain tires: chunky outer lugs mask center wear. The center row of blocks can be ground nearly flat from highway driving while the edges look aggressive. This is the most commonly missed tire defect.
-- "flush" = the tread blocks in the center are nearly level with the groove floor. The surface appears smooth or flat compared to the deep channels at the edges.
+- If ANY zone's surface appears flat or smooth while other zones have deep channels → that zone is "flush" regardless of tire type.
+- "flush" = tread blocks nearly level with groove floor. Surface appears smooth or flat compared to deeper zones.
 - If you agree with the initial "${firstOverall}" rating, set shouldUpgrade = false.`;
 
   const userPrompt = `INITIAL ASSESSMENT said this tire is "${firstOverall}" with center tread "${centerDepth}" — "${centerNotes}".

@@ -154,8 +154,8 @@ RESPOND WITH EXACTLY THIS JSON (no markdown, no code fences):
 }
 
 CRITICAL RULES:
-- The overall tread rating = the WORST zone rating. If center is REPLACE but edges are GOOD, overall = REPLACE.
-- On all-terrain tires: the chunky outer lugs can look fine while the CENTER ribs are worn flat. Examine the CENTER grooves independently — are they deep channels or worn smooth?
+- The overall tread rating = the WORST zone rating. If one zone is REPLACE but the others are GOOD, overall = REPLACE.
+- Compare zones against each other: if any zone's grooves are less than half the depth of another zone, the shallower zone is "flush" → REPLACE.
 - "flush" means grooves are nearly gone and the rubber surface is almost flat. "bald" means completely smooth.
 - When uncertain between WORN and REPLACE, choose REPLACE.
 - REPLACE = any zone where grooves are flush or gone (<3/32"), wear bars visible, or bald patches.
