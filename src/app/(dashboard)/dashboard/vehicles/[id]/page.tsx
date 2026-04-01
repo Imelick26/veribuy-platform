@@ -8,24 +8,24 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Progress } from "@/components/ui/Progress";
 import { MarketAnalysisSection, getConditionMarginPct, getConditionTierLabel } from "@/components/report/MarketAnalysisSection";
-import type { MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
+import type { MarketAnalysisData, MarketAnalysisSectionProps } from "@/components/report/MarketAnalysisSection";
 import { PhotoGallery } from "@/components/report/PhotoGallery";
 import { getConditionGrade } from "@/lib/market-valuation";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import {
   ArrowLeft, FileText, RefreshCw, ThumbsUp, ThumbsDown, DollarSign, Check, X,
   Activity, History, TrendingUp, Camera, ShieldAlert, CircleDot,
-  Car,
+  Car, Plus, Trash2,
 } from "lucide-react";
 
-type Tab = "condition" | "history" | "market" | "photos" | "risks";
+type Tab = "offer" | "condition" | "history" | "market" | "photos" | "risks";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: vehicle, isLoading } = trpc.vehicle.getDetail.useQuery({ id });
   const { data: orgSettings } = trpc.auth.getOrgSettings.useQuery();
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState<Tab>("risks");
+  const [activeTab, setActiveTab] = useState<Tab>("offer");
   const [showPriceInput, setShowPriceInput] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
   const [marginMode, setMarginMode] = useState<"pct" | "flat">("pct");
@@ -173,6 +173,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const tireAssessment = rawConditionData?.tireAssessment ?? null;
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "offer", label: "Offer", icon: <DollarSign className="h-4 w-4" /> },
     { key: "risks", label: "Risks", icon: <ShieldAlert className="h-4 w-4" /> },
     { key: "condition", label: "Condition", icon: <Activity className="h-4 w-4" /> },
     { key: "market", label: "Market", icon: <TrendingUp className="h-4 w-4" /> },
@@ -256,104 +257,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
         </div>
-
-        {/* Margin Adjuster */}
-        {estRetail > 0 && (
-          <div className="mt-4 p-3 rounded-lg bg-surface-overlay border border-border-default">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-text-primary">Dealer Margin</span>
-              <div className="flex items-center gap-0.5 bg-surface-sunken rounded-md p-0.5">
-                <button
-                  onClick={() => setMarginMode("pct")}
-                  className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-                    marginMode === "pct" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
-                  )}
-                >%</button>
-                <button
-                  onClick={() => setMarginMode("flat")}
-                  className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-                    marginMode === "flat" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
-                  )}
-                >$</button>
-              </div>
-            </div>
-            {marginMode === "pct" ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setMarginOverride(Math.max(5, effectiveMarginPct - 1))}
-                    className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
-                  >-</button>
-                  <span className="text-lg font-bold text-text-primary w-12 text-center">{effectiveMarginPct}%</span>
-                  <button
-                    onClick={() => setMarginOverride(Math.min(50, effectiveMarginPct + 1))}
-                    className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
-                  >+</button>
-                </div>
-                <span className="text-[10px] text-text-tertiary ml-1">
-                  {marginOverride != null ? (
-                    <button onClick={() => setMarginOverride(null)} className="text-brand-600 hover:underline">
-                      Reset to {aiMarginPct}% ({tierLabel})
-                    </button>
-                  ) : (
-                    <>AI recommended ({tierLabel} condition)</>
-                  )}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-text-secondary">$</span>
-                <input
-                  type="number"
-                  value={flatMarginOverride !== "" ? flatMarginOverride : (dealerMarginAmount / 100).toString()}
-                  onChange={(e) => setFlatMarginOverride(e.target.value)}
-                  className="w-24 text-lg font-bold bg-white border border-border-default rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-600"
-                  min={0}
-                  step={100}
-                />
-                <span className="text-[10px] text-text-tertiary">
-                  {flatMarginOverride !== "" ? (
-                    <button onClick={() => { setFlatMarginOverride(""); setMarginMode("pct"); }} className="text-brand-600 hover:underline">
-                      Reset to {aiMarginPct}% ({tierLabel})
-                    </button>
-                  ) : (
-                    <>Min floor: ${(minProfit / 100).toLocaleString()}</>
-                  )}
-                </span>
-              </div>
-            )}
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-default text-xs">
-              <span className="text-text-tertiary">Margin: {formatCurrency(dealerMarginAmount)}</span>
-              <span className="text-text-tertiary">Buy Price: <span className="font-semibold text-text-primary">{formatCurrency(maxBid)}</span></span>
-            </div>
-          </div>
-        )}
-
-        {/* Negotiation Playbook — the value prop */}
-        {maxBid > 0 && (() => {
-          const roundTo50 = (v: number) => Math.round(v / 5000) * 5000;
-          const openAt = roundTo50(Math.round(maxBid * 0.80));
-          const walkAway = roundTo50(Math.round(maxBid * 1.12));
-          return (
-            <div className="grid grid-cols-3 gap-3 mt-4">
-              <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-center">
-                <p className="text-xs text-green-600 uppercase tracking-wider font-medium">Open At</p>
-                <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(openAt)}</p>
-                <p className="text-[10px] text-green-500 mt-1">Start here</p>
-              </div>
-              <div className="p-4 rounded-lg bg-white border-2 border-text-primary text-center">
-                <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Target</p>
-                <p className="text-2xl font-bold text-text-primary mt-1">{formatCurrency(maxBid)}</p>
-                <p className="text-[10px] text-text-tertiary mt-1">Recommended buy</p>
-              </div>
-              <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-center">
-                <p className="text-xs text-red-500 uppercase tracking-wider font-medium">Walk Away</p>
-                <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(walkAway)}</p>
-                <p className="text-[10px] text-red-400 mt-1">Don&apos;t exceed</p>
-              </div>
-            </div>
-          );
-        })()}
 
         {/* Action buttons */}
         <div className="flex items-center gap-2 mt-5">
@@ -479,6 +382,155 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* ═══ TAB CONTENT ═══ */}
+
+      {/* Offer Tab */}
+      {activeTab === "offer" && (
+        <div className="space-y-5">
+          {/* Dealer Margin Adjuster */}
+          {estRetail > 0 && (
+            <div className="p-3 rounded-lg bg-surface-overlay border border-border-default">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-text-primary">Dealer Margin</span>
+                <div className="flex items-center gap-0.5 bg-surface-sunken rounded-md p-0.5">
+                  <button
+                    onClick={() => setMarginMode("pct")}
+                    className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                      marginMode === "pct" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                    )}
+                  >%</button>
+                  <button
+                    onClick={() => setMarginMode("flat")}
+                    className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                      marginMode === "flat" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                    )}
+                  >$</button>
+                </div>
+              </div>
+              {marginMode === "pct" ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setMarginOverride(Math.max(5, effectiveMarginPct - 1))}
+                      className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+                    >-</button>
+                    <span className="text-lg font-bold text-text-primary w-12 text-center">{effectiveMarginPct}%</span>
+                    <button
+                      onClick={() => setMarginOverride(Math.min(50, effectiveMarginPct + 1))}
+                      className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+                    >+</button>
+                  </div>
+                  <span className="text-[10px] text-text-tertiary ml-1">
+                    {marginOverride != null ? (
+                      <button onClick={() => setMarginOverride(null)} className="text-brand-600 hover:underline">
+                        Reset to {aiMarginPct}% ({tierLabel})
+                      </button>
+                    ) : (
+                      <>AI recommended ({tierLabel} condition)</>
+                    )}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-text-secondary">$</span>
+                  <input
+                    type="number"
+                    value={flatMarginOverride !== "" ? flatMarginOverride : (dealerMarginAmount / 100).toString()}
+                    onChange={(e) => setFlatMarginOverride(e.target.value)}
+                    className="w-24 text-lg font-bold bg-white border border-border-default rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                    min={0}
+                    step={100}
+                  />
+                  <span className="text-[10px] text-text-tertiary">
+                    {flatMarginOverride !== "" ? (
+                      <button onClick={() => { setFlatMarginOverride(""); setMarginMode("pct"); }} className="text-brand-600 hover:underline">
+                        Reset to {aiMarginPct}% ({tierLabel})
+                      </button>
+                    ) : (
+                      <>Min floor: ${(minProfit / 100).toLocaleString()}</>
+                    )}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-default text-xs">
+                <span className="text-text-tertiary">Margin: {formatCurrency(dealerMarginAmount)}</span>
+                <span className="text-text-tertiary">Buy Price: <span className="font-semibold text-text-primary">{formatCurrency(maxBid)}</span></span>
+              </div>
+            </div>
+          )}
+
+          {/* Negotiation Playbook */}
+          {maxBid > 0 && (() => {
+            const roundTo50 = (v: number) => Math.round(v / 5000) * 5000;
+            const openAt = roundTo50(Math.round(maxBid * 0.80));
+            const walkAway = roundTo50(Math.round(maxBid * 1.12));
+            return (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-center">
+                  <p className="text-xs text-green-600 uppercase tracking-wider font-medium">Open At</p>
+                  <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(openAt)}</p>
+                  <p className="text-[10px] text-green-500 mt-1">Start here</p>
+                </div>
+                <div className="p-4 rounded-lg bg-white border-2 border-text-primary text-center">
+                  <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Target</p>
+                  <p className="text-2xl font-bold text-text-primary mt-1">{formatCurrency(maxBid)}</p>
+                  <p className="text-[10px] text-text-tertiary mt-1">Recommended buy</p>
+                </div>
+                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-center">
+                  <p className="text-xs text-red-500 uppercase tracking-wider font-medium">Walk Away</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(walkAway)}</p>
+                  <p className="text-[10px] text-red-400 mt-1">Don&apos;t exceed</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Offer Justification Builder */}
+          {inspection && (
+            <OfferBuilder
+              inspectionId={inspection.id}
+              inspection={inspection as { offerMode?: string | null; offerNotes?: string | null; offerCostBreakdown?: unknown }}
+            />
+          )}
+
+          {/* ── Seller Report Preview ── */}
+          {market && inspection && (
+            <>
+              <div className="divider-brand-gradient my-2" />
+              <div>
+                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+                  Seller Report Preview
+                </p>
+                <div className="rounded-xl border-2 border-dashed border-border-strong p-4 bg-surface-raised">
+                  <MarketAnalysisSection
+                    data={market}
+                    audience="seller"
+                    overallScore={condScore}
+                    reconCostOverride={reconEstimate > 0 ? reconEstimate : undefined}
+                    targetMarginPercent={orgSettings?.targetMarginPercent}
+                    minProfitPerUnit={orgSettings?.minProfitPerUnit}
+                    marginOverride={marginOverride}
+                    offerMode={inspection.offerMode}
+                    offerNotes={inspection.offerNotes}
+                    offerCostBreakdown={inspection.offerCostBreakdown as MarketAnalysisSectionProps["offerCostBreakdown"]}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Generate Report Button ── */}
+          {inspection && market && (
+            <GenerateReportButton inspectionId={inspection.id} existingReportId={latestInspection?.report?.id} />
+          )}
+
+          {!market && (
+            <Card className="p-8 text-center">
+              <DollarSign className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
+              <p className="text-sm text-text-secondary">No market data yet. Complete an inspection to build your offer.</p>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Condition Tab */}
       {activeTab === "condition" && (
@@ -868,6 +920,257 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Offer Builder — editable cost breakdown + mode toggle              */
+/* ------------------------------------------------------------------ */
+
+interface CostItem { label: string; amountCents: number; description: string }
+
+function OfferBuilder({ inspectionId, inspection }: {
+  inspectionId: string;
+  inspection: { offerMode?: string | null; offerNotes?: string | null; offerCostBreakdown?: unknown };
+}) {
+  const [mode, setMode] = useState<"AI_ESTIMATED" | "CUSTOM_NOTES">(
+    (inspection.offerMode as "AI_ESTIMATED" | "CUSTOM_NOTES") || "AI_ESTIMATED"
+  );
+  const [notes, setNotes] = useState(inspection.offerNotes || "");
+  const [saved, setSaved] = useState(false);
+
+  // Editable cost items — initialized from inspection data
+  const existingItems = ((inspection.offerCostBreakdown as { costItems?: CostItem[] })?.costItems) || [];
+  const [costItems, setCostItems] = useState<CostItem[]>(existingItems);
+  const [dirty, setDirty] = useState(false);
+
+  const utils = trpc.useUtils();
+  const setOfferMode = trpc.inspection.setOfferMode.useMutation({
+    onSuccess: (data) => {
+      setSaved(true);
+      utils.vehicle.getDetail.invalidate();
+      setTimeout(() => setSaved(false), 2000);
+      // Update local cost items from AI result
+      if ("breakdown" in data && data.breakdown) {
+        const bd = data.breakdown as { costItems?: CostItem[] };
+        if (bd.costItems) {
+          setCostItems(bd.costItems);
+          setDirty(false);
+        }
+      }
+    },
+  });
+  const updateBreakdown = trpc.inspection.updateOfferBreakdown.useMutation({
+    onSuccess: () => {
+      setSaved(true);
+      setDirty(false);
+      utils.vehicle.getDetail.invalidate();
+      setTimeout(() => setSaved(false), 2000);
+    },
+  });
+
+  const hasBreakdown = costItems.length > 0;
+  const totalCents = costItems.reduce((s, c) => s + c.amountCents, 0);
+
+  function updateItem(index: number, field: keyof CostItem, value: string | number) {
+    setCostItems((prev) => prev.map((item, i) =>
+      i === index ? { ...item, [field]: value } : item
+    ));
+    setDirty(true);
+  }
+
+  function removeItem(index: number) {
+    setCostItems((prev) => prev.filter((_, i) => i !== index));
+    setDirty(true);
+  }
+
+  function addItem() {
+    setCostItems((prev) => [...prev, { label: "", amountCents: 0, description: "" }]);
+    setDirty(true);
+  }
+
+  function saveEdits() {
+    updateBreakdown.mutate({ inspectionId, costItems });
+  }
+
+  return (
+    <div className="p-4 rounded-lg border border-border-default bg-surface-overlay">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+          Offer Justification
+        </p>
+        {saved && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
+      </div>
+
+      {/* Mode toggle */}
+      <div className="flex gap-2 mb-3">
+        <button
+          onClick={() => setMode("AI_ESTIMATED")}
+          className={cn(
+            "flex-1 text-xs font-medium py-2 px-3 rounded-lg border transition-all cursor-pointer",
+            mode === "AI_ESTIMATED"
+              ? "border-brand-600 bg-brand-50 text-brand-700"
+              : "border-border-default bg-surface-raised text-text-secondary hover:bg-surface-hover"
+          )}
+        >AI Cost Breakdown</button>
+        <button
+          onClick={() => setMode("CUSTOM_NOTES")}
+          className={cn(
+            "flex-1 text-xs font-medium py-2 px-3 rounded-lg border transition-all cursor-pointer",
+            mode === "CUSTOM_NOTES"
+              ? "border-brand-600 bg-brand-50 text-brand-700"
+              : "border-border-default bg-surface-raised text-text-secondary hover:bg-surface-hover"
+          )}
+        >Custom Notes</button>
+      </div>
+
+      {mode === "AI_ESTIMATED" ? (
+        <div className="space-y-3">
+          {/* Generate / Regenerate button */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="brand"
+              loading={setOfferMode.isPending}
+              onClick={() => setOfferMode.mutate({ inspectionId, mode: "AI_ESTIMATED" })}
+            >
+              {hasBreakdown ? "Regenerate" : "Generate"} AI Breakdown
+            </Button>
+            <span className="text-[10px] text-text-tertiary">
+              {hasBreakdown ? "AI will replace current items" : "AI analyzes the gap between valuation and your offer"}
+            </span>
+          </div>
+
+          {/* Editable cost items */}
+          {hasBreakdown && (
+            <div className="space-y-2">
+              {costItems.map((item, i) => (
+                <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-surface-raised border border-border-default">
+                  <div className="flex-1 space-y-1.5">
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(e) => updateItem(i, "label", e.target.value)}
+                      placeholder="Cost category"
+                      className="w-full text-sm font-medium bg-transparent border-b border-transparent hover:border-border-default focus:border-brand-600 focus:outline-none px-0 py-0.5 text-text-primary placeholder:text-text-tertiary"
+                    />
+                    <input
+                      type="text"
+                      value={item.description}
+                      onChange={(e) => updateItem(i, "description", e.target.value)}
+                      placeholder="Description"
+                      className="w-full text-[11px] bg-transparent border-b border-transparent hover:border-border-default focus:border-brand-600 focus:outline-none px-0 py-0.5 text-text-tertiary placeholder:text-text-tertiary"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs text-text-tertiary">$</span>
+                    <input
+                      type="number"
+                      value={Math.round(item.amountCents / 100)}
+                      onChange={(e) => updateItem(i, "amountCents", (parseInt(e.target.value) || 0) * 100)}
+                      className="w-20 text-sm font-semibold text-right bg-surface-overlay border border-border-default rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                    />
+                    <button
+                      onClick={() => removeItem(i)}
+                      className="p-1 rounded-md text-text-tertiary hover:text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Total + Add/Save */}
+              <div className="flex items-center justify-between pt-2 border-t border-border-default">
+                <button
+                  onClick={addItem}
+                  className="flex items-center gap-1 text-xs text-brand-600 font-medium hover:underline cursor-pointer"
+                >
+                  <Plus className="h-3 w-3" /> Add Line Item
+                </button>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-text-tertiary">
+                    Total: <span className="font-semibold text-text-primary">${(totalCents / 100).toLocaleString()}</span>
+                  </span>
+                  {dirty && (
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      loading={updateBreakdown.isPending}
+                      onClick={saveEdits}
+                    >
+                      Save Changes
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Notes shown to the seller explaining the offer..."
+            className="w-full text-sm rounded-lg border border-border-default bg-surface-raised p-3 text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-600 resize-none"
+            rows={3}
+          />
+          <Button
+            size="sm"
+            variant="primary"
+            className="mt-2"
+            loading={setOfferMode.isPending}
+            onClick={() => setOfferMode.mutate({ inspectionId, mode: "CUSTOM_NOTES", notes })}
+          >
+            Save Notes
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Generate Report Button                                             */
+/* ------------------------------------------------------------------ */
+
+function GenerateReportButton({ inspectionId, existingReportId }: {
+  inspectionId: string;
+  existingReportId?: string | null;
+}) {
+  const utils = trpc.useUtils();
+  const [generated, setGenerated] = useState(false);
+  const generateReport = trpc.report.generate.useMutation({
+    onSuccess: () => {
+      setGenerated(true);
+      utils.vehicle.getDetail.invalidate();
+    },
+  });
+
+  return (
+    <div className="flex flex-col items-center gap-2 pt-4">
+      <Button
+        variant="brand"
+        size="lg"
+        loading={generateReport.isPending}
+        onClick={() => generateReport.mutate({ inspectionId })}
+        className="w-full sm:w-auto min-w-[240px]"
+      >
+        <FileText className="h-4 w-4" />
+        {existingReportId ? "Regenerate Report" : "Generate Report"}
+      </Button>
+      {generated && (
+        <p className="text-xs text-green-600 font-medium">
+          Report generated! <Link href="/dashboard/reports" className="underline">View Reports →</Link>
+        </p>
+      )}
+      {existingReportId && !generated && (
+        <p className="text-[10px] text-text-tertiary">
+          This will regenerate the existing report with your current offer settings.
+        </p>
+      )}
     </div>
   );
 }

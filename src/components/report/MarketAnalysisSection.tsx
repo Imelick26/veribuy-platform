@@ -84,7 +84,7 @@ export interface MarketAnalysisData {
   aiAuditorReasoning?: string | null;
 }
 
-interface MarketAnalysisSectionProps {
+export interface MarketAnalysisSectionProps {
   data: MarketAnalysisData;
   compact?: boolean;
   /** Hide the hero recommended buy price card (when already shown elsewhere) */
@@ -101,6 +101,16 @@ interface MarketAnalysisSectionProps {
   minProfitPerUnit?: number | null;
   /** Per-vehicle margin override (percentage) — bypasses condition tier */
   marginOverride?: number | null;
+  /** Offer justification mode — "AI_ESTIMATED" | "CUSTOM_NOTES" | null */
+  offerMode?: string | null;
+  /** Custom dealer notes for the offer (when mode = CUSTOM_NOTES) */
+  offerNotes?: string | null;
+  /** AI-computed cost decomposition (when mode = AI_ESTIMATED) */
+  offerCostBreakdown?: {
+    costItems?: Array<{ label: string; amountCents: number; description: string }>;
+    totalCostsCents?: number;
+    reasoning?: string;
+  } | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -146,7 +156,7 @@ const recLabel = (rec: string) =>
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function MarketAnalysisSection({ data, compact = false, hideHero = false, audience = "dealer", overallScore, reconCostOverride, targetMarginPercent, minProfitPerUnit, marginOverride }: MarketAnalysisSectionProps) {
+export function MarketAnalysisSection({ data, compact = false, hideHero = false, audience = "dealer", overallScore, reconCostOverride, targetMarginPercent, minProfitPerUnit, marginOverride, offerMode, offerNotes, offerCostBreakdown }: MarketAnalysisSectionProps) {
   const isSeller = audience === "seller";
   const comps = (data.comparables ?? []) as MarketAnalysisData["comparables"] & object[];
   const bands = data.priceBands as MarketAnalysisData["priceBands"];
@@ -192,40 +202,41 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
   const dealerMarginFromSetting = Math.max(pctMarginAmount, minProfit);
   const dealerBuyPrice = Math.max(0, Math.round((estRetail - dealerMarginFromSetting - reconCost) / 100) * 100);
 
-  // Seller waterfall: use actual repair costs, back-compute only the trade-in
-  // so the waterfall adds up: TradeIn + condDelta + histDelta - repairs = offer
+  // ── Seller waterfall: data-driven, fixed values ──
+  // Trade-in is sourced from market APIs (BB, NADA, VinAudit), NOT back-computed.
+  // Condition/history adjustments are fixed from AI analysis.
+  // Repairs are fixed from inspection findings.
+  // "Overhead costs" is the only variable — it absorbs the dealer's margin.
 
-  // Use MarketAnalysis.estReconCost as the single source of truth for repair costs.
-  // This comes from the AI recon estimator which accounts for local labor rates,
-  // bundled labor, and vehicle-specific parts costs.
   const sellerReconCost = reconCost;
-
-  // Back-compute trade-in so waterfall balances exactly
   const condMult = data.conditionMultiplier ?? 1;
   const histMult = data.historyMultiplier ?? 1;
-  const combinedMult = condMult * histMult;
-  // tradeIn × condMult × histMult - recon = offer  →  tradeIn = (offer + recon) / combined
-  // Back-compute trade-in. Keep recon fixed (actual costs), derive trade-in.
-  // Formula: tradeIn × condMult × histMult = offer + recon
-  // We want clean dollar amounts, so round trade-in to nearest $100.
-  // Then compute condition/history deltas from it, and let a small
-  // "rounding adjustment" line absorb any residual.
-  const sellerOffer = dealerBuyPrice; // Use margin-computed price, not stored fairBuyMax
-  const rawTradeIn = combinedMult > 0
-    ? (sellerOffer + sellerReconCost) / combinedMult
-    : sellerOffer + sellerReconCost;
-  const tradeInBase = Math.round(rawTradeIn / 10000) * 10000; // nearest $100
+
+  // Trade-in: use actual API-sourced value, rounded to nearest $100 for clean display
+  // Falls back to back-computation only if no API trade-in data exists
+  const sellerOffer = dealerBuyPrice;
+  const apiTradeIn = data.tradeInValue;
+  const tradeInBase = apiTradeIn != null && apiTradeIn > 0
+    ? Math.round(apiTradeIn / 10000) * 10000 // nearest $100 (cents)
+    : Math.round(((sellerOffer + sellerReconCost) / (condMult * histMult)) / 10000) * 10000; // legacy fallback
+
+  // Condition & history deltas — fixed from AI, applied to the trade-in
   const sellerAfterCondition = Math.round(tradeInBase * condMult);
   const sellerConditionDelta = sellerAfterCondition - tradeInBase;
   const sellerAfterHistory = histMult !== 1
     ? Math.round(sellerAfterCondition * histMult)
     : sellerAfterCondition;
   const sellerHistoryDelta = sellerAfterHistory - sellerAfterCondition;
-  // Residual from rounding — fold into the condition delta so it all balances
-  const sellerExpected = tradeInBase + sellerConditionDelta + sellerHistoryDelta - sellerReconCost;
-  const sellerRoundingAdj = sellerOffer - sellerExpected;
-  // Adjust condition delta to absorb rounding (small, invisible to seller)
-  const sellerConditionDeltaAdj = sellerConditionDelta + sellerRoundingAdj;
+
+  // Adjusted vehicle value = trade-in after condition + history - repairs (ALL FIXED)
+  const adjustedVehicleValue = sellerAfterHistory - sellerReconCost;
+
+  // Overhead costs = the gap between the fixed adjusted value and the dealer's offer
+  // This is what the AI cost breakdown explains. It absorbs the dealer's margin.
+  const sellerOverheadCosts = Math.max(0, adjustedVehicleValue - sellerOffer);
+
+  // For backward compat with rounding — absorb into condition delta
+  const sellerConditionDeltaAdj = sellerConditionDelta;
 
   // Seller-facing condition grade from the inspection overall score
   const sellerGrade = overallScore != null
@@ -387,11 +398,36 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
               </>
             )}
 
-            {/* Recon — single line, detailed breakdown shown in its own section */}
+            {/* Recon — single line */}
             {sellerReconCost > 0 && (
               <div className="flex justify-between">
                 <span className="text-text-secondary">Estimated Repairs Needed</span>
                 <span className="font-medium text-red-600">-{formatCurrency(sellerReconCost)}</span>
+              </div>
+            )}
+
+            {/* Dealer overhead costs — with inline AI breakdown */}
+            {sellerOverheadCosts > 0 && (
+              <div>
+                <div className="flex justify-between">
+                  <span className="text-text-secondary">Dealer Acquisition Costs</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(sellerOverheadCosts)}</span>
+                </div>
+                {/* AI breakdown sub-items */}
+                {offerMode === "AI_ESTIMATED" && offerCostBreakdown?.costItems && offerCostBreakdown.costItems.length > 0 && (
+                  <div className="ml-4 mt-1 space-y-0.5">
+                    {offerCostBreakdown.costItems.map((item, i) => (
+                      <div key={i} className="flex justify-between text-xs text-text-tertiary">
+                        <span>{item.label}</span>
+                        <span>-{formatCurrency(item.amountCents)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Custom notes inline */}
+                {offerMode === "CUSTOM_NOTES" && offerNotes && (
+                  <p className="ml-4 mt-1 text-xs text-text-tertiary italic">{offerNotes}</p>
+                )}
               </div>
             )}
 
@@ -436,6 +472,22 @@ export function MarketAnalysisSection({ data, compact = false, hideHero = false,
           </div>
         )}
       </div>
+
+      {/* Price ladder and separate "What Goes Into" sections removed —
+           AI breakdown is now shown inline under "Dealer Acquisition Costs"
+           in the waterfall above */}
+
+      {/* ── Seller: Data confidence badge ── */}
+      {isSeller && data.sourceCount != null && data.sourceCount > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-50 border border-brand-200">
+          <svg className="w-4 h-4 text-brand-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+          <span className="text-[11px] text-brand-700 font-medium">
+            This valuation is based on {data.sourceCount} independent market data source{data.sourceCount !== 1 ? "s" : ""} and verified by AI audit
+          </span>
+        </div>
+      )}
 
       {/* ── Market Comps count (dealer only) ── */}
       {!isSeller && (

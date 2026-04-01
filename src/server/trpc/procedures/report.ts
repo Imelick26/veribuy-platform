@@ -175,6 +175,9 @@ export const reportRouter = router({
               adjustedValueBeforeRecon: inspection.marketAnalysis.adjustedValueBeforeRecon,
               priceBands: inspection.marketAnalysis.priceBands as ReportData["marketAnalysis"] extends { priceBands: infer T } ? T : never,
               comparables: inspection.marketAnalysis.comparables as Array<{ title: string; price: number; mileage: number; location: string; source: string }>,
+              tradeInValue: inspection.marketAnalysis.tradeInValue,
+              wholesaleValue: inspection.marketAnalysis.wholesaleValue,
+              sourceCount: (inspection.marketAnalysis as Record<string, unknown>).sourceCount as number | null | undefined,
             }
           : undefined,
       };

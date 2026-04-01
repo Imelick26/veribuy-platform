@@ -10,8 +10,8 @@
  * Falls back to ProceduralFallback when the .glb file is not available.
  */
 
-import { useEffect, useMemo, Suspense } from "react";
-import { useLoader } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, Suspense } from "react";
+import { useLoader, useFrame } from "@react-three/fiber";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import * as THREE from "three";
 import { ProceduralFallback } from "./ProceduralFallback";
@@ -83,10 +83,34 @@ function GltfModel({ config }: VehicleModelProps) {
 }
 
 /**
- * Fallback wrapper that shows ProceduralFallback on load error.
+ * Minimal 3D loading indicator — a pulsing ring instead of the crude
+ * procedural wireframe car. Keeps the scene clean while GLTF downloads.
  */
-function ErrorFallback({ config }: VehicleModelProps) {
-  return <ProceduralFallback archetypeId={config.archetypeId} />;
+function ModelLoadingIndicator() {
+  const ringRef = useRef<THREE.Mesh>(null);
+
+  useFrame((state) => {
+    if (ringRef.current) {
+      ringRef.current.rotation.y = state.clock.elapsedTime * 0.5;
+      const scale = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.15;
+      ringRef.current.scale.setScalar(scale);
+    }
+  });
+
+  return (
+    <group position={[0, 0.4, 0]}>
+      <mesh ref={ringRef}>
+        <torusGeometry args={[0.6, 0.02, 16, 48]} />
+        <meshStandardMaterial
+          color="#1a3a7a"
+          emissive="#1a3a7a"
+          emissiveIntensity={0.4}
+          transparent
+          opacity={0.6}
+        />
+      </mesh>
+    </group>
+  );
 }
 
 export function VehicleModel({ config }: VehicleModelProps) {
@@ -94,9 +118,7 @@ export function VehicleModel({ config }: VehicleModelProps) {
     <ErrorBoundary
       fallback={<ProceduralFallback archetypeId={config.archetypeId} />}
     >
-      <Suspense
-        fallback={<ProceduralFallback archetypeId={config.archetypeId} />}
-      >
+      <Suspense fallback={<ModelLoadingIndicator />}>
         <GltfModel config={config} />
       </Suspense>
     </ErrorBoundary>

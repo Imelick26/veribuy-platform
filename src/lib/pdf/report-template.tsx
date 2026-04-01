@@ -68,6 +68,8 @@ interface ReportMarketAnalysis {
   comparables?: ReportMarketComparable[] | null;
   tradeInValue?: number | null;
   privatePartyValue?: number | null;
+  wholesaleValue?: number | null;
+  sourceCount?: number | null;
 }
 
 interface ReportRiskItem {
@@ -625,32 +627,29 @@ export function ReportDocument({ data }: { data: ReportData }) {
                 How We Determined This Offer
               </Text>
 
-              {/* Trade-In based waterfall — back-computed to land on offer */}
+              {/* Trade-In based waterfall — data-driven, fixed values */}
               {(() => {
                 const ma = data.marketAnalysis!;
-                const reconCost = ma.estReconCost || 0;
+                const totalRecon = ma.estReconCost || 0;
                 const condMult = ma.conditionMultiplier ?? 1;
                 const histMult = ma.historyMultiplier ?? 1;
                 const offerPrice = ma.fairBuyMax || ma.adjustedPrice;
                 const hb = ma.historyBreakdown;
 
-                // Itemized findings
-                // Use estReconCost as single source of truth
-                const totalRecon = reconCost;
+                // Trade-in: use actual API-sourced value, fallback to back-computation
+                const apiTradeIn = ma.tradeInValue;
+                const tradeInBase = apiTradeIn != null && apiTradeIn > 0
+                  ? Math.round(apiTradeIn / 10000) * 10000
+                  : Math.round(((offerPrice + totalRecon) / (condMult * histMult)) / 10000) * 10000;
 
-                // Back-compute trade-in so waterfall balances exactly
-                const combinedMult = condMult * histMult;
-                const rawTradeIn = combinedMult > 0
-                  ? (offerPrice + totalRecon) / combinedMult
-                  : offerPrice + totalRecon;
-                const tradeInBase = Math.round(rawTradeIn / 10000) * 10000;
                 const afterCondition = Math.round(tradeInBase * condMult);
-                const conditionDelta = afterCondition - tradeInBase;
+                const conditionDeltaAdj = afterCondition - tradeInBase;
                 const afterHistory = histMult !== 1 ? Math.round(afterCondition * histMult) : afterCondition;
                 const historyDelta = afterHistory - afterCondition;
-                // Absorb rounding into condition delta
-                const expected = tradeInBase + conditionDelta + historyDelta - totalRecon;
-                const conditionDeltaAdj = conditionDelta + (offerPrice - expected);
+
+                // Overhead = adjusted value - offer (absorbs dealer margin)
+                const adjustedValue = afterHistory - totalRecon;
+                const overheadCosts = Math.max(0, adjustedValue - offerPrice);
 
                 // Condition grade from inspection overall score
                 const score = data.scores.overall;
@@ -745,6 +744,14 @@ export function ReportDocument({ data }: { data: ReportData }) {
                       </View>
                     )}
 
+                    {/* Dealer overhead costs */}
+                    {overheadCosts > 0 && (
+                      <View style={styles.marketRow}>
+                        <Text style={styles.marketLabel}>Dealer Acquisition Costs</Text>
+                        <Text style={styles.marketDeltaNeg}>-{fmtCurrency(overheadCosts)}</Text>
+                      </View>
+                    )}
+
                     {/* Our Offer (bottom line) */}
                     <View style={[styles.marketRow, { borderBottomWidth: 2, borderBottomColor: "#16a34a", paddingVertical: 6 }]}>
                       <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold", color: "#16a34a" }}>Our Offer</Text>
@@ -756,6 +763,9 @@ export function ReportDocument({ data }: { data: ReportData }) {
                 );
               })()}
             </View>
+
+            {/* Price ladder and separate cost breakdown removed —
+                AI breakdown is shown inline under Dealer Acquisition Costs in the waterfall */}
           </View>
 
           <Text style={styles.footer}>

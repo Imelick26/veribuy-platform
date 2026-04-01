@@ -79,15 +79,15 @@ function Marker({
       let scale: number;
       if (isActive) {
         // Bold pulse for active marker
-        scale = 1.6 + Math.sin(state.clock.elapsedTime * 3) * 0.2;
+        scale = 1.4 + Math.sin(state.clock.elapsedTime * 3) * 0.15;
       } else if (isDimmed) {
         // Shrink dimmed markers
         scale = 0.6;
       } else if (hovered) {
-        scale = 1.4;
+        scale = 1.3;
       } else {
         // Normal breathing
-        scale = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.15;
+        scale = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.1;
       }
       meshRef.current.scale.setScalar(scale);
     }
@@ -114,7 +114,7 @@ function Marker({
         onPointerLeave={() => setHovered(false)}
         renderOrder={10}
       >
-        <sphereGeometry args={[0.12, 16, 16]} />
+        <sphereGeometry args={[0.07, 16, 16]} />
         <meshStandardMaterial
           color={color}
           emissive={color}
@@ -127,7 +127,7 @@ function Marker({
 
       {/* Outer pulse ring — hidden when dimmed, prominent when active */}
       <mesh ref={ringRef} renderOrder={9} visible={!isDimmed}>
-        <sphereGeometry args={[isActive ? 0.28 : 0.2, 16, 16]} />
+        <sphereGeometry args={[isActive ? 0.17 : 0.12, 16, 16]} />
         <meshStandardMaterial
           color={color}
           emissive={color}

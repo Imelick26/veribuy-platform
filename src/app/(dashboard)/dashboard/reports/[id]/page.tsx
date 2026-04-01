@@ -18,7 +18,7 @@ import {
   Wrench,
   BarChart3,
 } from "lucide-react";
-import { MarketAnalysisSection, type MarketAnalysisData } from "@/components/report/MarketAnalysisSection";
+import { MarketAnalysisSection, type MarketAnalysisData, type MarketAnalysisSectionProps } from "@/components/report/MarketAnalysisSection";
 import { PhotoGallery } from "@/components/report/PhotoGallery";
 
 export default function ReportDetailPage({
@@ -570,6 +570,7 @@ export default function ReportDetailPage({
               <BarChart3 className="inline h-5 w-5 mr-1" />
               Vehicle Valuation
             </h3>
+
             <MarketAnalysisSection
               data={report.inspection.marketAnalysis as unknown as MarketAnalysisData}
               audience="seller"
@@ -577,6 +578,9 @@ export default function ReportDetailPage({
               reconCostOverride={aiReconCost}
               targetMarginPercent={orgSettings?.targetMarginPercent}
               minProfitPerUnit={orgSettings?.minProfitPerUnit}
+              offerMode={inspection.offerMode}
+              offerNotes={inspection.offerNotes}
+              offerCostBreakdown={inspection.offerCostBreakdown as MarketAnalysisSectionProps["offerCostBreakdown"]}
             />
           </div>
         )}
@@ -597,3 +601,4 @@ export default function ReportDetailPage({
     </div>
   );
 }
+

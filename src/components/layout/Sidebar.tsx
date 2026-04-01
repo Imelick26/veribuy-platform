@@ -97,13 +97,17 @@ export function Sidebar() {
               href={item.href}
               onClick={close}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-all relative",
                 isActive
                   ? "bg-surface-hover text-text-primary"
                   : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"
               )}
             >
-              <item.icon className={cn("h-4 w-4 flex-shrink-0", isActive ? "text-text-secondary" : "text-text-tertiary")} />
+              {/* Gradient active indicator */}
+              {isActive && (
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-brand-gradient" />
+              )}
+              <item.icon className={cn("h-4 w-4 flex-shrink-0 transition-colors", isActive ? "text-brand-600" : "text-text-tertiary")} />
               {item.name}
             </Link>
           );

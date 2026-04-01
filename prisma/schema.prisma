@@ -224,6 +224,11 @@ model Inspection {
   report          Report?
   aiValuationLogs ValuationLog[]
 
+  // Dealer offer customization — explains gap between VeriBuy valuation and dealer's offer
+  offerMode           String?     // "AI_ESTIMATED" | "CUSTOM_NOTES" — how the gap is explained to seller
+  offerNotes          String?     // Free-text dealer notes shown on seller report when mode = CUSTOM_NOTES
+  offerCostBreakdown  Json?       // AI-computed cost decomposition when mode = AI_ESTIMATED
+
   // Outcome tracking (training data for AI accuracy)
   purchaseOutcome     String?     // "PURCHASED" | "PASSED" | null (not yet answered)
   purchasePrice       Int?        // cents — what they actually paid
