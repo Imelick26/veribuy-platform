@@ -721,6 +721,8 @@ export default function InspectionDetailPage({
           }))}
           onCapture={(captureType, file) => mediaUpload.upload(file, captureType)}
           isUploading={mediaUpload.currentCaptureType}
+          uploadError={mediaUpload.error}
+          onClearError={mediaUpload.clearError}
           onClose={(notes) => {
             setShowGuidedCapture(false);
             if (notes) setInspectorNotes(notes);

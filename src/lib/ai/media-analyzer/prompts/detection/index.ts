@@ -76,6 +76,7 @@ export function getPhotoChecklist(
     case "ENGINE_BAY":
       return buildEngineBayChecklist(vehicle, mileageStr);
     case "DOOR_JAMB":
+    case "DOOR_JAMB_DRIVER":
       return buildDoorJambChecklist(vehicle, mileageStr);
     case "UNDERCARRIAGE":
       return buildUndercarriageChecklist(vehicle, mileageStr);

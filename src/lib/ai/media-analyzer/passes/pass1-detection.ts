@@ -39,6 +39,7 @@ const CAPTURE_TYPE_AREA: Record<string, AffectsArea> = {
   ROOF: "exterior",
   ENGINE_BAY: "mechanical",
   DOOR_JAMB: "exterior",
+  DOOR_JAMB_DRIVER: "exterior",
   UNDERCARRIAGE: "underbody",
   TIRE_FRONT_DRIVER: "mechanical",
   TIRE_REAR_DRIVER: "mechanical",

@@ -80,8 +80,10 @@ interface CapturedPhoto {
 interface GuidedCaptureProps {
   inspectionId: string;
   captures: CapturedPhoto[];
-  onCapture: (captureType: string, file: File) => void;
+  onCapture: (captureType: string, file: File) => void | Promise<unknown>;
   isUploading?: string | null;
+  uploadError?: string | null;
+  onClearError?: () => void;
   onClose: (inspectorNotes?: string) => void;
 }
 
@@ -94,6 +96,8 @@ export function GuidedCapture({
   captures,
   onCapture,
   isUploading,
+  uploadError,
+  onClearError,
   onClose,
 }: GuidedCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -159,12 +163,36 @@ export function GuidedCapture({
     setCurrentIndex((prev) => Math.min(prev + 1, GUIDED_SHOTS.length - 1));
   }, [currentIndex, captures]);
 
+  const [pendingUploads, setPendingUploads] = useState<Set<string>>(new Set());
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      onCapture(currentShot.type, file);
-      setJustCaptured(currentShot.type);
-      // Auto-advance after a brief flash
+      const captureType = currentShot.type;
+
+      // Track this upload so we know it's in-flight
+      setPendingUploads((prev) => new Set(prev).add(captureType));
+
+      // Fire the upload — onCapture returns a promise (or void)
+      const uploadPromise = Promise.resolve(onCapture(captureType, file));
+      uploadPromise
+        .then(() => {
+          setPendingUploads((prev) => {
+            const next = new Set(prev);
+            next.delete(captureType);
+            return next;
+          });
+        })
+        .catch(() => {
+          setPendingUploads((prev) => {
+            const next = new Set(prev);
+            next.delete(captureType);
+            return next;
+          });
+        });
+
+      setJustCaptured(captureType);
+      // Show brief success flash, then advance
       setTimeout(() => {
         setJustCaptured(null);
         if (!isCurrentCaptured) {
@@ -184,8 +212,15 @@ export function GuidedCapture({
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-4 py-3 bg-slate-900/80 backdrop-blur-sm border-b border-slate-800">
         <button
-          onClick={() => onClose()}
-          className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors"
+          onClick={() => {
+            if (pendingUploads.size > 0) return; // Block close while uploads pending
+            onClose();
+          }}
+          disabled={pendingUploads.size > 0}
+          className={cn(
+            "flex items-center gap-1 text-sm transition-colors",
+            pendingUploads.size > 0 ? "text-slate-600 cursor-not-allowed" : "text-slate-400 hover:text-white"
+          )}
         >
           <X className="h-5 w-5" />
           <span className="hidden sm:inline">Close</span>
@@ -253,6 +288,22 @@ export function GuidedCapture({
           );
         })}
       </div>
+
+      {/* ── Upload error banner ── */}
+      {uploadError && (
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-red-500/20 border border-red-500/40 px-4 py-2.5">
+          <span className="text-sm text-red-300 flex-1">Upload failed: {uploadError}. Please retake the photo.</span>
+          <button onClick={onClearError} className="text-red-400 hover:text-red-200 text-xs font-medium shrink-0">Dismiss</button>
+        </div>
+      )}
+
+      {/* ── Pending uploads indicator ── */}
+      {pendingUploads.size > 0 && (
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-amber-500/15 border border-amber-500/30 px-4 py-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-500/30 border-t-amber-500 shrink-0" />
+          <span className="text-xs text-amber-300">{pendingUploads.size} photo{pendingUploads.size > 1 ? "s" : ""} uploading — don&apos;t close yet</span>
+        </div>
+      )}
 
       {/* ── Main content area ── */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 relative overflow-hidden">
@@ -426,11 +477,29 @@ export function GuidedCapture({
             </div>
 
             <button
-              onClick={() => { onClose(inspectorNotes.trim() || undefined); }}
-              className="w-full h-12 rounded-2xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+              onClick={() => {
+                if (pendingUploads.size > 0) return;
+                onClose(inspectorNotes.trim() || undefined);
+              }}
+              disabled={pendingUploads.size > 0}
+              className={cn(
+                "w-full h-12 rounded-2xl font-semibold transition-colors flex items-center justify-center gap-2",
+                pendingUploads.size > 0
+                  ? "bg-slate-600 text-slate-400 cursor-not-allowed"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700"
+              )}
             >
-              <CheckCircle className="h-5 w-5" />
-              {inspectorNotes.trim() ? "Continue with Notes" : `All ${GUIDED_SHOTS.length} Photos Captured — Done`}
+              {pendingUploads.size > 0 ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-400/30 border-t-slate-400" />
+                  Waiting for {pendingUploads.size} upload{pendingUploads.size > 1 ? "s" : ""}...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-5 w-5" />
+                  {inspectorNotes.trim() ? "Continue with Notes" : `All ${GUIDED_SHOTS.length} Photos Captured — Done`}
+                </>
+              )}
             </button>
           </div>
         )}

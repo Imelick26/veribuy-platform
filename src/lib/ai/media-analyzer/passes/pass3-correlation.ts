@@ -112,7 +112,7 @@ function detectTriggers(
 
   // Flood indicators — from door jamb findings
   const floodIndicators = findings.filter((f) =>
-    f.captureType === "DOOR_JAMB" && (
+    (f.captureType === "DOOR_JAMB" || f.captureType === "DOOR_JAMB_DRIVER") && (
       f.defectType.toLowerCase().includes("flood") ||
       f.defectType.toLowerCase().includes("water_line") ||
       f.defectType.toLowerCase().includes("mud_deposit") ||
