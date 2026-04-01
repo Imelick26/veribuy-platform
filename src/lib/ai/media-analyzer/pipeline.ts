@@ -1,0 +1,215 @@
+/**
+ * Pipeline Orchestrator v2
+ *
+ * 4-phase serial pipeline:
+ *   Phase 1: Focused per-photo inspection (detect + quantify in one call)
+ *   Phase 2: Multi-photo comparison scans (paint, alignment, tires, interior, wear)
+ *   Phase 3: Targeted re-scans (conditional, based on high-signal findings)
+ *   Phase 4: Score synthesis (all exterior photos + full findings → final scores)
+ *
+ * Memoized per media set so concurrent calls from Promise.all share one execution.
+ */
+
+import type {
+  VehicleInfo,
+  MediaForAnalysis,
+  PipelineResult,
+  PipelineMetadata,
+  DetectedFinding,
+  ComparisonFinding,
+} from "./types";
+import type { UnexpectedFinding } from "@/types/risk";
+import { runPhase1 } from "./passes/pass1-detection";
+import { runPhase2 } from "./passes/pass2-quantification";
+import { runPhase3, runPhase4 } from "./passes/pass3-correlation";
+
+// ---------------------------------------------------------------------------
+//  Memoization cache
+// ---------------------------------------------------------------------------
+
+const pipelineCache = new Map<string, Promise<PipelineResult>>();
+
+function buildCacheKey(media: MediaForAnalysis[]): string {
+  return media.map((m) => m.id).sort().join(",");
+}
+
+export function clearPipelineCache(): void {
+  pipelineCache.clear();
+}
+
+// ---------------------------------------------------------------------------
+//  Public API
+// ---------------------------------------------------------------------------
+
+export async function runPipeline(
+  vehicle: VehicleInfo,
+  media: MediaForAnalysis[],
+  inspectorNotes?: string,
+): Promise<PipelineResult> {
+  const cacheKey = buildCacheKey(media);
+  const cached = pipelineCache.get(cacheKey);
+  if (cached) {
+    console.log("[pipeline] Returning cached pipeline result");
+    return cached;
+  }
+
+  const promise = executePipeline(vehicle, media, inspectorNotes);
+  pipelineCache.set(cacheKey, promise);
+
+  try {
+    return await promise;
+  } catch (err) {
+    pipelineCache.delete(cacheKey);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Truck detection
+// ---------------------------------------------------------------------------
+
+const TRUCK_BODY_STYLES = [
+  "pickup", "truck", "crew cab", "regular cab", "extended cab",
+  "double cab", "quad cab", "king cab", "super cab", "mega cab",
+];
+
+const KNOWN_TRUCKS = [
+  "f-150", "f-250", "f-350", "f150", "f250", "f350",
+  "silverado", "sierra", "ram 1500", "ram 2500", "ram 3500",
+  "tundra", "tacoma", "titan", "frontier", "ranger", "colorado",
+  "canyon", "gladiator", "ridgeline", "maverick", "santa cruz",
+];
+
+function isTruck(vehicle: VehicleInfo): boolean {
+  const style = (vehicle.bodyStyle || "").toLowerCase();
+  if (TRUCK_BODY_STYLES.some((t) => style.includes(t))) return true;
+  const model = `${vehicle.make} ${vehicle.model}`.toLowerCase();
+  return KNOWN_TRUCKS.some((t) => model.includes(t));
+}
+
+// ---------------------------------------------------------------------------
+//  Pipeline execution
+// ---------------------------------------------------------------------------
+
+async function executePipeline(
+  vehicle: VehicleInfo,
+  media: MediaForAnalysis[],
+  inspectorNotes?: string,
+): Promise<PipelineResult> {
+  const startTime = Date.now();
+  const vehicleIsTruck = isTruck(vehicle);
+  console.log(`[pipeline] Starting 4-phase analysis for ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicleIsTruck ? "truck" : "non-truck"}) with ${media.length} photos`);
+
+  // ── Phase 1: Focused per-photo inspection ──
+  const phase1 = await runPhase1(vehicle, media, vehicleIsTruck);
+
+  // ── Phase 2: Multi-photo comparison scans ──
+  const phase2 = await runPhase2(vehicle, media);
+
+  // ── Phase 3: Targeted re-scans (conditional) ──
+  const allComparisonFindings: ComparisonFinding[] = [
+    ...phase2.paintFindings,
+    ...phase2.alignmentFindings,
+    ...phase2.tireResult.findings,
+    ...phase2.interiorFindings,
+    ...phase2.wearFindings,
+  ];
+
+  const phase3 = await runPhase3(vehicle, media, phase1.findings, allComparisonFindings);
+
+  // Merge all findings
+  const allFindings: DetectedFinding[] = [...phase1.findings, ...phase3.rescanFindings];
+  const allComparisons: ComparisonFinding[] = [...allComparisonFindings, ...phase3.rescanComparisonFindings];
+
+  // ── Phase 4: Score synthesis with exterior photos ──
+  const phase4 = await runPhase4(
+    vehicle,
+    media,
+    allFindings,
+    allComparisons,
+    phase2.tireResult.tireAssessment,
+    inspectorNotes,
+  );
+
+  // Merge Phase 4 additional findings (things the synthesis caught that Phase 1 missed)
+  const synthesisAdditionalFindings: DetectedFinding[] = []; // Phase 4 additionalFindings handled in normalization
+
+  // ── Build legacy-compatible unexpected findings ──
+  const unexpectedFindings = buildUnexpectedFindings(allFindings, allComparisons, media);
+
+  // ── Metadata ──
+  const durationMs = Date.now() - startTime;
+  const metadata: PipelineMetadata = {
+    totalApiCalls: phase1.apiCalls + phase2.apiCalls + phase3.apiCalls + phase4.apiCalls,
+    phase1Calls: phase1.apiCalls,
+    phase2Calls: phase2.apiCalls,
+    phase3Calls: phase3.apiCalls,
+    phase4Calls: phase4.apiCalls,
+    totalFindings: allFindings.length,
+    comparisonFindings: allComparisons.length,
+    rescanFindings: phase3.rescanFindings.length,
+    durationMs,
+  };
+
+  console.log(
+    `[pipeline] Complete: ${metadata.totalFindings} findings + ${metadata.comparisonFindings} comparisons, ` +
+    `${metadata.totalApiCalls} API calls, ${(durationMs / 1000).toFixed(1)}s`,
+  );
+
+  // Use tire assessment from Phase 4 synthesis (which incorporates Phase 2 tire comparison)
+  const finalSynthesis = {
+    ...phase4.synthesis,
+    tireAssessment: phase2.tireResult.tireAssessment,
+    crossFindings: allComparisons,
+  };
+
+  return {
+    findings: allFindings,
+    comparisonFindings: allComparisons,
+    rescanFindings: phase3.rescanFindings,
+    synthesis: finalSynthesis,
+    unexpectedFindings,
+    metadata,
+  };
+}
+
+// ---------------------------------------------------------------------------
+//  Convert findings to legacy UnexpectedFinding format
+// ---------------------------------------------------------------------------
+
+function buildUnexpectedFindings(
+  findings: DetectedFinding[],
+  comparisonFindings: ComparisonFinding[],
+  media: MediaForAnalysis[],
+): UnexpectedFinding[] {
+  const severityMap: Record<string, UnexpectedFinding["severity"]> = {
+    minor: "MINOR", moderate: "MODERATE", major: "MAJOR", critical: "CRITICAL",
+  };
+
+  const categoryMap: Record<string, string> = {
+    exterior: "COSMETIC_EXTERIOR",
+    interior: "COSMETIC_INTERIOR",
+    mechanical: "ENGINE",
+    underbody: "STRUCTURAL",
+  };
+
+  const fromFindings: UnexpectedFinding[] = findings.map((f) => ({
+    title: `${f.defectType.replace(/_/g, " ")} — ${f.location}`,
+    description: f.description,
+    severity: severityMap[f.severity] || "MINOR",
+    category: categoryMap[f.affectsArea] || "OTHER",
+    photoIndex: media.findIndex((m) => m.id === f.photoId),
+    confidence: f.confidence,
+  }));
+
+  const fromComparisons: UnexpectedFinding[] = comparisonFindings.map((f) => ({
+    title: f.title,
+    description: f.description,
+    severity: severityMap[f.severity] || "MINOR",
+    category: "OTHER",
+    photoIndex: -1,
+    confidence: f.confidence,
+  }));
+
+  return [...fromFindings, ...fromComparisons];
+}

@@ -1,7 +1,8 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
+import { Prisma } from "@/generated/prisma/client";
 import { router, protectedProcedure } from "../init";
-import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, assessTires, estimateTireReplacementCost, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
+import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, estimateTireReplacementCost, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
 import { fetchMarketData } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
@@ -15,6 +16,7 @@ import { analyzeConditionValue } from "@/lib/ai/condition-adjuster";
 import { estimateReconCosts } from "@/lib/ai/recon-estimator";
 import { rateDeal } from "@/lib/ai/deal-rater";
 import { auditPrice } from "@/lib/ai/price-auditor";
+import { decomposeOfferGap } from "@/lib/ai/offer-cost-decomposition";
 
 // Generate sequential inspection number (uses max to avoid collisions after deletions)
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -328,22 +330,20 @@ export const inspectionRouter = router({
         mileage: inspection.odometer,
       };
 
-      // Run condition assessment + unexpected issues + odometer OCR in parallel
+      // Run condition assessment pipeline + odometer OCR in parallel
+      // The pipeline internally handles condition scoring, defect detection,
+      // tire assessment, and cross-correlation — no need for separate calls.
       const odometerPhoto = mediaForAnalysis.find((m) => m.captureType === "ODOMETER");
 
-      const [conditionAssessment, unexpectedResult, odometerResult, tireResult] = await Promise.all([
+      const [conditionAssessment, odometerResult] = await Promise.all([
         analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes),
-        scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis),
         odometerPhoto && !inspection.odometer
           ? extractOdometerFromPhoto(odometerPhoto.url)
           : Promise.resolve(null),
-        assessTires(vehicleInfo, mediaForAnalysis),
       ]);
 
-      // Merge tire assessment into condition assessment
-      if (tireResult) {
-        conditionAssessment.tireAssessment = tireResult;
-      }
+      // Tire assessment is now embedded in the pipeline result
+      const tireResult = conditionAssessment.tireAssessment;
 
       // Auto-create tire replacement finding if any tires need replacing
       if (tireResult) {
@@ -358,14 +358,12 @@ export const inspectionRouter = router({
         const needsAttention = replaceCount + wornCount;
 
         if (needsAttention > 0) {
-          // Estimate cost for the specific vehicle
           const tireCost = await estimateTireReplacementCost(vehicleInfo, needsAttention);
           const positions = tires
             .filter((t) => t.condition === "REPLACE" || t.condition === "WORN")
             .map((t) => `${t.pos} (${t.condition.toLowerCase()})`)
             .join(", ");
 
-          // Check for existing tire finding before creating
           const existingTireFinding = await ctx.db.finding.findFirst({
             where: { inspectionId: input.inspectionId, title: { startsWith: "Tire Replacement" } },
           });
@@ -387,6 +385,36 @@ export const inspectionRouter = router({
         }
       }
 
+      // The pipeline also produces defect findings — create Finding records
+      // for all pipeline-detected defects (previously done in runAIAnalysis)
+      const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis);
+      for (const uf of pipelineFindings.unexpectedFindings) {
+        if (uf.confidence < 0.6) continue;
+
+        const existingFinding = await ctx.db.finding.findFirst({
+          where: { inspectionId: input.inspectionId, title: uf.title },
+        });
+        if (existingFinding) continue; // Prevent duplicates
+
+        const finding = await ctx.db.finding.create({
+          data: {
+            inspectionId: input.inspectionId,
+            title: uf.title,
+            description: uf.description,
+            severity: uf.severity as never,
+            category: (uf.category || "OTHER") as never,
+            evidence: `AI Detection Pipeline (${Math.round(uf.confidence * 100)}% confidence): ${uf.description}`,
+          },
+        });
+
+        if (uf.photoIndex >= 0 && uf.photoIndex < mediaForAnalysis.length) {
+          await ctx.db.mediaItem.update({
+            where: { id: mediaForAnalysis[uf.photoIndex].id },
+            data: { findingId: finding.id },
+          });
+        }
+      }
+
       // Persist condition scores to Inspection record
       await persistConditionScores(ctx.db, input.inspectionId, conditionAssessment);
 
@@ -401,7 +429,7 @@ export const inspectionRouter = router({
         );
       }
 
-      // Store results in step data (including photo-discovered risks)
+      // Store results in step data
       await ctx.db.inspectionStep.update({
         where: {
           inspectionId_step: {
@@ -415,8 +443,8 @@ export const inspectionRouter = router({
           data: JSON.parse(JSON.stringify({
             conditionAssessment,
             inspectorNotes: input.inspectorNotes || null,
-            unexpectedFindings: unexpectedResult.unexpectedFindings,
-            unexpectedSummary: unexpectedResult.summary,
+            unexpectedFindings: pipelineFindings.unexpectedFindings,
+            unexpectedSummary: pipelineFindings.summary,
             odometerOCR: odometerResult ? {
               mileage: odometerResult.mileage,
               confidence: odometerResult.confidence,
@@ -427,7 +455,7 @@ export const inspectionRouter = router({
 
       return {
         conditionAssessment,
-        unexpectedFindings: unexpectedResult.unexpectedFindings,
+        unexpectedFindings: pipelineFindings.unexpectedFindings,
         odometerOCR: odometerResult ? {
           mileage: odometerResult.mileage,
           confidence: odometerResult.confidence,
@@ -650,17 +678,26 @@ export const inspectionRouter = router({
         }
       }
 
-      // Run risk-specific + unexpected issues scan in parallel
-      const [riskResults, overallCondition] = await Promise.all([
-        analyzeRiskMedia(vehicleInfo, riskProfile.aggregatedRisks, mediaForAnalysis, questionAnswersByRisk as Record<string, import("@/types/risk").QuestionAnswer[]>),
-        scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis),
-      ]);
+      // Run risk-specific analysis only — pipeline defect detection already
+      // happened in runConditionScan and created Finding records there.
+      const riskResults = await analyzeRiskMedia(
+        vehicleInfo,
+        riskProfile.aggregatedRisks,
+        mediaForAnalysis,
+        questionAnswersByRisk as Record<string, import("@/types/risk").QuestionAnswer[]>,
+      );
 
       // Auto-create findings for CONFIRMED risks with evidence linking
       for (const result of riskResults) {
         if (result.verdict === "CONFIRMED") {
           const risk = riskProfile.aggregatedRisks.find((r) => r.id === result.riskId);
           if (risk) {
+            // Check for duplicate (pipeline may have already found this defect)
+            const existingFinding = await ctx.db.finding.findFirst({
+              where: { inspectionId: input.inspectionId, title: risk.title },
+            });
+            if (existingFinding) continue;
+
             const finding = await ctx.db.finding.create({
               data: {
                 inspectionId: input.inspectionId,
@@ -668,7 +705,7 @@ export const inspectionRouter = router({
                 description: result.explanation,
                 severity: risk.severity as never,
                 category: risk.category as never,
-                evidence: `AI Analysis (${Math.round(result.confidence * 100)}% confidence): ${result.explanation}`,
+                evidence: `AI Risk Analysis (${Math.round(result.confidence * 100)}% confidence): ${result.explanation}`,
                 repairCostLow: result.refinedCost?.low ?? risk.cost.low,
                 repairCostHigh: result.refinedCost?.high ?? risk.cost.high,
                 positionX: risk.position.x,
@@ -691,34 +728,7 @@ export const inspectionRouter = router({
         }
       }
 
-      // Auto-create findings from unexpected issues found in overall condition scan
-      for (const uf of overallCondition.unexpectedFindings) {
-        if (uf.confidence < 0.6) continue;
-
-        const finding = await ctx.db.finding.create({
-          data: {
-            inspectionId: input.inspectionId,
-            title: uf.title,
-            description: uf.description,
-            severity: uf.severity as never,
-            category: (uf.category || "OTHER") as never,
-            evidence: `AI Condition Scan (${Math.round(uf.confidence * 100)}% confidence): ${uf.description}`,
-          },
-        });
-
-        // Link the specific photo if identifiable
-        if (uf.photoIndex >= 0 && uf.photoIndex < mediaForAnalysis.length) {
-          await ctx.db.mediaItem.update({
-            where: { id: mediaForAnalysis[uf.photoIndex].id },
-            data: { findingId: finding.id },
-          });
-        }
-      }
-
-      // Condition scores are now set by the separate AI condition assessment
-      // (runConditionScan procedure). Findings affect repair costs, not score.
-
-      // Store both result sets in the AI_ANALYSIS step data
+      // Store risk analysis results in the AI_ANALYSIS step data
       await ctx.db.inspectionStep.update({
         where: {
           inspectionId_step: {
@@ -731,14 +741,12 @@ export const inspectionRouter = router({
           enteredAt: new Date(),
           data: JSON.parse(JSON.stringify({
             aiResults: riskResults,
-            overallCondition,
           })),
         },
       });
 
       return {
         riskResults: riskResults as AIAnalysisResult[],
-        overallCondition,
       };
     }),
 
@@ -1351,6 +1359,108 @@ export const inspectionRouter = router({
           purchaseOutcome: input.outcome,
           purchasePrice: input.outcome === "PURCHASED" ? (input.purchasePrice ?? null) : null,
           outcomeRecordedAt: new Date(),
+        },
+      });
+      return { success: true };
+    }),
+
+  // Set offer mode and notes (AI-estimated cost breakdown or custom dealer notes)
+  setOfferMode: protectedProcedure
+    .input(z.object({
+      inspectionId: z.string(),
+      mode: z.enum(["AI_ESTIMATED", "CUSTOM_NOTES"]),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const inspection = await ctx.db.inspection.findFirstOrThrow({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { vehicle: true, marketAnalysis: true },
+      });
+
+      if (input.mode === "CUSTOM_NOTES") {
+        await ctx.db.inspection.update({
+          where: { id: input.inspectionId },
+          data: {
+            offerMode: "CUSTOM_NOTES",
+            offerNotes: input.notes || null,
+            offerCostBreakdown: Prisma.DbNull,
+          },
+        });
+        return { success: true, mode: "CUSTOM_NOTES" as const };
+      }
+
+      // AI_ESTIMATED: compute cost breakdown
+      const ma = inspection.marketAnalysis;
+      if (!ma) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Market analysis not yet completed" });
+
+      // Valuation = the value before dealer margin (offer + margin portion)
+      // We use adjustedValueBeforeRecon or compute from estRetail
+      const valuationCents = (ma.adjustedValueBeforeRecon as number | null) || ma.estRetailPrice || ma.baselinePrice;
+      const offerCents = ma.fairBuyMax || ma.adjustedPrice;
+      const reconCents = ma.estReconCost || 0;
+
+      // Compute avg days on market from comparables
+      const comps = (ma.comparables as Array<{ daysOnMarket?: number }>) || [];
+      const compsWithDom = comps.filter((c) => c.daysOnMarket && c.daysOnMarket > 0);
+      const avgDom = compsWithDom.length > 0
+        ? Math.round(compsWithDom.reduce((s, c) => s + (c.daysOnMarket || 0), 0) / compsWithDom.length)
+        : null;
+
+      const aiResult = await decomposeOfferGap({
+        valuationCents,
+        offerCents,
+        reconCents,
+        vehicle: {
+          year: inspection.vehicle?.year || 2020,
+          make: inspection.vehicle?.make || "Unknown",
+          model: inspection.vehicle?.model || "Unknown",
+          trim: inspection.vehicle?.trim,
+          bodyStyle: inspection.vehicle?.bodyStyle || null,
+          mileage: inspection.odometer,
+        },
+        location: inspection.location,
+        avgDaysOnMarket: avgDom,
+        findingsCount: await ctx.db.finding.count({ where: { inspectionId: input.inspectionId } }),
+      });
+
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId },
+        data: {
+          offerMode: "AI_ESTIMATED",
+          offerNotes: null,
+          offerCostBreakdown: JSON.parse(JSON.stringify(aiResult.result)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return {
+        success: true,
+        mode: "AI_ESTIMATED" as const,
+        breakdown: aiResult.result,
+        tier: aiResult.fallbackTier,
+      };
+    }),
+
+  // Save dealer-edited offer cost breakdown (without re-running AI)
+  updateOfferBreakdown: protectedProcedure
+    .input(z.object({
+      inspectionId: z.string(),
+      costItems: z.array(z.object({
+        label: z.string(),
+        amountCents: z.number(),
+        description: z.string(),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const breakdown = {
+        costItems: input.costItems,
+        totalCostsCents: input.costItems.reduce((s, c) => s + c.amountCents, 0),
+        reasoning: "Dealer-edited cost breakdown",
+      };
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        data: {
+          offerMode: "AI_ESTIMATED",
+          offerCostBreakdown: JSON.parse(JSON.stringify(breakdown)) as Prisma.InputJsonValue,
         },
       });
       return { success: true };
