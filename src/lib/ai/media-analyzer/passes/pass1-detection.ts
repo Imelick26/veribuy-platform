@@ -150,7 +150,25 @@ async function inspectSinglePhoto(
     defaultArea = "interior";
   }
 
-  const findings = normalizeFindings(response.result, photo, defaultArea);
+  let findings = normalizeFindings(response.result, photo, defaultArea);
+
+  // ── Tire second opinion: challenge any non-REPLACE tire verdict ──
+  if (isTire && response.result.treadAnalysis) {
+    const ta = response.result.treadAnalysis as TreadAnalysisResponse;
+    const overall = String(ta.overall || "").toUpperCase();
+
+    // If the first read says GOOD or WORN, get a second opinion
+    if (overall !== "REPLACE") {
+      const secondOpinion = await getTireSecondOpinion(
+        vehicle, mileageStr, validPhotos, ta, photo.captureType,
+      );
+      if (secondOpinion) {
+        // Second opinion disagrees — upgrade the findings
+        console.log(`[phase1:tire] Second opinion upgraded ${photo.captureType}: ${overall} → ${secondOpinion.overall}`);
+        findings = mergeSecondOpinionFindings(findings, secondOpinion, photo, defaultArea);
+      }
+    }
+  }
 
   return {
     captureType: photo.captureType,
@@ -162,11 +180,150 @@ async function inspectSinglePhoto(
 }
 
 // ---------------------------------------------------------------------------
+//  Tire second opinion
+// ---------------------------------------------------------------------------
+
+interface TreadAnalysisResponse {
+  innerEdge?: { rating?: string; grooveDepth?: string; notes?: string };
+  center?: { rating?: string; grooveDepth?: string; notes?: string };
+  outerEdge?: { rating?: string; grooveDepth?: string; notes?: string };
+  overall?: string;
+}
+
+interface SecondOpinionResult {
+  overall: string;
+  centerVerdict: string;
+  reasoning: string;
+  shouldUpgrade: boolean;
+}
+
+/**
+ * Sends the same tire photo to GPT-4o with a challenge prompt:
+ * "The first analysis said X — look specifically at center vs edge
+ * groove depth. Is this correct or should it be worse?"
+ *
+ * Only called when first read is GOOD or WORN — we don't second-guess REPLACE.
+ */
+async function getTireSecondOpinion(
+  vehicle: VehicleInfo,
+  mileageStr: string,
+  photos: MediaForAnalysis[],
+  firstRead: TreadAnalysisResponse,
+  captureType: string,
+): Promise<SecondOpinionResult | null> {
+  const centerNotes = firstRead.center?.notes || "no details";
+  const centerDepth = firstRead.center?.grooveDepth || "unknown";
+  const firstOverall = firstRead.overall || "WORN";
+
+  const systemPrompt = `You are a tire safety auditor reviewing a previous inspection of a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}). Your job: challenge the initial assessment by looking SPECIFICALLY at the center tread zone compared to the edges.
+
+RESPOND WITH EXACTLY THIS JSON:
+{
+  "centerGrooveDepth": "deep|shallow|flush|bald",
+  "centerVsEdgeRatio": "describe how center compares to edge groove depth",
+  "shouldUpgrade": true/false,
+  "upgradeTo": "WORN|REPLACE",
+  "reasoning": "1-2 sentences explaining your verdict"
+}
+
+RULES:
+- If center grooves are less than HALF the depth of the edge grooves → centerGrooveDepth = "flush" → shouldUpgrade to REPLACE.
+- On all-terrain tires: chunky outer lugs mask center wear. The center row of blocks can be ground nearly flat from highway driving while the edges look aggressive. This is the most commonly missed tire defect.
+- "flush" = the tread blocks in the center are nearly level with the groove floor. The surface appears smooth or flat compared to the deep channels at the edges.
+- If you agree with the initial "${firstOverall}" rating, set shouldUpgrade = false.`;
+
+  const userPrompt = `INITIAL ASSESSMENT said this tire is "${firstOverall}" with center tread "${centerDepth}" — "${centerNotes}".
+
+Look at this tire photo again. Focus ONLY on the center tread strip:
+1. How deep are the CENTER grooves compared to the OUTER EDGE grooves?
+2. Could the center be closer to "flush" than "${centerDepth}"?
+3. Is "${firstOverall}" the right call, or should this be worse?`;
+
+  const response = await callVision<{
+    centerGrooveDepth?: string;
+    centerVsEdgeRatio?: string;
+    shouldUpgrade?: boolean;
+    upgradeTo?: string;
+    reasoning?: string;
+  }>({
+    model: "gpt-4o",
+    systemPrompt,
+    userText: userPrompt,
+    photos,
+    temperature: 0.3, // Slightly higher temp for independent judgment
+    maxTokens: 400,
+    label: `phase1:tire-second-opinion:${captureType}`,
+  });
+
+  if (!response) return null;
+
+  const r = response.result;
+  if (!r.shouldUpgrade) {
+    console.log(`[phase1:tire] Second opinion agrees with ${firstOverall}: ${r.reasoning}`);
+    return null;
+  }
+
+  return {
+    overall: String(r.upgradeTo || "REPLACE"),
+    centerVerdict: String(r.centerGrooveDepth || "flush"),
+    reasoning: String(r.reasoning || "Second opinion upgraded tire rating"),
+    shouldUpgrade: true,
+  };
+}
+
+/**
+ * Merges second opinion findings: if the upgrade says REPLACE, ensure
+ * there's a finding with severity "major" instead of "moderate".
+ */
+function mergeSecondOpinionFindings(
+  existing: DetectedFinding[],
+  secondOpinion: SecondOpinionResult,
+  photo: MediaForAnalysis,
+  defaultArea: AffectsArea,
+): DetectedFinding[] {
+  // Upgrade any existing tire wear findings to major
+  const upgraded = existing.map((f) => {
+    if (f.defectType.includes("wear") || f.defectType.includes("bald") || f.defectType.includes("tread")) {
+      return {
+        ...f,
+        severity: "major" as const,
+        description: `${f.description} [Second opinion: center tread is ${secondOpinion.centerVerdict}. ${secondOpinion.reasoning}]`,
+      };
+    }
+    return f;
+  });
+
+  // If no existing tread finding, add one
+  const hasTreadFinding = upgraded.some((f) =>
+    f.defectType.includes("wear") || f.defectType.includes("bald") || f.defectType.includes("tread"),
+  );
+
+  if (!hasTreadFinding) {
+    upgraded.push({
+      defectType: "center_bald",
+      location: "center tread strip",
+      severity: "major",
+      confidence: 0.85,
+      repairApproach: "replace tire",
+      repairCostLow: 15000,
+      repairCostHigh: 35000,
+      description: `Center tread is ${secondOpinion.centerVerdict} — needs replacement. ${secondOpinion.reasoning}`,
+      photoId: photo.id,
+      captureType: photo.captureType,
+      affectsArea: defaultArea,
+    });
+  }
+
+  return upgraded;
+}
+
+// ---------------------------------------------------------------------------
 //  Response types and normalization
 // ---------------------------------------------------------------------------
 
 interface Phase1Response {
   findings?: Phase1FindingResponse[];
+  treadAnalysis?: TreadAnalysisResponse;
   areaCondition?: string;
   notes?: string;
 }
