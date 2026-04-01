@@ -1,12 +1,13 @@
 /**
- * VIN extraction from photo.
+ * VIN extraction from photo — production-grade pipeline.
  *
- * Pipeline:
- * 1. Google Cloud Vision API (best raw OCR accuracy) — if API key configured
- * 2. GPT-4o Vision (fallback, or primary if no Google key)
- * 3. Check digit validation on any read
- * 4. Common confusion-pair auto-correction (W/H, B/8, D/0, S/5)
- * 5. If check digit still fails, GPT-4o second attempt with error context
+ * Runs Google Cloud Vision AND GPT-4o in parallel, then picks the
+ * best candidate using layered validation:
+ *   1. Check digit (mathematical — definitive)
+ *   2. NHTSA decode (does this VIN map to a real vehicle?)
+ *   3. WMI prefix (positions 1-3 match a known manufacturer?)
+ *   4. Structural rules (position 10 = valid year code, 12-17 = digits)
+ *   5. Confusion-pair auto-correction as last resort
  */
 
 import { getOpenAI } from "@/lib/openai";
@@ -25,24 +26,18 @@ const VIN_TRANSLITERATION: Record<string, number> = {
 
 const VIN_WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
 
-/**
- * Computes the VIN check digit (position 9). Returns "X" or "0"-"9".
- */
 function computeCheckDigit(vin: string): string {
   let sum = 0;
   for (let i = 0; i < 17; i++) {
-    if (i === 8) continue; // Skip check digit position
+    if (i === 8) continue;
     const value = VIN_TRANSLITERATION[vin[i]];
-    if (value === undefined) return "?"; // Invalid character
+    if (value === undefined) return "?";
     sum += value * VIN_WEIGHTS[i];
   }
   const remainder = sum % 11;
   return remainder === 10 ? "X" : String(remainder);
 }
 
-/**
- * Validates VIN check digit (position 9).
- */
 function isValidCheckDigit(vin: string): boolean {
   if (vin.length !== 17) return false;
   const expected = computeCheckDigit(vin);
@@ -50,78 +45,110 @@ function isValidCheckDigit(vin: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-//  Common OCR confusion pairs for stamped/embossed VIN plates
+//  Structural validation (beyond check digit)
+// ---------------------------------------------------------------------------
+
+/** Valid model year codes (position 10). Covers 1980-2039. */
+const VALID_YEAR_CODES = new Set(
+  "ABCDEFGHJKLMNPRSTVWXY123456789".split(""),
+);
+
+/** Common WMI prefixes (positions 1-3). Not exhaustive but covers major US-market makes. */
+const KNOWN_WMI_PREFIXES = new Set([
+  // Ford
+  "1FA", "1FB", "1FC", "1FD", "1FM", "1FT", "1FV", "1ZV", "3FA", "3FM",
+  // GM (Chevrolet, GMC, Buick, Cadillac)
+  "1G1", "1G2", "1GC", "1GD", "1GK", "1GT", "1GY", "2G1", "3G1", "3GN",
+  // Chrysler / Ram / Dodge / Jeep
+  "1C3", "1C4", "1C6", "1D7", "2C3", "2C4", "3C4", "3C6", "3D7",
+  // Toyota
+  "1TM", "2T1", "2T2", "2T3", "4T1", "4T3", "4T4", "5TD", "5TF", "JTE", "JTD", "JTN",
+  // Honda
+  "1HG", "2HG", "2HK", "5FN", "5J6", "JHM",
+  // Nissan
+  "1N4", "1N6", "3N1", "5N1", "JN1", "JN8",
+  // BMW
+  "WBA", "WBS", "WBY", "5UX", "5YM",
+  // Mercedes
+  "WDB", "WDC", "WDD", "4JG", "55S",
+  // VW / Audi
+  "WVW", "WVG", "WAU", "WA1",
+  // Subaru
+  "4S3", "4S4", "JF1", "JF2",
+  // Hyundai / Kia
+  "5NP", "5NM", "5XY", "KNA", "KND",
+  // Tesla
+  "5YJ", "7SA",
+]);
+
+/** Validates VIN structure beyond check digit */
+function validateStructure(vin: string): { valid: boolean; score: number } {
+  if (vin.length !== 17) return { valid: false, score: 0 };
+
+  let score = 0;
+
+  // Check all characters are valid VIN chars
+  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) score += 10;
+  else return { valid: false, score: 0 };
+
+  // Position 10: valid year code
+  if (VALID_YEAR_CODES.has(vin[9])) score += 10;
+
+  // Positions 12-17: should be digits (sequential production number)
+  if (/^\d{6}$/.test(vin.slice(11))) score += 15;
+  else if (/^\d{5}[A-Z]/.test(vin.slice(11))) score += 5; // Some exceptions
+
+  // WMI prefix (positions 1-3)
+  if (KNOWN_WMI_PREFIXES.has(vin.slice(0, 3))) score += 20;
+
+  // Check digit passes
+  if (isValidCheckDigit(vin)) score += 50;
+
+  return { valid: score >= 10, score };
+}
+
+// ---------------------------------------------------------------------------
+//  Confusion-pair auto-correction
 // ---------------------------------------------------------------------------
 
 const CONFUSION_PAIRS: Record<string, string[]> = {
-  W: ["H", "M"],     // W↔H most common on stamped plates
-  H: ["W", "N"],
-  B: ["8", "3"],
-  "8": ["B", "3"],
-  D: ["0"],
-  "0": ["D"],
-  S: ["5"],
-  "5": ["S"],
-  G: ["6"],
-  "6": ["G"],
-  Z: ["2"],
-  "2": ["Z"],
-  "1": ["7"],
-  "7": ["1"],
-  N: ["H", "M"],
-  M: ["W", "N"],
-  V: ["U", "Y"],
-  U: ["V"],
-  C: ["G"],
-  E: ["F"],
-  F: ["E", "P"],
-  P: ["R", "F"],
-  R: ["P"],
+  W: ["H", "M"], H: ["W", "N"], B: ["8", "3"], "8": ["B", "3"],
+  D: ["0"], "0": ["D"], S: ["5"], "5": ["S"], G: ["6"], "6": ["G"],
+  Z: ["2"], "2": ["Z"], "1": ["7"], "7": ["1"], N: ["H", "M"],
+  M: ["W", "N"], V: ["U", "Y"], U: ["V"], C: ["G"],
+  E: ["F"], F: ["E", "P"], P: ["R", "F"], R: ["P"],
 };
 
-/**
- * Tries common character substitutions to find a VIN that passes check digit.
- * Returns the corrected VIN or null if no substitution works.
- */
 function tryConfusionCorrections(vin: string): string | null {
-  // Skip position 8 (check digit itself) and positions that are digits 0-9
-  // (less likely to be misread than letters on stamped plates)
+  // Single character correction
   for (let pos = 0; pos < 17; pos++) {
     if (pos === 8) continue;
-    const char = vin[pos];
-    const alternatives = CONFUSION_PAIRS[char];
+    const alternatives = CONFUSION_PAIRS[vin[pos]];
     if (!alternatives) continue;
-
     for (const alt of alternatives) {
-      // Make sure the alternative is valid for VIN
-      if (!"ABCDEFGHJKLMNPRSTUVWXYZ0123456789".includes(alt)) continue;
       const candidate = vin.slice(0, pos) + alt + vin.slice(pos + 1);
       if (isValidCheckDigit(candidate)) {
-        console.log(`[VIN-OCR] Check digit correction: position ${pos} ${char}→${alt} (${vin} → ${candidate})`);
+        console.log(`[VIN-OCR] Correction: pos ${pos} ${vin[pos]}→${alt} (${vin} → ${candidate})`);
         return candidate;
       }
     }
   }
 
-  // Try two-character corrections (less common but handles W→H + another error)
-  for (let pos1 = 0; pos1 < 17; pos1++) {
-    if (pos1 === 8) continue;
-    const char1 = vin[pos1];
-    const alts1 = CONFUSION_PAIRS[char1];
+  // Double character correction
+  for (let p1 = 0; p1 < 17; p1++) {
+    if (p1 === 8) continue;
+    const alts1 = CONFUSION_PAIRS[vin[p1]];
     if (!alts1) continue;
-
-    for (const alt1 of alts1) {
-      const partial = vin.slice(0, pos1) + alt1 + vin.slice(pos1 + 1);
-      for (let pos2 = pos1 + 1; pos2 < 17; pos2++) {
-        if (pos2 === 8) continue;
-        const char2 = partial[pos2];
-        const alts2 = CONFUSION_PAIRS[char2];
+    for (const a1 of alts1) {
+      const partial = vin.slice(0, p1) + a1 + vin.slice(p1 + 1);
+      for (let p2 = p1 + 1; p2 < 17; p2++) {
+        if (p2 === 8) continue;
+        const alts2 = CONFUSION_PAIRS[partial[p2]];
         if (!alts2) continue;
-
-        for (const alt2 of alts2) {
-          const candidate = partial.slice(0, pos2) + alt2 + partial.slice(pos2 + 1);
+        for (const a2 of alts2) {
+          const candidate = partial.slice(0, p2) + a2 + partial.slice(p2 + 1);
           if (isValidCheckDigit(candidate)) {
-            console.log(`[VIN-OCR] Double correction: pos${pos1} ${char1}→${alt1}, pos${pos2} ${char2}→${alt2} (${vin} → ${candidate})`);
+            console.log(`[VIN-OCR] Double correction: pos${p1} ${vin[p1]}→${a1}, pos${p2} ${partial[p2]}→${a2}`);
             return candidate;
           }
         }
@@ -133,26 +160,46 @@ function tryConfusionCorrections(vin: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+//  NHTSA decode validation
+// ---------------------------------------------------------------------------
+
+async function nhtsaValidate(vin: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`,
+      { signal: AbortSignal.timeout(5000) },
+    );
+    if (!response.ok) return false;
+    const data = await response.json() as {
+      Results?: Array<{ Make?: string; ModelYear?: string; ErrorCode?: string }>;
+    };
+    const result = data.Results?.[0];
+    if (!result) return false;
+    // ErrorCode "0" = decoded successfully with no errors
+    // ErrorCode containing "0" somewhere = at least partially valid
+    const hasVehicle = !!(result.Make && result.ModelYear && result.ModelYear !== "0");
+    return hasVehicle;
+  } catch {
+    return false; // Network failure — don't block on this
+  }
+}
+
+// ---------------------------------------------------------------------------
 //  Google Cloud Vision OCR
 // ---------------------------------------------------------------------------
 
 const GOOGLE_VISION_API_KEY = process.env.GOOGLE_CLOUD_VISION_API_KEY;
 
-/**
- * Uses Google Cloud Vision API for high-accuracy text detection.
- * Returns all VIN-like 17-character strings found in the image.
- */
 async function googleVisionOCR(photoUrl: string): Promise<string[]> {
   if (!GOOGLE_VISION_API_KEY) return [];
 
   try {
-    // Download image and convert to base64
     const imageResponse = await fetch(photoUrl, { signal: AbortSignal.timeout(10000) });
     if (!imageResponse.ok) return [];
     const imageBuffer = await imageResponse.arrayBuffer();
     const base64Image = Buffer.from(imageBuffer).toString("base64");
 
-    // Call Google Cloud Vision TEXT_DETECTION
+    // Use DOCUMENT_TEXT_DETECTION — better for structured labels like door jamb stickers
     const response = await fetch(
       `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
       {
@@ -162,7 +209,13 @@ async function googleVisionOCR(photoUrl: string): Promise<string[]> {
           requests: [
             {
               image: { content: base64Image },
-              features: [{ type: "TEXT_DETECTION", maxResults: 10 }],
+              features: [
+                { type: "DOCUMENT_TEXT_DETECTION" },
+                { type: "TEXT_DETECTION", maxResults: 50 },
+              ],
+              imageContext: {
+                languageHints: ["en"],
+              },
             },
           ],
         }),
@@ -171,40 +224,56 @@ async function googleVisionOCR(photoUrl: string): Promise<string[]> {
     );
 
     if (!response.ok) {
-      console.warn(`[VIN-OCR:Google] API returned ${response.status}`);
+      console.warn(`[VIN-OCR:Google] API error ${response.status}`);
       return [];
     }
 
     const data = await response.json() as {
       responses?: Array<{
+        fullTextAnnotation?: { text?: string };
         textAnnotations?: Array<{ description?: string }>;
       }>;
     };
 
-    const fullText = data.responses?.[0]?.textAnnotations?.[0]?.description || "";
-
-    // Extract all potential VIN strings (17 alphanumeric chars)
-    const vinPattern = /[A-HJ-NPR-Z0-9]{17}/gi;
+    const result = data.responses?.[0];
     const candidates: string[] = [];
-    let match;
-    while ((match = vinPattern.exec(fullText.replace(/[\s\n\r]/g, ""))) !== null) {
-      const candidate = match[0].toUpperCase();
-      // Filter out strings with I, O, Q (invalid in VIN)
-      if (!/[IOQ]/.test(candidate)) {
-        candidates.push(candidate);
-      }
-    }
 
-    // Also try extracting from individual text annotations (sometimes more accurate)
-    const annotations = data.responses?.[0]?.textAnnotations || [];
+    // Strategy 1: Extract from full document text (best for structured stickers)
+    const fullText = result?.fullTextAnnotation?.text || result?.textAnnotations?.[0]?.description || "";
+    extractVinCandidates(fullText, candidates);
+
+    // Strategy 2: Look for text near "VIN" label
+    extractVinNearLabel(fullText, candidates);
+
+    // Strategy 3: Check individual text annotations
+    const annotations = result?.textAnnotations || [];
     for (const annotation of annotations.slice(1)) {
       const text = (annotation.description || "").replace(/\s/g, "").toUpperCase();
-      if (text.length === 17 && /^[A-HJ-NPR-Z0-9]{17}$/.test(text)) {
-        if (!candidates.includes(text)) candidates.push(text);
+      if (text.length >= 17 && text.length <= 20) {
+        const cleaned = text.replace(/[^A-HJ-NPR-Z0-9]/g, "");
+        if (cleaned.length === 17 && !candidates.includes(cleaned)) {
+          candidates.push(cleaned);
+        }
       }
     }
 
-    console.log(`[VIN-OCR:Google] Found ${candidates.length} VIN candidate(s)`);
+    // Strategy 4: Join adjacent short annotations that could be a split VIN
+    const shortTexts = annotations.slice(1).map((a) => (a.description || "").replace(/\s/g, "").toUpperCase());
+    for (let i = 0; i < shortTexts.length - 1; i++) {
+      const joined = (shortTexts[i] + shortTexts[i + 1]).replace(/[^A-HJ-NPR-Z0-9]/g, "");
+      if (joined.length === 17 && !candidates.includes(joined)) {
+        candidates.push(joined);
+      }
+      // Try joining 3 adjacent
+      if (i < shortTexts.length - 2) {
+        const joined3 = (shortTexts[i] + shortTexts[i + 1] + shortTexts[i + 2]).replace(/[^A-HJ-NPR-Z0-9]/g, "");
+        if (joined3.length === 17 && !candidates.includes(joined3)) {
+          candidates.push(joined3);
+        }
+      }
+    }
+
+    console.log(`[VIN-OCR:Google] ${candidates.length} candidate(s) from ${annotations.length} text blocks`);
     return candidates;
   } catch (err) {
     console.warn(`[VIN-OCR:Google] Failed:`, err instanceof Error ? err.message : err);
@@ -212,104 +281,59 @@ async function googleVisionOCR(photoUrl: string): Promise<string[]> {
   }
 }
 
-// ---------------------------------------------------------------------------
-//  Public API
-// ---------------------------------------------------------------------------
+/** Extract 17-char VIN candidates from a text blob */
+function extractVinCandidates(text: string, out: string[]): void {
+  // Remove common separators but preserve enough to find VINs
+  const cleaned = text.toUpperCase().replace(/[^A-Z0-9\n\s]/g, " ");
 
-/**
- * Extracts VIN from a door jamb / VIN plate photo.
- *
- * Pipeline:
- * 1. Google Cloud Vision (if API key configured) — best raw OCR
- * 2. Check digit validation on Google candidates
- * 3. If no valid candidate from Google, fall back to GPT-4o Vision
- * 4. Check digit validation + confusion-pair auto-correction
- * 5. If still failing, GPT-4o second attempt with error context
- */
-export async function extractVinFromPhoto(
-  photoUrl: string,
-): Promise<{ vin: string | null; confidence: number }> {
-  const openai = getOpenAI();
+  // Try with all whitespace stripped (handles "1FTH W26F 7TEA 10490" formatting)
+  const noSpace = cleaned.replace(/[\s\n\r]/g, "");
+  const pattern = /[A-HJ-NPR-Z0-9]{17}/g;
+  let match;
+  while ((match = pattern.exec(noSpace)) !== null) {
+    const candidate = match[0];
+    if (!/[IOQ]/.test(candidate) && !out.includes(candidate)) {
+      out.push(candidate);
+    }
+  }
 
-  try {
-    // ── Google Cloud Vision (primary, if configured) ──
-    const googleCandidates = await googleVisionOCR(photoUrl);
-
-    // Check each candidate against check digit
-    for (const candidate of googleCandidates) {
-      if (isValidCheckDigit(candidate)) {
-        console.log(`[VIN-OCR] Google Vision check digit PASSED: ${candidate}`);
-        return { vin: candidate, confidence: 0.98 };
+  // Also try line-by-line (VIN often on its own line)
+  for (const line of cleaned.split("\n")) {
+    const lineClean = line.replace(/\s/g, "");
+    if (lineClean.length >= 17 && lineClean.length <= 20) {
+      const vinChars = lineClean.replace(/[^A-HJ-NPR-Z0-9]/g, "");
+      if (vinChars.length === 17 && !out.includes(vinChars)) {
+        out.push(vinChars);
       }
     }
+  }
+}
 
-    // Try confusion corrections on Google candidates
-    for (const candidate of googleCandidates) {
-      const corrected = tryConfusionCorrections(candidate);
-      if (corrected) {
-        console.log(`[VIN-OCR] Google Vision + correction: ${candidate} → ${corrected}`);
-        return { vin: corrected, confidence: 0.93 };
+/** Look for VIN near a "VIN" label in the text */
+function extractVinNearLabel(text: string, out: string[]): void {
+  const upper = text.toUpperCase();
+  const vinLabelPatterns = [
+    /VIN[:\s#.\-]*([A-HJ-NPR-Z0-9\s]{17,25})/g,
+    /VEHICLE\s*IDENTIFICATION\s*(?:NUMBER|NO\.?)[:\s#.\-]*([A-HJ-NPR-Z0-9\s]{17,25})/g,
+    /V\.?I\.?N\.?\s*[:\s#.\-]*([A-HJ-NPR-Z0-9\s]{17,25})/g,
+  ];
+
+  for (const pattern of vinLabelPatterns) {
+    let match;
+    while ((match = pattern.exec(upper)) !== null) {
+      const raw = match[1].replace(/[\s\-]/g, "");
+      if (raw.length >= 17) {
+        const candidate = raw.slice(0, 17);
+        if (/^[A-HJ-NPR-Z0-9]{17}$/.test(candidate) && !out.includes(candidate)) {
+          out.push(candidate);
+        }
       }
     }
-
-    if (googleCandidates.length > 0) {
-      console.log(`[VIN-OCR] Google Vision found candidates but none passed check digit`);
-    }
-
-    // ── GPT-4o Vision (fallback or primary if no Google key) ──
-    const firstRead = await readVinFromPhoto(openai, photoUrl);
-    if (!firstRead.vin) {
-      // If Google had a candidate, return it with low confidence
-      if (googleCandidates.length > 0) {
-        return { vin: googleCandidates[0], confidence: 0.5 };
-      }
-      return firstRead;
-    }
-
-    // Check digit validation
-    if (isValidCheckDigit(firstRead.vin)) {
-      console.log(`[VIN-OCR] GPT-4o check digit PASSED: ${firstRead.vin}`);
-      return { vin: firstRead.vin, confidence: Math.max(firstRead.confidence, 0.95) };
-    }
-
-    console.log(`[VIN-OCR] GPT-4o check digit FAILED: ${firstRead.vin} (expected ${computeCheckDigit(firstRead.vin)} at pos 9, got ${firstRead.vin[8]})`);
-
-    // ── Try common confusion corrections ──
-    const corrected = tryConfusionCorrections(firstRead.vin);
-    if (corrected) {
-      console.log(`[VIN-OCR] Auto-corrected: ${firstRead.vin} → ${corrected}`);
-      return { vin: corrected, confidence: Math.max(firstRead.confidence * 0.9, 0.85) };
-    }
-
-    // ── GPT-4o second attempt with error context ──
-    console.log(`[VIN-OCR] Requesting GPT-4o second read with error context`);
-    const secondRead = await readVinFromPhoto(openai, photoUrl, firstRead.vin);
-    if (!secondRead.vin) return firstRead;
-
-    if (isValidCheckDigit(secondRead.vin)) {
-      console.log(`[VIN-OCR] GPT-4o second read check digit PASSED: ${secondRead.vin}`);
-      return { vin: secondRead.vin, confidence: Math.max(secondRead.confidence, 0.9) };
-    }
-
-    const corrected2 = tryConfusionCorrections(secondRead.vin);
-    if (corrected2) {
-      console.log(`[VIN-OCR] Auto-corrected second read: ${secondRead.vin} → ${corrected2}`);
-      return { vin: corrected2, confidence: 0.8 };
-    }
-
-    // All attempts failed check digit — return best guess
-    console.warn(`[VIN-OCR] All attempts failed check digit. Returning best guess with low confidence.`);
-    // Prefer Google's read over GPT-4o if available
-    const bestGuess = googleCandidates[0] || firstRead.vin;
-    return { vin: bestGuess, confidence: Math.min(firstRead.confidence, 0.5) };
-  } catch (err) {
-    console.error("[VIN-OCR] Failed:", err);
-    return { vin: null, confidence: 0 };
   }
 }
 
 // ---------------------------------------------------------------------------
-//  GPT-4o Vision call
+//  GPT-4o Vision read
 // ---------------------------------------------------------------------------
 
 async function readVinFromPhoto(
@@ -318,14 +342,13 @@ async function readVinFromPhoto(
   previousAttempt?: string,
 ): Promise<{ vin: string | null; confidence: number }> {
   const retryContext = previousAttempt
-    ? `\n\nPREVIOUS ATTEMPT: "${previousAttempt}" — this FAILED check digit validation. The check digit (position 9) did not match. One or more characters are likely misread. Common confusions on stamped metal VIN plates:
-- W and H look very similar (both have vertical strokes with angled connections)
-- B and 8 (rounded shapes)
-- D and 0 (oval shapes)
-- S and 5 (curved vs angular)
-- N and H (similar vertical strokes)
-- 1 and 7 (thin strokes)
-Please re-examine the photo VERY carefully, especially characters that could be W/H, B/8, D/0, or S/5. Look at the exact shape of each stroke.`
+    ? `\n\nPREVIOUS ATTEMPT: "${previousAttempt}" — FAILED check digit validation. One or more characters are wrong. Common confusions on stamped metal:
+- W↔H (V-shaped dip vs horizontal bar)
+- B↔8 (flat left vs fully rounded)
+- D↔0 (flat left vs oval)
+- S↔5 (curved vs angular top)
+- N↔H (diagonal vs horizontal bar)
+Re-examine EVERY character. Look at the exact stroke shapes.`
     : "";
 
   const response = await openai.chat.completions.create({
@@ -333,33 +356,22 @@ Please re-examine the photo VERY carefully, especially characters that could be 
     messages: [
       {
         role: "system",
-        content: `You are a vehicle identification expert specializing in reading VINs from door jamb stickers and stamped metal plates. Extract the 17-character VIN from the provided photo.
+        content: `You are a VIN reading specialist. Extract the 17-character VIN from the photo.
 
-The VIN may appear on:
-- A door jamb sticker/label
-- An embossed/stamped metal tag
-- A hood label or emissions sticker
-- A dashboard plate (viewed through windshield)
+VIN rules:
+- 17 characters: A-H, J-N, P, R-Z, 0-9 (NEVER I, O, or Q)
+- Position 9 is a check digit (0-9 or X)
+- Position 10 is model year (T=1996, V=1997, W=1998, X=1999, Y=2000, 1=2001...)
+- Positions 12-17 are always digits
 
-VIN format rules:
-- Exactly 17 characters
-- ONLY uses: A-H, J-N, P, R-Z, 0-9 (NEVER uses I, O, or Q)
-- Position 1: country (1=USA, 2=Canada, 3=Mexico, J=Japan, W=Germany, S=UK)
-- Position 9: CHECK DIGIT (0-9 or X) — this is mathematically computed from all other characters
-- Position 10: model year code (T=1996, V=1997, W=1998, X=1999, Y=2000, 1=2001, ..., A=2010, B=2011, ...)
-- Positions 12-17: sequential production number (always digits)
+CRITICAL — read each character individually. On stamped/embossed plates:
+- W has a V-shaped center dip. H has a flat horizontal bar.
+- B has a flat left side. 8 is fully rounded on both sides.
+- D has a flat left side. 0 is fully oval.
+- N has a diagonal middle stroke. H has a horizontal middle stroke.
+- S is curved everywhere. 5 has a flat top bar.${retryContext}
 
-COMMON MISREADS on stamped/embossed plates:
-- W vs H: Look carefully at the center — W has a V-shaped dip, H has a horizontal bar
-- B vs 8: B has flat left side, 8 is fully rounded
-- D vs 0: D has flat left side, 0 is fully rounded
-- S vs 5: S is curved, 5 has a horizontal top bar
-- N vs H: N has a diagonal stroke, H has a horizontal bar
-- 1 vs 7: 7 has a horizontal top bar
-
-Read EVERY character individually. Be especially careful with positions where these confusions occur.${retryContext}
-
-Return JSON: { "vin": "<17 char VIN or null if truly unreadable>", "confidence": <0.0 to 1.0> }`,
+Return JSON: { "vin": "<17 chars or null>", "confidence": <0.0-1.0> }`,
       },
       {
         role: "user",
@@ -367,8 +379,8 @@ Return JSON: { "vin": "<17 char VIN or null if truly unreadable>", "confidence":
           {
             type: "text",
             text: previousAttempt
-              ? `Re-examine this VIN photo. Your previous read "${previousAttempt}" has an incorrect check digit. Look very carefully at each character, especially any that could be W/H, B/8, D/0, or S/5 confusions.`
-              : "Extract the VIN from this vehicle identification label photo.",
+              ? `Previous read "${previousAttempt}" failed check digit. Re-read carefully.`
+              : "Read the VIN from this photo.",
           },
           { type: "image_url", image_url: { url: photoUrl, detail: "high" } },
         ],
@@ -387,9 +399,155 @@ Return JSON: { "vin": "<17 char VIN or null if truly unreadable>", "confidence":
     typeof parsed.vin === "string" && parsed.vin.length === 17
       ? parsed.vin.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, "")
       : null;
-  const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
-
   if (vin && vin.length !== 17) return { vin: null, confidence: 0 };
 
-  return { vin, confidence };
+  return { vin, confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0 };
+}
+
+// ---------------------------------------------------------------------------
+//  Candidate scoring and selection
+// ---------------------------------------------------------------------------
+
+interface ScoredCandidate {
+  vin: string;
+  source: "google" | "gpt4o" | "corrected";
+  checkDigitValid: boolean;
+  structureScore: number;
+  nhtsaValid?: boolean;
+  confidence: number;
+}
+
+async function scoreAndSelectBest(candidates: ScoredCandidate[]): Promise<{ vin: string; confidence: number } | null> {
+  if (candidates.length === 0) return null;
+
+  // Sort: check digit valid first, then structure score, then confidence
+  candidates.sort((a, b) => {
+    if (a.checkDigitValid !== b.checkDigitValid) return a.checkDigitValid ? -1 : 1;
+    if (a.structureScore !== b.structureScore) return b.structureScore - a.structureScore;
+    return b.confidence - a.confidence;
+  });
+
+  const best = candidates[0];
+
+  // If best passes check digit, validate with NHTSA for extra certainty
+  if (best.checkDigitValid && best.nhtsaValid === undefined) {
+    best.nhtsaValid = await nhtsaValidate(best.vin);
+    if (best.nhtsaValid) {
+      console.log(`[VIN-OCR] NHTSA validated: ${best.vin}`);
+      return { vin: best.vin, confidence: 0.99 };
+    }
+  }
+
+  if (best.checkDigitValid) {
+    return { vin: best.vin, confidence: Math.max(best.confidence, 0.95) };
+  }
+
+  // No check digit valid — try NHTSA on top candidates as tiebreaker
+  for (const c of candidates.slice(0, 3)) {
+    if (c.nhtsaValid === undefined) {
+      c.nhtsaValid = await nhtsaValidate(c.vin);
+      if (c.nhtsaValid) {
+        console.log(`[VIN-OCR] NHTSA validated (no check digit): ${c.vin}`);
+        return { vin: c.vin, confidence: 0.8 };
+      }
+    }
+  }
+
+  // Nothing validated — return best guess with low confidence
+  return { vin: best.vin, confidence: Math.min(best.confidence, 0.5) };
+}
+
+// ---------------------------------------------------------------------------
+//  Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Extracts VIN from a vehicle photo. Runs Google Vision and GPT-4o in
+ * parallel, then selects the best candidate using layered validation.
+ */
+export async function extractVinFromPhoto(
+  photoUrl: string,
+): Promise<{ vin: string | null; confidence: number }> {
+  try {
+    const openai = getOpenAI();
+
+    // ── Run Google Vision + GPT-4o in parallel ──
+    const [googleCandidates, gptResult] = await Promise.all([
+      googleVisionOCR(photoUrl),
+      readVinFromPhoto(openai, photoUrl),
+    ]);
+
+    console.log(`[VIN-OCR] Google: ${googleCandidates.length} candidates, GPT-4o: ${gptResult.vin || "null"}`);
+
+    // ── Score all candidates ──
+    const scored: ScoredCandidate[] = [];
+
+    for (const vin of googleCandidates) {
+      const structure = validateStructure(vin);
+      if (structure.valid) {
+        scored.push({
+          vin,
+          source: "google",
+          checkDigitValid: isValidCheckDigit(vin),
+          structureScore: structure.score,
+          confidence: isValidCheckDigit(vin) ? 0.98 : 0.7,
+        });
+      }
+    }
+
+    if (gptResult.vin) {
+      const structure = validateStructure(gptResult.vin);
+      scored.push({
+        vin: gptResult.vin,
+        source: "gpt4o",
+        checkDigitValid: isValidCheckDigit(gptResult.vin),
+        structureScore: structure.score,
+        confidence: gptResult.confidence,
+      });
+    }
+
+    // ── Try confusion corrections on all failing candidates ──
+    const failedCandidates = scored.filter((c) => !c.checkDigitValid);
+    for (const fc of failedCandidates) {
+      const corrected = tryConfusionCorrections(fc.vin);
+      if (corrected) {
+        const structure = validateStructure(corrected);
+        scored.push({
+          vin: corrected,
+          source: "corrected",
+          checkDigitValid: true,
+          structureScore: structure.score,
+          confidence: fc.confidence * 0.9,
+        });
+      }
+    }
+
+    // ── Pick the best ──
+    const best = await scoreAndSelectBest(scored);
+    if (best) return best;
+
+    // ── Nothing worked — GPT-4o second attempt with context ──
+    const allReads = [...googleCandidates, gptResult.vin].filter(Boolean) as string[];
+    if (allReads.length > 0) {
+      console.log(`[VIN-OCR] All candidates failed validation. Trying GPT-4o with error context.`);
+      const secondRead = await readVinFromPhoto(openai, photoUrl, allReads[0]);
+      if (secondRead.vin) {
+        if (isValidCheckDigit(secondRead.vin)) {
+          const valid = await nhtsaValidate(secondRead.vin);
+          return { vin: secondRead.vin, confidence: valid ? 0.95 : 0.9 };
+        }
+        const corrected = tryConfusionCorrections(secondRead.vin);
+        if (corrected) {
+          return { vin: corrected, confidence: 0.85 };
+        }
+        return { vin: secondRead.vin, confidence: 0.5 };
+      }
+    }
+
+    console.warn("[VIN-OCR] All extraction methods failed");
+    return { vin: null, confidence: 0 };
+  } catch (err) {
+    console.error("[VIN-OCR] Fatal error:", err);
+    return { vin: null, confidence: 0 };
+  }
 }
