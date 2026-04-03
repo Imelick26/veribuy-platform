@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Send, CheckCircle, MessageSquare, ArrowRight } from "lucide-react";
+import { Send, CheckCircle, Mail, Clock } from "lucide-react";
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -23,7 +23,7 @@ export default function Contact() {
       await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, type: "meeting" }),
+        body: JSON.stringify({ ...formData, type: "contact" }),
       });
       setSubmitted(true);
     } catch {
@@ -39,48 +39,46 @@ export default function Contact() {
 
       <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-16">
-          {/* Left — Info */}
+          {/* Left -- Info */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <p className="text-sm font-medium text-accent-pink uppercase tracking-widest mb-4">
+            <p className="text-sm font-medium text-accent-pink uppercase tracking-[0.15em] mb-4">
               Get in Touch
             </p>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
-              Let&apos;s talk about{" "}
-              <span className="text-brand-gradient">your needs</span>
+              Let&apos;s discuss{" "}
+              <span className="text-brand-gradient">your operations</span>
             </h2>
             <p className="text-lg text-gray-400 leading-relaxed mb-10">
-              Whether you&apos;re a dealership group, inspection firm, or insurer
-              — we&apos;d love to understand your challenges and show you how
-              VeriBuy can help.
+              Whether you manage a multi-rooftop dealer group, run an online
+              marketplace, or underwrite vehicle-backed products, our team is
+              ready to show you how VeriBuy fits your workflow.
             </p>
 
             <div className="space-y-6">
               <div className="flex items-start gap-4">
                 <div className="shrink-0 w-10 h-10 rounded-xl bg-brand-gradient flex items-center justify-center">
-                  <MessageSquare size={20} className="text-white" />
+                  <Mail size={18} className="text-white" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-400 mb-1">Reach us</p>
-                  <p className="text-white font-medium">
-                    Use the form and we&apos;ll get back to you directly.
+                  <p className="text-sm font-medium text-gray-300 mb-0.5">Email us directly</p>
+                  <p className="text-sm text-gray-500">
+                    hello@getveribuy.com
                   </p>
                 </div>
               </div>
 
               <div className="flex items-start gap-4">
                 <div className="shrink-0 w-10 h-10 rounded-xl bg-brand-gradient flex items-center justify-center">
-                  <ArrowRight size={20} className="text-white" />
+                  <Clock size={18} className="text-white" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-400 mb-1">
-                    Typical response time
-                  </p>
-                  <p className="text-white font-medium">
+                  <p className="text-sm font-medium text-gray-300 mb-0.5">Typical response time</p>
+                  <p className="text-sm text-gray-500">
                     Within 24 hours on business days
                   </p>
                 </div>
@@ -88,7 +86,7 @@ export default function Contact() {
             </div>
           </motion.div>
 
-          {/* Right — Form */}
+          {/* Right -- Form */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -102,18 +100,17 @@ export default function Contact() {
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Message sent!</h3>
                 <p className="text-gray-400">
-                  We&apos;ll get back to you within 24 hours. Looking forward to
-                  connecting.
+                  We&apos;ll get back to you within 24 hours.
                 </p>
               </div>
             ) : (
               <form
                 onSubmit={handleSubmit}
-                className="glass-card rounded-2xl p-8 space-y-5"
+                className="glass-card rounded-2xl p-8 space-y-4"
               >
-                <div className="grid sm:grid-cols-2 gap-5">
+                <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
                       Full Name *
                     </label>
                     <input
@@ -123,12 +120,12 @@ export default function Contact() {
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
-                      placeholder="John Doe"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
+                      placeholder="Jane Smith"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
                       Work Email *
                     </label>
                     <input
@@ -138,15 +135,15 @@ export default function Contact() {
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
-                      placeholder="john@company.com"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
+                      placeholder="jane@company.com"
                     />
                   </div>
                 </div>
 
-                <div className="grid sm:grid-cols-2 gap-5">
+                <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
                       Company *
                     </label>
                     <input
@@ -156,12 +153,12 @@ export default function Contact() {
                       onChange={(e) =>
                         setFormData({ ...formData, company: e.target.value })
                       }
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
-                      placeholder="Acme Motors"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
+                      placeholder="Acme Auto Group"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
                       Phone
                     </label>
                     <input
@@ -170,14 +167,14 @@ export default function Contact() {
                       onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
                       placeholder="+1 (555) 123-4567"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">
                     How can we help? *
                   </label>
                   <textarea
@@ -187,7 +184,7 @@ export default function Contact() {
                     onChange={(e) =>
                       setFormData({ ...formData, message: e.target.value })
                     }
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors resize-none"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors resize-none"
                     placeholder="Tell us about your organization and what you're looking for..."
                   />
                 </div>
@@ -195,14 +192,14 @@ export default function Contact() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-brand-gradient rounded-xl py-3.5 text-base font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg hover:opacity-95 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-brand-gradient rounded-xl py-3.5 text-sm font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg hover:opacity-95 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
                       Send Message
-                      <Send size={18} />
+                      <Send size={16} />
                     </>
                   )}
                 </button>

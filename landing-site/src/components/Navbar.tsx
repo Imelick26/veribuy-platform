@@ -5,10 +5,8 @@ import Image from "next/image";
 import { Menu, X } from "lucide-react";
 
 const navLinks = [
-  { label: "Features", href: "#features" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Benefits", href: "#benefits" },
-  { label: "Contact", href: "#contact" },
+  { label: "Platform", href: "#platform" },
+  { label: "Get a Demo", href: "#demo" },
 ];
 
 export default function Navbar() {
@@ -25,25 +23,25 @@ export default function Navbar() {
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "bg-black/80 backdrop-blur-xl border-b border-white/5"
+          ? "bg-[#0c0f1a]/90 backdrop-blur-xl border-b border-white/5"
           : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="flex h-20 items-center justify-between">
+        <div className="flex h-18 items-center justify-between">
           {/* Logo */}
-          <a href="#" className="flex items-center gap-3">
-            <Image src="/logo.png" alt="VeriBuy" width={40} height={40} className="rounded-lg" />
-            <span className="text-xl font-bold tracking-tight">VeriBuy</span>
+          <a href="#" className="flex items-center gap-2.5">
+            <Image src="/logo.png" alt="VeriBuy" width={36} height={36} className="rounded-lg" />
+            <span className="text-lg font-bold tracking-tight">VeriBuy</span>
           </a>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden lg:flex items-center gap-7">
             {navLinks.map((link) => (
               <a
                 key={link.href}
                 href={link.href}
-                className="text-sm text-gray-400 hover:text-white transition-colors duration-200"
+                className="text-[13px] text-gray-400 hover:text-white transition-colors duration-200"
               >
                 {link.label}
               </a>
@@ -51,25 +49,27 @@ export default function Navbar() {
           </div>
 
           {/* Desktop CTAs */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-4">
             <a
-              href="#demo"
-              className="text-sm font-medium text-gray-300 hover:text-white transition-colors duration-200"
+              href="https://app.getveribuy.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[13px] font-medium text-gray-300 hover:text-white transition-colors duration-200"
             >
-              Request Demo
+              Login
             </a>
             <a
-              href="#contact"
-              className="bg-brand-gradient rounded-full px-6 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity shadow-brand-glow"
+              href="#demo"
+              className="bg-brand-gradient rounded-full px-5 py-2 text-[13px] font-semibold text-white hover:opacity-90 transition-opacity shadow-brand-glow"
             >
-              Get Started
+              Schedule Demo
             </a>
           </div>
 
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden text-gray-400 hover:text-white"
+            className="lg:hidden text-gray-400 hover:text-white"
             aria-label="Toggle menu"
           >
             {mobileOpen ? <X size={24} /> : <Menu size={24} />}
@@ -79,7 +79,7 @@ export default function Navbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden bg-black/95 backdrop-blur-xl border-t border-white/5">
+        <div className="lg:hidden bg-[#0c0f1a]/95 backdrop-blur-xl border-t border-white/5">
           <div className="px-6 py-6 space-y-4">
             {navLinks.map((link) => (
               <a
@@ -93,18 +93,20 @@ export default function Navbar() {
             ))}
             <div className="pt-4 border-t border-white/10 space-y-3">
               <a
-                href="#demo"
+                href="https://app.getveribuy.com"
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={() => setMobileOpen(false)}
                 className="block text-center text-sm font-medium text-gray-300 hover:text-white py-2"
               >
-                Request Demo
+                Login
               </a>
               <a
-                href="#contact"
+                href="#demo"
                 onClick={() => setMobileOpen(false)}
                 className="block text-center bg-brand-gradient rounded-full px-6 py-2.5 text-sm font-semibold text-white"
               >
-                Get Started
+                Schedule Demo
               </a>
             </div>
           </div>

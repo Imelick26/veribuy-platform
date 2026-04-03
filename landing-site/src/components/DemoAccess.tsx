@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, CheckCircle, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle } from "lucide-react";
 
 export default function DemoAccess() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    phone: "",
     company: "",
+    role: "",
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,155 +26,165 @@ export default function DemoAccess() {
         body: JSON.stringify({
           ...formData,
           type: "demo",
-          message: `Demo access requested by ${formData.name} from ${formData.company}`,
+          message: `Demo requested by ${formData.name} (${formData.role}) from ${formData.company}. Phone: ${formData.phone}`,
         }),
       });
       setSubmitted(true);
     } catch {
-      // Still show success — form data captured
       setSubmitted(true);
     } finally {
       setLoading(false);
     }
   };
 
+  const inputClass =
+    "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-pink/50 focus:ring-1 focus:ring-accent-pink/50 transition-colors";
+
   return (
     <section id="demo" className="relative py-24 lg:py-32">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-brand-gradient p-px">
-          <div className="rounded-3xl bg-black/90 p-10 md:p-16">
-            <div className="grid lg:grid-cols-2 gap-12 items-center">
-              {/* Left — Copy */}
-              <motion.div
-                initial={{ opacity: 0, x: -30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6 }}
-              >
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300 mb-6">
-                  <Sparkles size={16} className="text-accent-pink" />
-                  Free to get started
-                </div>
-                <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-                  See VeriBuy{" "}
-                  <span className="text-brand-gradient">in action</span>
-                </h2>
-                <p className="text-lg text-gray-400 leading-relaxed mb-8">
-                  Get hands-on access to the platform. See how VeriBuy
-                  transforms your vehicle verification workflow — no commitment
-                  required.
-                </p>
-                <ul className="space-y-3">
-                  {[
-                    "Full platform access",
-                    "Guided onboarding experience",
-                    "No credit card required",
-                  ].map((item) => (
-                    <li
-                      key={item}
-                      className="flex items-center gap-3 text-gray-300"
-                    >
-                      <CheckCircle
-                        size={18}
-                        className="text-emerald-400 shrink-0"
-                      />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
+      <div className="mx-auto max-w-2xl px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-10"
+        >
+          <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+            Interested in{" "}
+            <span className="text-brand-gradient">VeriBuy</span>?
+          </h2>
+          <p className="text-gray-400 text-lg">
+            Leave your info below and our team will reach out to schedule a demo.
+          </p>
+        </motion.div>
 
-              {/* Right — Form */}
-              <motion.div
-                initial={{ opacity: 0, x: 30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: 0.2 }}
-              >
-                {submitted ? (
-                  <div className="text-center py-12">
-                    <div className="mx-auto mb-6 w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                      <CheckCircle size={32} className="text-emerald-400" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-2">You&apos;re in!</h3>
-                    <p className="text-gray-400 mb-6">
-                      Check your inbox — we&apos;ll have you set up in minutes.
-                    </p>
-                    <a
-                      href="https://getveribuy.com"
-                      className="inline-flex items-center gap-2 text-accent-pink hover:text-accent-magenta transition-colors font-medium"
-                    >
-                      Go to Platform
-                      <ArrowRight size={16} />
-                    </a>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="relative overflow-hidden rounded-2xl bg-brand-gradient p-px"
+        >
+          <div className="rounded-2xl bg-[#0c0f1a]/95 p-8 md:p-10">
+            {submitted ? (
+              <div className="text-center py-8">
+                <div className="mx-auto mb-6 w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <CheckCircle size={32} className="text-emerald-400" />
+                </div>
+                <h3 className="text-2xl font-bold mb-2">We&apos;ll be in touch!</h3>
+                <p className="text-gray-400">
+                  Our team will reach out within one business day to get your demo scheduled.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
+                      className={inputClass}
+                      placeholder="Jane Smith"
+                    />
                   </div>
-                ) : (
-                  <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.name}
-                        onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
-                        placeholder="John Doe"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Work Email
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={formData.email}
-                        onChange={(e) =>
-                          setFormData({ ...formData, email: e.target.value })
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
-                        placeholder="john@company.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Company
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.company}
-                        onChange={(e) =>
-                          setFormData({ ...formData, company: e.target.value })
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent-magenta/50 focus:ring-1 focus:ring-accent-magenta/50 transition-colors"
-                        placeholder="Acme Motors"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full bg-brand-gradient rounded-xl py-3.5 text-base font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg hover:opacity-95 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {loading ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          Get Demo Access
-                          <ArrowRight size={18} />
-                        </>
-                      )}
-                    </button>
-                  </form>
-                )}
-              </motion.div>
-            </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                      Work Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      className={inputClass}
+                      placeholder="jane@dealership.com"
+                    />
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                      Phone Number *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={formData.phone}
+                      onChange={(e) =>
+                        setFormData({ ...formData, phone: e.target.value })
+                      }
+                      className={inputClass}
+                      placeholder="(555) 123-4567"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                      Company *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.company}
+                      onChange={(e) =>
+                        setFormData({ ...formData, company: e.target.value })
+                      }
+                      className={inputClass}
+                      placeholder="Acme Auto Group"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                    Your Role
+                  </label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) =>
+                      setFormData({ ...formData, role: e.target.value })
+                    }
+                    className={`${inputClass} appearance-none`}
+                  >
+                    <option value="" className="bg-[#0c0f1a]">Select role</option>
+                    <option value="dealer-principal" className="bg-[#0c0f1a]">Dealer Principal / GM</option>
+                    <option value="operations" className="bg-[#0c0f1a]">Operations Manager</option>
+                    <option value="technology" className="bg-[#0c0f1a]">Technology / IT</option>
+                    <option value="finance" className="bg-[#0c0f1a]">Finance / Lending</option>
+                    <option value="insurance" className="bg-[#0c0f1a]">Insurance / Risk</option>
+                    <option value="marketplace" className="bg-[#0c0f1a]">Marketplace / Platform</option>
+                    <option value="other" className="bg-[#0c0f1a]">Other</option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-brand-gradient rounded-xl py-3.5 text-sm font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg hover:opacity-95 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      Schedule Your Demo
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
+                <p className="text-[11px] text-gray-600 text-center">
+                  No credit card required. We&apos;ll confirm your demo within 24 hours.
+                </p>
+              </form>
+            )}
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );

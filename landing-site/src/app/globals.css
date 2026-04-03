@@ -1,20 +1,21 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 @theme {
-  /* Brand Colors */
-  --color-brand-50: #faf5ff;
-  --color-brand-100: #f3e8ff;
-  --color-brand-200: #e9d5ff;
-  --color-brand-300: #d8b4fe;
-  --color-brand-400: #c084fc;
-  --color-brand-500: #a855f7;
-  --color-brand-600: #5c0099;
-  --color-brand-700: #4a0080;
-  --color-brand-800: #3b0066;
-  --color-brand-900: #1a0033;
+  /* Brand Colors — from VeriBuy Brand Style Guide */
+  --color-brand-50: #fff0f4;
+  --color-brand-100: #ffe0ea;
+  --color-brand-200: #ffb8ce;
+  --color-brand-300: #ff7da8;
+  --color-brand-400: #ff4289;
+  --color-brand-500: #d42a6e;
+  --color-brand-600: #1a3a7a;
+  --color-brand-700: #142d61;
+  --color-brand-800: #0f2148;
+  --color-brand-900: #0a1628;
 
   --color-accent-pink: #ff4289;
-  --color-accent-magenta: #be00a4;
+  --color-accent-magenta: #be185d;
 
   /* Animation */
   --animate-float: float 6s ease-in-out infinite;
@@ -22,6 +23,7 @@
   --animate-shimmer: shimmer 2s linear infinite;
   --animate-pulse-glow: pulse-glow 3s ease-in-out infinite;
   --animate-fade-in-up: fadeInUp 0.6s ease-out forwards;
+  --animate-marquee: marquee 40s linear infinite;
 }
 
 @keyframes float {
@@ -50,67 +52,115 @@
   }
 }
 
-/* Base Styles */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ─── Base ─── */
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #000000;
-  color: #ffffff;
+  background: #0c0f1a;
+  color: #e8eaed;
+  letter-spacing: -0.01em;
 }
 
-/* Gradient Utilities */
+/* ─── Gradient Utilities ─── */
 .bg-brand-gradient {
-  background: linear-gradient(135deg, #ff4289, #be00a4, #5c0099);
+  background: linear-gradient(135deg, #ff4289, #1a3a7a);
 }
 
 .text-brand-gradient {
-  background: linear-gradient(135deg, #ff4289, #be00a4, #5c0099);
+  background: linear-gradient(135deg, #ff4289, #be185d, #1a3a7a);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .bg-brand-gradient-subtle {
-  background: linear-gradient(135deg, rgba(255, 66, 137, 0.08), rgba(190, 0, 164, 0.08), rgba(92, 0, 153, 0.08));
+  background: linear-gradient(180deg, rgba(12,15,26,1) 0%, rgba(16,20,35,1) 100%);
 }
 
-/* Glow Effects */
+/* ─── Glow Effects ─── */
 .shadow-brand-glow {
-  box-shadow: 0 0 30px rgba(190, 0, 164, 0.3);
+  box-shadow: 0 0 24px rgba(255, 66, 137, 0.12), 0 0 60px rgba(255, 66, 137, 0.05);
 }
 
 .shadow-brand-glow-lg {
-  box-shadow: 0 0 60px rgba(190, 0, 164, 0.4);
+  box-shadow: 0 0 40px rgba(255, 66, 137, 0.18), 0 0 80px rgba(255, 66, 137, 0.08);
 }
 
-/* Glass Card */
+/* ─── Glass Card — elevated surface ─── */
 .glass-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .glass-card-hover:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(190, 0, 164, 0.3);
-  box-shadow: 0 0 30px rgba(190, 0, 164, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
-/* Grid Background */
+/* ─── Grid Background ─── */
 .grid-bg {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
   background-size: 60px 60px;
 }
 
-/* Section divider gradient */
+/* ─── Section divider ─── */
 .section-divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(190, 0, 164, 0.3), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
+}
+
+/* ─── Marquee ─── */
+.marquee-track {
+  animation: marquee 40s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* ─── Badge shimmer ─── */
+.badge-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.03) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+/* ─── Selection ─── */
+::selection {
+  background: rgba(255, 66, 137, 0.2);
+  color: #ffffff;
+}
+
+/* ─── Scrollbar (subtle) ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
