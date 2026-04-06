@@ -489,6 +489,17 @@ export const inspectionRouter = router({
         include: {
           vehicle: true,
           inspector: { select: { id: true, name: true } },
+          report: { select: { id: true } },
+          marketAnalysis: {
+            select: {
+              recommendation: true,
+              estRetailPrice: true,
+              estReconCost: true,
+              adjustedPrice: true,
+              conditionMultiplier: true,
+              historyMultiplier: true,
+            },
+          },
           _count: { select: { findings: true, media: true } },
         },
       });

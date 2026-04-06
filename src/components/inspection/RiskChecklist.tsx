@@ -170,8 +170,8 @@ export function RiskChecklist({
       {photoDiscoveredRisks.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <Camera className="h-4 w-4 text-amber-600" />
-            <h4 className="text-sm font-semibold text-amber-700">
+            <Camera className="h-4 w-4 text-caution-600" />
+            <h4 className="text-sm font-semibold text-caution-700">
               Photo-Discovered Issues ({photoDiscoveredRisks.length})
             </h4>
           </div>
@@ -182,10 +182,10 @@ export function RiskChecklist({
             {photoDiscoveredRisks.map((pdr, i) => (
               <div
                 key={`pdr-${i}`}
-                className="rounded-lg border border-amber-200 bg-amber-50 p-2.5"
+                className="rounded-lg border border-caution-200 bg-caution-50 p-2.5"
               >
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <AlertTriangle className="h-4 w-4 text-caution-600 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium text-text-primary">
                       {pdr.title}
@@ -205,7 +205,7 @@ export function RiskChecklist({
                   </Badge>
                 </div>
                 {pdr.confidence < 0.7 && (
-                  <p className="text-[10px] text-amber-600 mt-1">
+                  <p className="text-[10px] text-caution-600 mt-1">
                     Confidence: {Math.round(pdr.confidence * 100)}% — verify during physical inspection
                   </p>
                 )}

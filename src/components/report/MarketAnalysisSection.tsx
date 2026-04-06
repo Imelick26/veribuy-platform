@@ -123,7 +123,7 @@ function formatMileage(miles: number): string {
 
 const recColor = (rec: string) =>
   rec === "STRONG_BUY" ? { bg: "bg-green-50", border: "border-green-300", text: "text-green-700" } :
-  rec === "FAIR_BUY" ? { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-700" } :
+  rec === "FAIR_BUY" ? { bg: "bg-caution-50", border: "border-caution-300", text: "text-caution-600" } :
   { bg: "bg-red-50", border: "border-red-300", text: "text-red-700" };
 
 const recBadgeVariant = (rec: string) =>

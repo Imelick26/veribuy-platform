@@ -34,9 +34,37 @@
   /* Severity Colors */
   --color-severity-critical: #b91c1c;
   --color-severity-major: #ea580c;
-  --color-severity-moderate: #ca8a04;
+  --color-severity-moderate: #A67622;
   --color-severity-minor: #16a34a;
   --color-severity-info: #1a3a7a;
+
+  /* Caution Palette — warm bronze, replaces generic yellow/amber */
+  --color-caution-50: #FDF6EE;
+  --color-caution-100: #F9E8D0;
+  --color-caution-200: #F0CFA0;
+  --color-caution-300: #DEB06A;
+  --color-caution-400: #C4913A;
+  --color-caution-500: #A67622;
+  --color-caution-600: #8A6119;
+  --color-caution-700: #6E4D14;
+  --color-caution-800: #533A0F;
+
+  /* Financial Colors — distinct from status green/red */
+  --color-money-positive: #0D7C3E;
+  --color-money-negative: #C4291C;
+  --color-money-neutral: #1a1a2e;
+  --color-money-bg-positive: #E8F5E9;
+  --color-money-bg-negative: #FFEBEE;
+
+  /* Deal Rating Colors — derived from brand spectrum */
+  --color-deal-strong-buy: #0D7C3E;
+  --color-deal-strong-buy-bg: #E8F5E9;
+  --color-deal-fair-buy: #1a3a7a;
+  --color-deal-fair-buy-bg: #EBF0F9;
+  --color-deal-overpaying: #9B2C5E;
+  --color-deal-overpaying-bg: #FCE8F1;
+  --color-deal-pass: #C4291C;
+  --color-deal-pass-bg: #FFEBEE;
 }
 
 /* === Body === */

@@ -623,7 +623,7 @@ function VinConfirmPanel({
         </div>
       )}
       {!detectedVin && (
-        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-700">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-caution-50 border border-caution-200 text-sm text-caution-700">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           <span>Couldn&apos;t read VIN from photo — please enter it manually</span>
         </div>
@@ -727,8 +727,8 @@ function OdometerConfirmRow({
   }
 
   return (
-    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-      <p className="text-xs font-semibold text-amber-700 mb-2">
+    <div className="p-3 rounded-lg bg-caution-50 border border-caution-200">
+      <p className="text-xs font-semibold text-caution-700 mb-2">
         {currentOdometer ? "Verify Odometer Reading" : "Enter Odometer Reading"}
       </p>
       <div className="flex items-center gap-2">
@@ -738,7 +738,7 @@ function OdometerConfirmRow({
           placeholder="e.g. 198432"
           value={value}
           onChange={(e) => setValue(e.target.value.replace(/[^0-9]/g, ""))}
-          className="flex-1 px-3 py-2 text-sm font-medium border border-amber-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          className="flex-1 px-3 py-2 text-sm font-medium border border-caution-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
         />
         <span className="text-xs text-text-tertiary">mi</span>
         <Button

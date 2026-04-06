@@ -78,7 +78,7 @@ export function Sidebar() {
       <div className="px-3 pt-3 pb-1">
         <button
           onClick={handleNewInspection}
-          className="flex items-center justify-center gap-2 w-full rounded-lg bg-brand-gradient text-white text-sm font-medium py-2 shadow-brand-glow hover:brightness-110 transition-all cursor-pointer"
+          className="flex items-center justify-center gap-2 w-full rounded-lg bg-text-primary text-white text-sm font-medium py-2 hover:opacity-90 transition-colors cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" />
           New Inspection
@@ -90,14 +90,16 @@ export function Sidebar() {
         {navigation.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href !== "/dashboard" && pathname?.startsWith(item.href));
+            (item.href !== "/dashboard" && pathname?.startsWith(item.href + "/") &&
+              // Don't let /dashboard/settings match when a sibling like /dashboard/settings/team is more specific
+              !navigation.some((other) => other.href !== item.href && other.href.startsWith(item.href) && pathname?.startsWith(other.href)));
           return (
             <Link
               key={item.name}
               href={item.href}
               onClick={close}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-all relative",
+                "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors relative",
                 isActive
                   ? "bg-surface-hover text-text-primary"
                   : "text-text-secondary hover:bg-surface-hover hover:text-text-primary"

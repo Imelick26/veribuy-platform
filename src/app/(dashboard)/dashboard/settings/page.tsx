@@ -134,7 +134,7 @@ export default function SettingsPage() {
                 {([
                   { label: "Excellent", score: "85+", color: "bg-green-50 border-green-200 text-green-700", example: "Clean, low miles" },
                   { label: "Good", score: "70-84", color: "bg-green-50 border-green-200 text-green-700", example: "Solid, minor wear" },
-                  { label: "Fair", score: "60-69", color: "bg-amber-50 border-amber-200 text-amber-700", example: "Needs work" },
+                  { label: "Fair", score: "60-69", color: "bg-surface-overlay border-border-default text-text-secondary", example: "Needs work" },
                   { label: "Poor", score: "<60", color: "bg-red-50 border-red-200 text-red-700", example: "Heavy recon" },
                 ] as const).map(({ label, score, color, example }) => {
                   const pct = getConditionMarginPct(currentMargin, label === "Excellent" ? 90 : label === "Good" ? 75 : label === "Fair" ? 65 : 50);
@@ -210,8 +210,8 @@ export default function SettingsPage() {
         </Card>
       )}
       {checkoutStatus === "cancelled" && (
-        <Card className="border-border-default border-l-4 border-l-amber-500">
-          <p className="text-sm text-yellow-700">Payment was cancelled. No charges were made.</p>
+        <Card className="border-border-default border-l-4 border-l-caution-400">
+          <p className="text-sm text-caution-600">Payment was cancelled. No charges were made.</p>
         </Card>
       )}
 

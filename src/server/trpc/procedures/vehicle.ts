@@ -136,7 +136,10 @@ export const vehicleRouter = router({
           inspections: {
             orderBy: { createdAt: "desc" },
             take: 1,
-            select: { id: true, status: true, overallScore: true, number: true },
+            select: {
+              id: true, status: true, overallScore: true, number: true,
+              marketAnalysis: { select: { recommendation: true } },
+            },
           },
         },
       });

@@ -299,9 +299,9 @@ export function GuidedCapture({
 
       {/* ── Pending uploads indicator ── */}
       {pendingUploads.size > 0 && (
-        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-amber-500/15 border border-amber-500/30 px-4 py-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-500/30 border-t-amber-500 shrink-0" />
-          <span className="text-xs text-amber-300">{pendingUploads.size} photo{pendingUploads.size > 1 ? "s" : ""} uploading — don&apos;t close yet</span>
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-caution-500/15 border border-caution-500/30 px-4 py-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-caution-500/30 border-t-caution-500 shrink-0" />
+          <span className="text-xs text-caution-300">{pendingUploads.size} photo{pendingUploads.size > 1 ? "s" : ""} uploading — don&apos;t close yet</span>
         </div>
       )}
 

@@ -19,7 +19,7 @@ export function Progress({ value, color = "brand", size = "md", className }: Pro
       <div
         className={cn("h-full rounded-full transition-all duration-500", {
           "bg-green-500": color === "green",
-          "bg-yellow-400": color === "yellow",
+          "bg-caution-400": color === "yellow",
           "bg-red-500": color === "red",
           "bg-gradient-progress": color === "brand",
         })}

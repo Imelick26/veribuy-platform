@@ -6,15 +6,18 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   accent?: boolean;
   /** Enable hover elevation effect */
   hoverable?: boolean;
+  /** Hero variant — thick border, extra padding. One per page max. */
+  hero?: boolean;
 }
 
-export function Card({ className, children, accent, hoverable, ...props }: CardProps) {
+export function Card({ className, children, accent, hoverable, hero, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-xl border border-border-default bg-surface-raised p-5 transition-all",
-        hoverable && "hover:shadow-md hover:-translate-y-0.5",
+        "rounded-xl border border-border-default bg-surface-raised p-6 transition-all",
+        hoverable && "hover:shadow-md",
         accent && "card-accent-left pl-6",
+        hero && "border-2 border-text-primary p-8",
         className
       )}
       {...props}

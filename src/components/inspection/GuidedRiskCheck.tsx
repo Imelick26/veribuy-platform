@@ -190,7 +190,7 @@ export function GuidedRiskCheck({
                 key={q.id}
                 className={cn(
                   "rounded-lg border p-2.5 transition-all",
-                  isFailing ? "border-amber-300 bg-amber-50/50" :
+                  isFailing ? "border-caution-300 bg-caution-50/50" :
                   isAnswered ? "border-green-200 bg-green-50/30" :
                   "border-border-default bg-surface-raised"
                 )}
@@ -198,7 +198,7 @@ export function GuidedRiskCheck({
                 <div className="flex items-start gap-2 mb-2">
                   <span className={cn(
                     "shrink-0 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold",
-                    isFailing ? "bg-amber-200 text-amber-800" :
+                    isFailing ? "bg-caution-200 text-caution-800" :
                     isAnswered ? "bg-green-200 text-green-800" :
                     "bg-surface-overlay text-text-tertiary"
                   )}>
@@ -216,7 +216,7 @@ export function GuidedRiskCheck({
                       "px-4 py-1.5 rounded-md text-xs font-medium transition-all",
                       answer === "yes"
                         ? answer === q.failureAnswer
-                          ? "bg-amber-500 text-white"
+                          ? "bg-caution-500 text-white"
                           : "bg-green-600 text-white"
                         : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
                     )}
@@ -229,7 +229,7 @@ export function GuidedRiskCheck({
                       "px-4 py-1.5 rounded-md text-xs font-medium transition-all",
                       answer === "no"
                         ? answer === q.failureAnswer
-                          ? "bg-amber-500 text-white"
+                          ? "bg-caution-500 text-white"
                           : "bg-green-600 text-white"
                         : "bg-surface-overlay text-text-secondary hover:bg-surface-sunken"
                     )}
@@ -247,12 +247,12 @@ export function GuidedRiskCheck({
       {needsEvidencePhoto && (
         <div className={cn(
           "rounded-lg border p-3 transition-all",
-          hasEvidencePhoto ? "border-green-200 bg-green-50/30" : "border-amber-300 bg-amber-50/40"
+          hasEvidencePhoto ? "border-green-200 bg-green-50/30" : "border-caution-300 bg-caution-50/40"
         )}>
           <div className="flex items-start gap-2 mb-2">
             <AlertTriangle className={cn(
               "h-4 w-4 shrink-0 mt-0.5",
-              hasEvidencePhoto ? "text-green-600" : "text-amber-600"
+              hasEvidencePhoto ? "text-green-600" : "text-caution-600"
             )} />
             <div className="flex-1">
               <p className="text-sm font-medium text-text-primary">
@@ -302,7 +302,7 @@ export function GuidedRiskCheck({
                 "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
                 hasEvidencePhoto
                   ? "bg-green-100 text-green-700 hover:bg-green-200"
-                  : "bg-amber-500 text-white hover:bg-amber-600"
+                  : "bg-caution-500 text-white hover:bg-caution-600"
               )}
             >
               {uploadingRiskPhoto ? (
@@ -326,10 +326,10 @@ export function GuidedRiskCheck({
 
       {/* ─── SECTION 4: COMPLETION / CONFIRM ─── */}
       {isComplete && hasFailures && status === "NOT_CHECKED" && (
-        <div className="rounded-lg p-3 border border-amber-200 bg-amber-50/30">
+        <div className="rounded-lg p-3 border border-caution-200 bg-caution-50/30">
           <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <span className="text-sm font-semibold text-amber-700">
+            <AlertTriangle className="h-4 w-4 text-caution-600" />
+            <span className="text-sm font-semibold text-caution-700">
               {failedQuestions.length} issue{failedQuestions.length > 1 ? "s" : ""} detected
             </span>
           </div>
@@ -337,7 +337,7 @@ export function GuidedRiskCheck({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onManualOverride("CONFIRMED")}
-              className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors bg-amber-500 text-white hover:bg-amber-600"
+              className="flex-1 py-2 rounded-lg text-sm font-medium transition-colors bg-caution-500 text-white hover:bg-caution-600"
             >
               Confirm Issue{!hasEvidencePhoto && needsEvidencePhoto ? " (no photo)" : ""}
             </button>
@@ -436,7 +436,7 @@ function LegacyPhotoCheck({
       <div className={cn(
         "rounded-lg border p-3 transition-all",
         riskPhotoCount >= recommendedPhotos ? "border-green-200 bg-green-50/50" :
-        hasPhotos ? "border-amber-300 bg-amber-50/30" :
+        hasPhotos ? "border-caution-300 bg-caution-50/30" :
         "border-brand-400 bg-brand-50/30"
       )}>
         <div className="ml-6 space-y-2 mb-2">

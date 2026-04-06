@@ -6,31 +6,34 @@ import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Progress } from "@/components/ui/Progress";
+import { Overline } from "@/components/ui/Overline";
+import { StatusDot } from "@/components/ui/StatusDot";
+import { ConditionBar } from "@/components/ui/ConditionBar";
 import { MarketAnalysisSection, getConditionMarginPct, getConditionTierLabel } from "@/components/report/MarketAnalysisSection";
 import type { MarketAnalysisData, MarketAnalysisSectionProps } from "@/components/report/MarketAnalysisSection";
 import { PhotoGallery } from "@/components/report/PhotoGallery";
 import { getConditionGrade } from "@/lib/market-valuation";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, cn, getDealRatingBadge } from "@/lib/utils";
 import {
   ArrowLeft, FileText, RefreshCw, ThumbsUp, ThumbsDown, DollarSign, Check, X,
-  Activity, History, TrendingUp, Camera, ShieldAlert, CircleDot,
-  Car, Plus, Trash2,
+  Activity, History, TrendingUp, Camera, ShieldAlert, ChevronDown, ChevronUp,
+  Car, Plus, Trash2, Settings2,
 } from "lucide-react";
 
-type Tab = "offer" | "condition" | "history" | "market" | "photos" | "risks";
+type Tab = "condition" | "risks" | "history" | "market" | "photos" | "report";
 
 export default function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: vehicle, isLoading } = trpc.vehicle.getDetail.useQuery({ id });
   const { data: orgSettings } = trpc.auth.getOrgSettings.useQuery();
   const utils = trpc.useUtils();
-  const [activeTab, setActiveTab] = useState<Tab>("offer");
+  const [activeTab, setActiveTab] = useState<Tab>("condition");
   const [showPriceInput, setShowPriceInput] = useState(false);
   const [purchasePrice, setPurchasePrice] = useState("");
   const [marginMode, setMarginMode] = useState<"pct" | "flat">("pct");
-  const [marginOverride, setMarginOverride] = useState<number | null>(null); // pct override
-  const [flatMarginOverride, setFlatMarginOverride] = useState<string>(""); // flat $ override
+  const [marginOverride, setMarginOverride] = useState<number | null>(null);
+  const [flatMarginOverride, setFlatMarginOverride] = useState<string>("");
+  const [showDealAdjust, setShowDealAdjust] = useState(false);
 
   const recordOutcome = trpc.inspection.recordOutcome.useMutation({
     onSuccess: () => {
@@ -66,12 +69,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  // Latest completed inspection (or most recent)
   const latestInspection = vehicle.inspections[0];
   const completedInspection = vehicle.inspections.find((i) => i.status === "COMPLETED") || latestInspection;
   const inspection = completedInspection;
 
-  // Extract key data from latest inspection
   const conditionScore = inspection?.overallScore ?? null;
   const conditionGrade = conditionScore ? getConditionGrade(conditionScore) : null;
   const market = inspection?.marketAnalysis as MarketAnalysisData | null;
@@ -84,16 +85,10 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   const media = inspection?.media || [];
   const steps = inspection?.steps || [];
 
-  // Hero photo — passenger front 3/4, fall back to driver 3/4, then front center
-  const heroPhoto = media.find((m) => m.captureType === "FRONT_34_PASSENGER")
-    || media.find((m) => m.captureType === "FRONT_34_DRIVER")
-    || media.find((m) => m.captureType === "FRONT_CENTER");
-
-  // Recon cost = AI-computed (accounts for bundled labor, local rates)
+  // Recon
   const confirmedFindings = findings.filter((f) => f.repairCostLow || f.repairCostHigh);
   const reconLow = confirmedFindings.reduce((s, f) => s + (f.repairCostLow || 0), 0);
   const reconHigh = confirmedFindings.reduce((s, f) => s + (f.repairCostHigh || 0), 0);
-  // Recon breakdown from AI valuation log
   const reconLog = (inspection as { aiValuationLogs?: Array<{ output: unknown }> })?.aiValuationLogs?.[0];
   const reconBreakdown = reconLog?.output as {
     totalReconCost?: number;
@@ -102,38 +97,31 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     totalReasoning?: string;
   } | null;
 
-  // Single source of truth for recon: prefer breakdown total, fall back to market analysis, then findings
   const reconEstimate = reconBreakdown?.totalReconCost
     || market?.estReconCost
     || (reconLow > 0 ? Math.round((reconLow + reconHigh) / 2) : 0);
 
-  // Fair market value & margin-driven buy price
+  // Pricing
   const estRetail = market?.estRetailPrice || market?.baselinePrice || 0;
   const condMult = market?.conditionMultiplier ?? 1;
   const histMult = market?.historyMultiplier ?? 1;
-  const fmv = Math.round(estRetail * condMult * histMult) - reconEstimate;
   const basePct = orgSettings?.targetMarginPercent ?? 20;
   const condScore = inspection?.overallScore ?? null;
   const aiMarginPct = getConditionMarginPct(basePct, condScore);
   const tierLabel = getConditionTierLabel(condScore);
   const minProfit = orgSettings?.minProfitPerUnit ?? 150000;
 
-  // Margin: flat $ override, pct override, or AI-recommended
   const flatParsed = flatMarginOverride !== "" ? Math.round(parseFloat(flatMarginOverride) * 100) : null;
   const effectiveMarginPct = marginMode === "pct" ? (marginOverride ?? aiMarginPct) : aiMarginPct;
   const dealerMarginAmount = marginMode === "flat" && flatParsed != null
     ? Math.max(flatParsed, minProfit)
     : Math.max(Math.round(estRetail * (effectiveMarginPct / 100)), minProfit);
   const maxBid = Math.max(0, Math.round((estRetail - dealerMarginAmount - reconEstimate) / 100) * 100);
-  const effectiveMarginDisplay = marginMode === "flat" && flatParsed != null
-    ? `$${(dealerMarginAmount / 100).toLocaleString()}`
-    : `${effectiveMarginPct}%`;
   const netMargin = estRetail > 0 && maxBid > 0 ? estRetail - maxBid - reconEstimate : 0;
 
-  // Odometer
   const odometer = inspection?.odometer;
 
-  // Risk data from steps
+  // Risk data
   const riskStep = steps.find((s) => s.step === "RISK_INSPECTION") || steps.find((s) => s.step === "RISK_REVIEW");
   const riskData = riskStep?.data as {
     aggregatedRisks?: Array<{
@@ -141,11 +129,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       cost: { low: number; high: number };
       costTiers?: Array<{ condition: string; label: string; costLow: number; costHigh: number }>;
       inspectionQuestions?: Array<{ id: string; question: string; failureAnswer: string }>;
-      whatThisIs?: string;
-      howToLocate?: string;
-      howToInspect?: string;
-      signsOfFailure?: string[];
-      whyItMatters?: string;
+      whatThisIs?: string; howToLocate?: string; howToInspect?: string;
+      signsOfFailure?: string[]; whyItMatters?: string;
     }>;
     checkStatuses?: Record<string, {
       status: string;
@@ -154,14 +139,14 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     }>;
   } | null;
 
-  // Compute avg days on market from comparables
+  // Comparables
   const comps = (market?.comparables ?? []) as Array<{ daysOnMarket?: number }>;
   const compsWithDom = comps.filter((c) => c.daysOnMarket && c.daysOnMarket > 0);
   const avgDaysOnMarket = compsWithDom.length > 0
     ? Math.round(compsWithDom.reduce((s, c) => s + (c.daysOnMarket || 0), 0) / compsWithDom.length)
     : null;
 
-  // Tire assessment data (extracted once for reuse across tabs)
+  // Tire assessment
   const rawConditionData = inspection?.conditionRawData as { tireAssessment?: {
     frontDriver: { condition: string; observations: string[] };
     frontPassenger: { condition: string; observations: string[] };
@@ -172,21 +157,39 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
   } } | null;
   const tireAssessment = rawConditionData?.tireAssessment ?? null;
 
+  // Hero photo — passenger front 3/4, fall back to driver 3/4, then front center
+  const heroPhoto = media.find((m) => m.captureType === "FRONT_34_PASSENGER")
+    || media.find((m) => m.captureType === "FRONT_34_DRIVER")
+    || media.find((m) => m.captureType === "FRONT_CENTER");
+
+  // Deal rating
+  const dealRating = getDealRatingBadge(market?.recommendation as string | undefined);
+
+  // Negotiation
+  const roundTo50 = (v: number) => Math.round(v / 5000) * 5000;
+  const openAt = roundTo50(Math.round(maxBid * 0.80));
+  const walkAway = roundTo50(Math.round(maxBid * 1.12));
+
+  // Source count
+  const sourceCount = (market as { sourceCount?: number } | null)?.sourceCount ?? 0;
+
+  // Confirmed risks count
+  const confirmedRiskCount = riskData?.aggregatedRisks?.filter((r) => riskData.checkStatuses?.[r.id]?.status === "CONFIRMED").length ?? 0;
+
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "offer", label: "Offer", icon: <DollarSign className="h-4 w-4" /> },
-    { key: "risks", label: "Risks", icon: <ShieldAlert className="h-4 w-4" /> },
     { key: "condition", label: "Condition", icon: <Activity className="h-4 w-4" /> },
-    { key: "market", label: "Market", icon: <TrendingUp className="h-4 w-4" /> },
+    { key: "risks", label: "Risks", icon: <ShieldAlert className="h-4 w-4" /> },
     { key: "history", label: "History", icon: <History className="h-4 w-4" /> },
+    { key: "market", label: "Market", icon: <TrendingUp className="h-4 w-4" /> },
     { key: "photos", label: "Photos", icon: <Camera className="h-4 w-4" /> },
+    { key: "report", label: "Report", icon: <FileText className="h-4 w-4" /> },
   ];
 
   return (
-    <div className="space-y-5 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto">
 
-      {/* ═══ DECISION HEADER ═══ */}
+      {/* ═══ HEADER ═══ */}
       <div>
-        {/* Top bar */}
         <div className="flex items-center justify-between mb-4">
           <Link href="/dashboard/vehicles" className="flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors">
             <ArrowLeft className="h-4 w-4" /> Vehicles
@@ -195,170 +198,283 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             {inspection?.report && (
               <Link href={`/dashboard/reports/${inspection.report.id}`}>
                 <Button variant="secondary" size="sm">
-                  <FileText className="h-3.5 w-3.5 mr-1" /> View Report
+                  <FileText className="h-3.5 w-3.5" /> View Report
                 </Button>
               </Link>
-            )}
-            {inspection && (inspection.status === "COMPLETED" || inspection.status === "MARKET_PRICED") && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => generateReport.mutate({ inspectionId: inspection.id })}
-                loading={generateReport.isPending}
-              >
-                <FileText className="h-3.5 w-3.5 mr-1" /> {inspection.report ? "Regenerate Report" : "Generate Report"}
-              </Button>
             )}
           </div>
         </div>
 
-        {/* Vehicle identity + hero photo */}
-        <div className="flex gap-4 mb-4">
+        <div className="flex gap-4">
           {heroPhoto?.url && (
-            <div className="shrink-0 w-32 h-24 sm:w-40 sm:h-28 rounded-lg overflow-hidden bg-surface-sunken border border-border-default">
+            <div className="shrink-0 w-28 h-20 sm:w-36 sm:h-24 rounded-lg overflow-hidden bg-surface-sunken border border-border-default">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={heroPhoto.url} alt={`${vehicle.year} ${vehicle.make} ${vehicle.model}`} className="w-full h-full object-cover" />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-text-primary tracking-tight">
+            <h1 className="text-[24px] font-bold text-text-primary tracking-tight">
               {vehicle.year} {vehicle.make} {vehicle.model} {vehicle.trim || ""}
             </h1>
-            <div className="flex items-center gap-3 text-sm text-text-secondary mt-1 flex-wrap">
-              <span className="font-mono text-xs">{vehicle.vin}</span>
-              {odometer && <span>{odometer.toLocaleString()} mi</span>}
-              {vehicle.drivetrain && <span>{vehicle.drivetrain}</span>}
+            <div className="flex items-center gap-2 text-sm text-text-secondary mt-1 flex-wrap">
               {vehicle.engine && <span>{vehicle.engine.replace(/(\d+\.\d{1})\d+L/, "$1L")}</span>}
+              {vehicle.engine && vehicle.drivetrain && <span className="text-text-tertiary">·</span>}
+              {vehicle.drivetrain && <span>{vehicle.drivetrain}</span>}
+              {odometer && <><span className="text-text-tertiary">·</span><span>{odometer.toLocaleString()} mi</span></>}
             </div>
+            <p className="font-mono text-xs text-text-tertiary mt-1">{vehicle.vin}</p>
           </div>
         </div>
+      </div>
 
-        {/* Condition + Recon summary */}
-        <div className="flex items-baseline gap-6 mt-2">
-          <div className="flex items-baseline gap-2">
-            <span className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Condition</span>
-            <span className="text-lg font-bold text-text-primary">
-              {conditionGrade ? conditionGrade.replace("_", " ") : "—"}
-            </span>
+      {/* ═══ THE DEAL — Hero Card ═══ */}
+      {market && estRetail > 0 ? (
+        <Card hero>
+          {/* Deal rating + condition */}
+          <div className="flex items-center justify-between mb-6">
+            <Badge variant={dealRating.variant} className="text-sm px-3 py-1">
+              {dealRating.label}
+            </Badge>
             {conditionScore != null && (
-              <span className={cn(
-                "text-sm font-bold",
-                conditionScore >= 70 ? "text-green-600" :
-                conditionScore >= 60 ? "text-amber-600" : "text-red-600"
-              )}>
-                {conditionScore}<span className="text-text-tertiary font-normal text-xs">/100</span>
-              </span>
+              <div className="flex items-center gap-2">
+                <Overline>Condition</Overline>
+                <span className="text-lg font-bold text-text-primary">{conditionScore}<span className="text-text-tertiary font-normal text-sm">/100</span></span>
+                {conditionGrade && (
+                  <span className="text-xs text-text-secondary">({conditionGrade.replace("_", " ")})</span>
+                )}
+              </div>
             )}
           </div>
-          {reconEstimate > 0 && (
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Est. Recon</span>
-              <span className="text-lg font-bold text-red-600">{formatCurrency(reconEstimate)}</span>
+
+          {/* Financial hero — 3 column */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
+            <div>
+              <Overline>Buy At</Overline>
+              <p className="text-[36px] font-bold tracking-tight text-money-neutral leading-none mt-1">
+                {formatCurrency(maxBid)}
+              </p>
+            </div>
+            <div>
+              <Overline>Est. Retail</Overline>
+              <p className="text-[18px] font-bold text-text-primary mt-1">
+                {formatCurrency(estRetail)}
+              </p>
+            </div>
+            <div>
+              <Overline>Est. Margin</Overline>
+              <p className={cn(
+                "text-[18px] font-bold mt-1",
+                netMargin > 0 ? "text-money-positive" : "text-money-negative"
+              )}>
+                {formatCurrency(Math.abs(netMargin))}
+                {netMargin < 0 && <span className="text-xs font-normal ml-1">loss</span>}
+              </p>
+            </div>
+          </div>
+
+          {/* Negotiation band */}
+          {maxBid > 0 && (
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              <div className="py-2.5 px-3 rounded-lg bg-money-bg-positive text-center">
+                <p className="text-[10px] font-semibold text-money-positive uppercase tracking-wider">Open At</p>
+                <p className="text-base font-bold text-money-positive mt-0.5">{formatCurrency(openAt)}</p>
+              </div>
+              <div className="py-2.5 px-3 rounded-lg bg-surface-raised border-2 border-text-primary text-center">
+                <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Target</p>
+                <p className="text-base font-bold text-text-primary mt-0.5">{formatCurrency(maxBid)}</p>
+              </div>
+              <div className="py-2.5 px-3 rounded-lg bg-money-bg-negative text-center">
+                <p className="text-[10px] font-semibold text-money-negative uppercase tracking-wider">Walk Away</p>
+                <p className="text-base font-bold text-money-negative mt-0.5">{formatCurrency(walkAway)}</p>
+              </div>
             </div>
           )}
-        </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 mt-5">
-          {latestInspection?.purchaseOutcome ? (
-            <>
-              <div className={cn(
-                "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border",
-                latestInspection.purchaseOutcome === "PURCHASED"
-                  ? "border-text-primary bg-text-primary text-white"
-                  : "border-border-default text-text-secondary"
-              )}>
-                {latestInspection.purchaseOutcome === "PURCHASED"
-                  ? <><Check className="h-3.5 w-3.5" /> Purchased{latestInspection.purchasePrice ? ` for ${formatCurrency(latestInspection.purchasePrice)}` : ""}</>
-                  : <><X className="h-3.5 w-3.5" /> Passed</>
-                }
+          {/* Quick stats line */}
+          <div className="flex items-center gap-4 text-xs text-text-secondary flex-wrap">
+            {reconEstimate > 0 && (
+              <span>Recon: <span className="font-semibold text-money-negative">{formatCurrency(reconEstimate)}</span></span>
+            )}
+            {confirmedRiskCount > 0 && (
+              <span>{confirmedRiskCount} risk{confirmedRiskCount !== 1 ? "s" : ""} confirmed</span>
+            )}
+            {avgDaysOnMarket != null && (
+              <span>Avg. {avgDaysOnMarket}d on lot</span>
+            )}
+            {sourceCount > 0 && (
+              <span>{sourceCount} data source{sourceCount !== 1 ? "s" : ""}</span>
+            )}
+          </div>
+
+          {/* Collapsible margin adjuster */}
+          <div className="mt-4 pt-4 border-t border-border-default">
+            <button
+              onClick={() => setShowDealAdjust(!showDealAdjust)}
+              className="flex items-center gap-1.5 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              Adjust Margin
+              {showDealAdjust ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+
+            {showDealAdjust && (
+              <div className="mt-3 p-3 rounded-lg bg-surface-overlay border border-border-default">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-text-primary">Dealer Margin</span>
+                  <div className="flex items-center gap-0.5 bg-surface-sunken rounded-md p-0.5">
+                    <button
+                      onClick={() => setMarginMode("pct")}
+                      className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                        marginMode === "pct" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                      )}
+                    >%</button>
+                    <button
+                      onClick={() => setMarginMode("flat")}
+                      className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
+                        marginMode === "flat" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                      )}
+                    >$</button>
+                  </div>
+                </div>
+                {marginMode === "pct" ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setMarginOverride(Math.max(5, effectiveMarginPct - 1))}
+                        className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+                      >-</button>
+                      <span className="text-lg font-bold text-text-primary w-12 text-center">{effectiveMarginPct}%</span>
+                      <button
+                        onClick={() => setMarginOverride(Math.min(50, effectiveMarginPct + 1))}
+                        className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
+                      >+</button>
+                    </div>
+                    <span className="text-[10px] text-text-tertiary ml-1">
+                      {marginOverride != null ? (
+                        <button onClick={() => setMarginOverride(null)} className="text-brand-600 hover:underline">
+                          Reset to {aiMarginPct}% ({tierLabel})
+                        </button>
+                      ) : (
+                        <>AI recommended ({tierLabel} condition)</>
+                      )}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-text-secondary">$</span>
+                    <input
+                      type="number"
+                      value={flatMarginOverride !== "" ? flatMarginOverride : (dealerMarginAmount / 100).toString()}
+                      onChange={(e) => setFlatMarginOverride(e.target.value)}
+                      className="w-24 text-lg font-bold bg-white border border-border-default rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      min={0}
+                      step={100}
+                    />
+                    <span className="text-[10px] text-text-tertiary">
+                      {flatMarginOverride !== "" ? (
+                        <button onClick={() => { setFlatMarginOverride(""); setMarginMode("pct"); }} className="text-brand-600 hover:underline">
+                          Reset to {aiMarginPct}% ({tierLabel})
+                        </button>
+                      ) : (
+                        <>Min floor: ${(minProfit / 100).toLocaleString()}</>
+                      )}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-default text-xs">
+                  <span className="text-text-tertiary">Margin: {formatCurrency(dealerMarginAmount)}</span>
+                  <span className="text-text-tertiary">Buy Price: <span className="font-semibold text-text-primary">{formatCurrency(maxBid)}</span></span>
+                </div>
               </div>
-              <Link href="/dashboard/inspections/new">
-                <Button variant="ghost" size="sm">
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
-                </Button>
-              </Link>
-            </>
-          ) : latestInspection ? (
-            <>
-              <button
-                onClick={() => setShowPriceInput(true)}
-                disabled={showPriceInput}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-strong text-text-primary hover:bg-surface-hover transition-colors disabled:opacity-50"
-              >
-                <ThumbsUp className="h-3.5 w-3.5" /> I Bought It
-              </button>
-              <button
-                onClick={() => recordOutcome.mutate({ inspectionId: latestInspection.id, outcome: "PASSED" })}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-strong text-text-primary hover:bg-surface-hover transition-colors"
-              >
-                <ThumbsDown className="h-3.5 w-3.5" /> I Passed
-              </button>
-              <Link href="/dashboard/inspections/new">
-                <Button variant="ghost" size="sm">
-                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Re-Inspect
-                </Button>
-              </Link>
-            </>
-          ) : (
+            )}
+          </div>
+        </Card>
+      ) : (
+        <Card className="text-center py-8">
+          <DollarSign className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
+          <p className="text-sm text-text-secondary">No market data yet. Complete an inspection to see the deal.</p>
+        </Card>
+      )}
+
+      {/* ═══ ACTION BUTTONS ═══ */}
+      <div className="flex items-center gap-2">
+        {latestInspection?.purchaseOutcome ? (
+          <>
+            <div className={cn(
+              "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border",
+              latestInspection.purchaseOutcome === "PURCHASED"
+                ? "border-text-primary bg-text-primary text-white"
+                : "border-border-default text-text-secondary"
+            )}>
+              {latestInspection.purchaseOutcome === "PURCHASED"
+                ? <><Check className="h-3.5 w-3.5" /> Purchased{latestInspection.purchasePrice ? ` for ${formatCurrency(latestInspection.purchasePrice)}` : ""}</>
+                : <><X className="h-3.5 w-3.5" /> Passed</>
+              }
+            </div>
             <Link href="/dashboard/inspections/new">
               <Button variant="ghost" size="sm">
-                <RefreshCw className="h-3.5 w-3.5 mr-1" /> New Inspection
+                <RefreshCw className="h-3.5 w-3.5" /> Re-Inspect
               </Button>
             </Link>
-          )}
-        </div>
-
-        {/* Purchase price input */}
-        {showPriceInput && latestInspection && (
-          <div className="flex items-center gap-2 mt-3 p-3 rounded-lg border border-border-default bg-surface-raised">
-            <span className="text-sm text-text-secondary">$</span>
-            <input
-              type="number"
-              placeholder="Purchase price"
-              value={purchasePrice}
-              onChange={(e) => setPurchasePrice(e.target.value)}
-              className="flex-1 text-sm bg-white border border-border-default rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-text-primary"
-              autoFocus
-            />
+          </>
+        ) : latestInspection ? (
+          <>
             <button
-              onClick={() => recordOutcome.mutate({
-                inspectionId: latestInspection.id,
-                outcome: "PURCHASED",
-                purchasePrice: purchasePrice ? Math.round(parseFloat(purchasePrice) * 100) : undefined,
-              })}
-              className="px-4 py-1.5 rounded-md text-sm font-medium bg-text-primary text-white hover:opacity-90"
+              onClick={() => setShowPriceInput(true)}
+              disabled={showPriceInput}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-strong text-text-primary hover:bg-surface-hover transition-colors disabled:opacity-50"
             >
-              Confirm
+              <ThumbsUp className="h-3.5 w-3.5" /> I Bought It
             </button>
             <button
-              onClick={() => { setShowPriceInput(false); setPurchasePrice(""); }}
-              className="px-3 py-1.5 rounded-md text-sm text-text-tertiary hover:text-text-primary"
+              onClick={() => recordOutcome.mutate({ inspectionId: latestInspection.id, outcome: "PASSED" })}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-border-strong text-text-primary hover:bg-surface-hover transition-colors"
             >
-              Cancel
+              <ThumbsDown className="h-3.5 w-3.5" /> I Passed
             </button>
-          </div>
+            <Link href="/dashboard/inspections/new">
+              <Button variant="ghost" size="sm">
+                <RefreshCw className="h-3.5 w-3.5" /> Re-Inspect
+              </Button>
+            </Link>
+          </>
+        ) : (
+          <Link href="/dashboard/inspections/new">
+            <Button variant="ghost" size="sm">
+              <RefreshCw className="h-3.5 w-3.5" /> New Inspection
+            </Button>
+          </Link>
         )}
       </div>
 
-      {/* ═══ DEAL STRIP ═══ */}
-      {market && (
-        <div className="rounded-lg bg-surface-sunken px-2 py-2">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
-            {[
-              { label: "Est. Retail", value: estRetail, color: "text-text-primary" },
-              { label: "Est. Recon", value: reconEstimate, color: "text-red-600" },
-              { label: "Net Margin", value: netMargin, color: netMargin > 0 ? "text-green-700" : "text-red-600" },
-              { label: "Avg. Time on Lot", value: avgDaysOnMarket, color: "text-text-primary", suffix: " days", raw: true },
-            ].map(({ label, value, color, suffix, raw }) => (
-              <div key={label} className="px-3 py-2.5 text-center">
-                <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
-                <p className={cn("text-sm font-semibold mt-0.5", color)}>
-                  {value ? `${raw ? value : formatCurrency(typeof value === "number" ? value : 0)}${suffix || ""}` : "—"}
-                </p>
-              </div>
-            ))}
-          </div>
+      {/* Purchase price input */}
+      {showPriceInput && latestInspection && (
+        <div className="flex items-center gap-2 p-3 rounded-lg border border-border-default bg-surface-raised">
+          <span className="text-sm text-text-secondary">$</span>
+          <input
+            type="number"
+            placeholder="Purchase price"
+            value={purchasePrice}
+            onChange={(e) => setPurchasePrice(e.target.value)}
+            className="flex-1 text-sm bg-white border border-border-default rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-text-primary"
+            autoFocus
+          />
+          <button
+            onClick={() => recordOutcome.mutate({
+              inspectionId: latestInspection.id,
+              outcome: "PURCHASED",
+              purchasePrice: purchasePrice ? Math.round(parseFloat(purchasePrice) * 100) : undefined,
+            })}
+            className="px-4 py-1.5 rounded-md text-sm font-medium bg-text-primary text-white hover:opacity-90"
+          >
+            Confirm
+          </button>
+          <button
+            onClick={() => { setShowPriceInput(false); setPurchasePrice(""); }}
+            className="px-3 py-1.5 rounded-md text-sm text-text-tertiary hover:text-text-primary"
+          >
+            Cancel
+          </button>
         </div>
       )}
 
@@ -383,162 +499,16 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
       {/* ═══ TAB CONTENT ═══ */}
 
-      {/* Offer Tab */}
-      {activeTab === "offer" && (
-        <div className="space-y-5">
-          {/* Dealer Margin Adjuster */}
-          {estRetail > 0 && (
-            <div className="p-3 rounded-lg bg-surface-overlay border border-border-default">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-text-primary">Dealer Margin</span>
-                <div className="flex items-center gap-0.5 bg-surface-sunken rounded-md p-0.5">
-                  <button
-                    onClick={() => setMarginMode("pct")}
-                    className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-                      marginMode === "pct" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
-                    )}
-                  >%</button>
-                  <button
-                    onClick={() => setMarginMode("flat")}
-                    className={cn("px-2 py-0.5 rounded text-[10px] font-medium transition-colors",
-                      marginMode === "flat" ? "bg-white text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
-                    )}
-                  >$</button>
-                </div>
-              </div>
-              {marginMode === "pct" ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setMarginOverride(Math.max(5, effectiveMarginPct - 1))}
-                      className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
-                    >-</button>
-                    <span className="text-lg font-bold text-text-primary w-12 text-center">{effectiveMarginPct}%</span>
-                    <button
-                      onClick={() => setMarginOverride(Math.min(50, effectiveMarginPct + 1))}
-                      className="w-7 h-7 rounded-md text-sm font-bold text-text-secondary bg-surface-sunken hover:bg-surface-hover transition-colors"
-                    >+</button>
-                  </div>
-                  <span className="text-[10px] text-text-tertiary ml-1">
-                    {marginOverride != null ? (
-                      <button onClick={() => setMarginOverride(null)} className="text-brand-600 hover:underline">
-                        Reset to {aiMarginPct}% ({tierLabel})
-                      </button>
-                    ) : (
-                      <>AI recommended ({tierLabel} condition)</>
-                    )}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-text-secondary">$</span>
-                  <input
-                    type="number"
-                    value={flatMarginOverride !== "" ? flatMarginOverride : (dealerMarginAmount / 100).toString()}
-                    onChange={(e) => setFlatMarginOverride(e.target.value)}
-                    className="w-24 text-lg font-bold bg-white border border-border-default rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-600"
-                    min={0}
-                    step={100}
-                  />
-                  <span className="text-[10px] text-text-tertiary">
-                    {flatMarginOverride !== "" ? (
-                      <button onClick={() => { setFlatMarginOverride(""); setMarginMode("pct"); }} className="text-brand-600 hover:underline">
-                        Reset to {aiMarginPct}% ({tierLabel})
-                      </button>
-                    ) : (
-                      <>Min floor: ${(minProfit / 100).toLocaleString()}</>
-                    )}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-default text-xs">
-                <span className="text-text-tertiary">Margin: {formatCurrency(dealerMarginAmount)}</span>
-                <span className="text-text-tertiary">Buy Price: <span className="font-semibold text-text-primary">{formatCurrency(maxBid)}</span></span>
-              </div>
-            </div>
-          )}
-
-          {/* Negotiation Playbook */}
-          {maxBid > 0 && (() => {
-            const roundTo50 = (v: number) => Math.round(v / 5000) * 5000;
-            const openAt = roundTo50(Math.round(maxBid * 0.80));
-            const walkAway = roundTo50(Math.round(maxBid * 1.12));
-            return (
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-center">
-                  <p className="text-xs text-green-600 uppercase tracking-wider font-medium">Open At</p>
-                  <p className="text-2xl font-bold text-green-700 mt-1">{formatCurrency(openAt)}</p>
-                  <p className="text-[10px] text-green-500 mt-1">Start here</p>
-                </div>
-                <div className="p-4 rounded-lg bg-white border-2 border-text-primary text-center">
-                  <p className="text-xs text-text-tertiary uppercase tracking-wider font-medium">Target</p>
-                  <p className="text-2xl font-bold text-text-primary mt-1">{formatCurrency(maxBid)}</p>
-                  <p className="text-[10px] text-text-tertiary mt-1">Recommended buy</p>
-                </div>
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-center">
-                  <p className="text-xs text-red-500 uppercase tracking-wider font-medium">Walk Away</p>
-                  <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(walkAway)}</p>
-                  <p className="text-[10px] text-red-400 mt-1">Don&apos;t exceed</p>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Offer Justification Builder */}
-          {inspection && (
-            <OfferBuilder
-              inspectionId={inspection.id}
-              inspection={inspection as { offerMode?: string | null; offerNotes?: string | null; offerCostBreakdown?: unknown }}
-            />
-          )}
-
-          {/* ── Seller Report Preview ── */}
-          {market && inspection && (
-            <>
-              <div className="divider-brand-gradient my-2" />
-              <div>
-                <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
-                  Seller Report Preview
-                </p>
-                <div className="rounded-xl border-2 border-dashed border-border-strong p-4 bg-surface-raised">
-                  <MarketAnalysisSection
-                    data={market}
-                    audience="seller"
-                    overallScore={condScore}
-                    reconCostOverride={reconEstimate > 0 ? reconEstimate : undefined}
-                    targetMarginPercent={orgSettings?.targetMarginPercent}
-                    minProfitPerUnit={orgSettings?.minProfitPerUnit}
-                    marginOverride={marginOverride}
-                    offerMode={inspection.offerMode}
-                    offerNotes={inspection.offerNotes}
-                    offerCostBreakdown={inspection.offerCostBreakdown as MarketAnalysisSectionProps["offerCostBreakdown"]}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ── Generate Report Button ── */}
-          {inspection && market && (
-            <GenerateReportButton inspectionId={inspection.id} existingReportId={latestInspection?.report?.id} />
-          )}
-
-          {!market && (
-            <Card className="p-8 text-center">
-              <DollarSign className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
-              <p className="text-sm text-text-secondary">No market data yet. Complete an inspection to build your offer.</p>
-            </Card>
-          )}
-        </div>
-      )}
-
       {/* Condition Tab */}
       {activeTab === "condition" && (
-        <div className="space-y-5">
-          {/* Overall + 4-area breakdown */}
+        <div className="space-y-6">
+          {/* 4-area breakdown */}
           {conditionScore != null && (
             <div>
-              <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">Condition Assessment</h3>
+              <div className="flex items-center justify-between mb-4">
+                <Overline>Condition Assessment</Overline>
+                <span className="text-sm font-bold text-text-primary">{conditionScore}/100 overall</span>
+              </div>
               <div className="space-y-4">
                 {[
                   { label: "Exterior Body", key: "exteriorBody", score: inspection?.exteriorBodyScore, weight: "30%" },
@@ -547,36 +517,26 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   { label: "Underbody / Frame", key: "underbodyFrame", score: inspection?.underbodyFrameScore, weight: "20%" },
                 ].map(({ label, key, score, weight }) => {
                   const areaDetail = rawConditionData?.[key as keyof typeof rawConditionData] as {
-                    summary?: string; keyObservations?: string[]; concerns?: string[]; scoreJustification?: string;
+                    summary?: string; concerns?: string[];
                   } | undefined;
-                  const dotColor = (score || 0) >= 7 ? "bg-green-500" : (score || 0) >= 6 ? "bg-yellow-400" : "bg-red-500";
+                  const subtitle = [
+                    areaDetail?.summary,
+                    ...(areaDetail?.concerns?.map((c) => `⚠ ${c}`) || []),
+                  ].filter(Boolean).join(" — ");
                   return (
-                    <div key={label} className="pb-4 border-b border-border-default last:border-0 last:pb-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColor)} />
-                          <span className="text-sm font-medium text-text-primary">{label}</span>
-                        </div>
-                        <span className="text-sm font-bold text-text-primary">{score ?? "—"}/10</span>
-                      </div>
-                      {areaDetail?.summary && (
-                        <p className="text-sm text-text-secondary mt-1 leading-relaxed ml-[18px]">{areaDetail.summary}</p>
-                      )}
-                      {areaDetail?.concerns && areaDetail.concerns.length > 0 && (
-                        <div className="mt-1 ml-[18px]">
-                          {areaDetail.concerns.map((c, i) => (
-                            <p key={i} className="text-sm text-red-600 leading-relaxed">• {c}</p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <ConditionBar
+                      key={label}
+                      label={`${label} (${weight})`}
+                      score={score as number | null}
+                      subtitle={subtitle || undefined}
+                    />
                   );
                 })}
               </div>
             </div>
           )}
 
-          {/* Tire Condition — inline in condition tab */}
+          {/* Tire Condition */}
           {tireAssessment && (() => {
             const tireEntries = [
               { label: "Front Left", key: "TIRE_FRONT_DRIVER", data: tireAssessment.frontDriver },
@@ -584,12 +544,12 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               { label: "Rear Left", key: "TIRE_REAR_DRIVER", data: tireAssessment.rearDriver },
               { label: "Rear Right", key: "TIRE_REAR_PASSENGER", data: tireAssessment.rearPassenger },
             ];
-            const dotColor = (c: string) => c === "GOOD" ? "bg-green-500" : c === "WORN" ? "bg-yellow-400" : "bg-red-500";
+            const dotColor = (c: string): "green" | "yellow" | "red" => c === "GOOD" ? "green" : c === "WORN" ? "yellow" : "red";
             const condLabel = (c: string) => c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
 
             return (
               <div>
-                <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">Tire Condition</h3>
+                <Overline className="block mb-4">Tire Condition</Overline>
                 <div className="grid grid-cols-2 gap-3">
                   {tireEntries.map(({ label, key, data }) => {
                     const tirePhoto = media.find((m) => m.captureType === key);
@@ -603,7 +563,7 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
-                            <div className={cn("w-2 h-2 rounded-full shrink-0", dotColor(data.condition))} />
+                            <StatusDot color={dotColor(data.condition)} />
                             <span className="text-xs font-medium text-text-primary">{label}</span>
                           </div>
                           <p className="text-xs font-semibold text-text-primary">{condLabel(data.condition)}</p>
@@ -624,21 +584,21 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             );
           })()}
 
-          {/* Identified issues */}
+          {/* Identified Issues */}
           {findings.length > 0 && (
             <div>
-              <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">
-                Identified Issues ({findings.length})
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <Overline>Identified Issues ({findings.length})</Overline>
+                {reconEstimate > 0 && (
+                  <span className="text-sm font-bold text-money-negative">{formatCurrency(reconEstimate)} recon</span>
+                )}
+              </div>
               <div className="space-y-2">
                 {findings.map((f) => {
-                  // Cross-reference with risk data to get tier label (repair action)
                   const matchingRisk = riskData?.aggregatedRisks?.find((r) => r.title === f.title);
                   const check = matchingRisk ? riskData?.checkStatuses?.[matchingRisk.id] : null;
 
-                  // Determine which tier applies based on question answers
                   let tierLabel: string | null = null;
-                  let tierCost: number | null = null;
                   if (matchingRisk?.costTiers && matchingRisk.costTiers.length === 3 && check?.questionAnswers) {
                     const failureCount = check.questionAnswers.filter((qa) => {
                       const q = matchingRisk.inspectionQuestions?.find((iq) => iq.id === qa.questionId);
@@ -646,74 +606,69 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                     }).length;
                     const tierIndex = Math.min(Math.max(failureCount - 1, 0), 2);
                     const tier = matchingRisk.costTiers[tierIndex];
-                    if (tier) {
-                      tierLabel = tier.label;
-                      tierCost = Math.round((tier.costLow + tier.costHigh) / 2);
-                    }
+                    if (tier) tierLabel = tier.label;
                   }
 
-                  // Fall back to finding cost midpoint if no tier data
-                  const repairCost = tierCost || (f.repairCostLow && f.repairCostHigh
-                    ? Math.round((f.repairCostLow + f.repairCostHigh) / 2)
-                    : f.repairCostLow || f.repairCostHigh || null);
+                  const repairCost = f.repairCostLow && f.repairCostHigh
+                    ? `${formatCurrency(f.repairCostLow)} – ${formatCurrency(f.repairCostHigh)}`
+                    : f.repairCostLow ? formatCurrency(f.repairCostLow)
+                    : f.repairCostHigh ? formatCurrency(f.repairCostHigh)
+                    : null;
 
                   return (
                     <div
                       key={f.id}
-                      className="p-3 rounded-lg border border-border-default bg-surface-raised border-l-4 border-l-red-500"
+                      className="flex items-center justify-between p-3 rounded-lg border border-border-default bg-surface-raised border-l-4 border-l-red-500"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-text-primary">{f.title}</span>
-                        <Badge variant={f.severity === "CRITICAL" ? "danger" : f.severity === "MAJOR" ? "warning" : "default"} className="text-[10px] shrink-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <StatusDot color={f.severity === "CRITICAL" || f.severity === "MAJOR" ? "red" : "yellow"} className="w-2.5 h-2.5" />
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium text-text-primary">{f.title}</span>
+                          {tierLabel && (
+                            <span className="text-xs text-money-negative ml-2">· {tierLabel}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {repairCost && (
+                          <span className="text-xs font-semibold text-money-negative">{repairCost}</span>
+                        )}
+                        <Badge variant={f.severity === "CRITICAL" ? "danger" : f.severity === "MAJOR" ? "warning" : "default"} className="text-[10px]">
                           {f.severity}
                         </Badge>
                       </div>
-                      {/* Repair action — what needs to be done */}
-                      {tierLabel && (
-                        <p className="text-xs font-medium text-red-700 mt-1">
-                          Repair: {tierLabel}
-                        </p>
-                      )}
-                      {f.description && (
-                        <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{f.description}</p>
-                      )}
                     </div>
                   );
                 })}
               </div>
-              {/* Recon breakdown — AI-computed with justification */}
-              {reconEstimate > 0 && (
+
+              {/* Recon breakdown */}
+              {reconEstimate > 0 && reconBreakdown?.itemizedCosts && reconBreakdown.itemizedCosts.length > 0 && (
                 <div className="pt-3 mt-3 border-t border-border-default space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-text-primary">Total Est. Reconditioning</span>
-                    <span className="text-sm font-bold text-red-600">{formatCurrency(reconEstimate)}</span>
+                    <span className="text-sm font-bold text-money-negative">{formatCurrency(reconEstimate)}</span>
                   </div>
-
-                  {/* Itemized cost justification */}
-                  {reconBreakdown?.itemizedCosts && reconBreakdown.itemizedCosts.length > 0 && (
-                    <div className="space-y-1.5 mt-2">
-                      {reconBreakdown.itemizedCosts.map((item, i) => (
-                        <div key={i} className="flex items-start justify-between text-xs px-2 py-1.5 rounded bg-surface-sunken">
-                          <div className="flex-1 min-w-0 mr-3">
-                            <span className="font-medium text-text-primary">{item.finding}</span>
-                            {item.reasoning && (
-                              <p className="text-text-tertiary mt-0.5">{item.reasoning}</p>
-                            )}
-                            {(item.laborHours || item.partsEstimate) && (
-                              <p className="text-text-tertiary mt-0.5">
-                                {item.laborHours ? `${item.laborHours}h labor` : ""}
-                                {item.laborHours && item.partsEstimate ? " + " : ""}
-                                {item.partsEstimate ? `${formatCurrency(item.partsEstimate)} parts` : ""}
-                              </p>
-                            )}
-                          </div>
-                          <span className="font-medium text-red-600 shrink-0">{formatCurrency(item.estimatedCostCents)}</span>
+                  <div className="space-y-1.5 mt-2">
+                    {reconBreakdown.itemizedCosts.map((item, i) => (
+                      <div key={i} className="flex items-start justify-between text-xs px-2 py-1.5 rounded bg-surface-sunken">
+                        <div className="flex-1 min-w-0 mr-3">
+                          <span className="font-medium text-text-primary">{item.finding}</span>
+                          {item.reasoning && (
+                            <p className="text-text-tertiary mt-0.5">{item.reasoning}</p>
+                          )}
+                          {(item.laborHours || item.partsEstimate) && (
+                            <p className="text-text-tertiary mt-0.5">
+                              {item.laborHours ? `${item.laborHours}h labor` : ""}
+                              {item.laborHours && item.partsEstimate ? " + " : ""}
+                              {item.partsEstimate ? `${formatCurrency(item.partsEstimate)} parts` : ""}
+                            </p>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Labor rate context */}
+                        <span className="font-medium text-money-negative shrink-0">{formatCurrency(item.estimatedCostCents)}</span>
+                      </div>
+                    ))}
+                  </div>
                   {reconBreakdown?.laborRateContext && (
                     <p className="text-[10px] text-text-tertiary mt-1">{reconBreakdown.laborRateContext}</p>
                   )}
@@ -731,104 +686,26 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {/* History Tab */}
-      {activeTab === "history" && (
-        <div className="space-y-5">
-          {history ? (
-            <>
-              {/* Status flags */}
-              <div>
-                <h3 className="text-base font-semibold text-text-primary tracking-tight mb-4">Vehicle History</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {[
-                    { label: "Title Status", value: history.titleStatus || "Unknown", bad: history.titleStatus !== "CLEAN" },
-                    { label: "Accidents", value: String(history.accidentCount ?? "Unknown"), bad: (history.accidentCount || 0) > 0 },
-                    { label: "Owners", value: String(history.ownerCount ?? "Unknown"), bad: (history.ownerCount || 0) > 3 },
-                    { label: "Structural Damage", value: history.structuralDamage ? "YES" : "No", bad: !!history.structuralDamage },
-                    { label: "Flood Damage", value: history.floodDamage ? "YES" : "No", bad: !!history.floodDamage },
-                  ].map(({ label, value, bad }) => (
-                    <div key={label} className="p-3 rounded-lg border border-border-default bg-surface-raised text-center">
-                      <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
-                      <p className={cn("text-sm font-bold mt-0.5", bad ? "text-red-600" : "text-text-primary")}>{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Odometer timeline */}
-              {history.rawData?.odometerReadings && history.rawData.odometerReadings.length > 0 && (
-                <div>
-                  <h3 className="text-base font-semibold text-text-primary tracking-tight mb-3">Odometer History</h3>
-                  <div className="space-y-1.5">
-                    {history.rawData.odometerReadings.slice(0, 10).map((reading, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-border-default last:border-0">
-                        <span className="text-text-secondary">{reading.date || "—"}</span>
-                        <span className="font-medium text-text-primary">{reading.odometer?.toLocaleString()} mi</span>
-                        <span className="text-text-tertiary">{reading.source || ""}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <Card className="p-8 text-center">
-              <History className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
-              <p className="text-sm text-text-secondary">No history data yet. Complete an inspection to fetch vehicle history.</p>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Market Tab */}
-      {activeTab === "market" && (
-        <div>
-          {market ? (
-            <MarketAnalysisSection data={market} compact hideHero targetMarginPercent={orgSettings?.targetMarginPercent} minProfitPerUnit={orgSettings?.minProfitPerUnit} reconCostOverride={reconEstimate > 0 ? reconEstimate : undefined} overallScore={condScore} marginOverride={marginOverride} />
-          ) : (
-            <Card className="p-8 text-center">
-              <TrendingUp className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
-              <p className="text-sm text-text-secondary">No market data yet. Complete an inspection to run market analysis.</p>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* Photos Tab */}
-      {activeTab === "photos" && (
-        <div>
-          {media.length > 0 ? (
-            <PhotoGallery media={media} findings={findings} />
-          ) : (
-            <Card className="p-8 text-center">
-              <Camera className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
-              <p className="text-sm text-text-secondary">No photos yet. Complete an inspection to capture vehicle photos.</p>
-            </Card>
-          )}
-        </div>
-      )}
-
       {/* Risks Tab */}
       {activeTab === "risks" && (
         <div className="space-y-5">
           {riskData?.aggregatedRisks && riskData.aggregatedRisks.length > 0 ? (
             <div className="space-y-3">
-              <h3 className="text-base font-semibold text-text-primary tracking-tight">
+              <Overline>
                 Known Risk Areas ({riskData.aggregatedRisks.length})
-              </h3>
+              </Overline>
               {riskData.aggregatedRisks.map((risk) => {
                 const check = riskData.checkStatuses?.[risk.id];
                 const status = check?.status || "NOT_CHECKED";
 
                 const statusStyle = status === "CONFIRMED"
-                  ? { border: "border-border-default border-l-4 border-l-red-500", text: "text-red-600", label: "Identified" }
+                  ? { border: "border-border-default border-l-4 border-l-red-500", text: "text-red-600", label: "Identified", dot: "red" as const }
                   : status === "NOT_FOUND"
-                  ? { border: "border-border-default", text: "text-green-600", label: "Clear" }
+                  ? { border: "border-border-default", text: "text-green-600", label: "Clear", dot: "green" as const }
                   : status === "UNABLE_TO_INSPECT"
-                  ? { border: "border-border-default", text: "text-text-tertiary", label: "Skipped" }
-                  : { border: "border-border-default", text: "text-text-tertiary", label: "Not Checked" };
+                  ? { border: "border-border-default", text: "text-text-tertiary", label: "Skipped", dot: "yellow" as const }
+                  : { border: "border-border-default", text: "text-text-tertiary", label: "Not Checked", dot: "gray" as const };
 
-                // Get evidence photos for this risk
                 const evidenceMediaIds = check?.mediaIds || [];
                 const questionMediaIds = check?.questionAnswers?.flatMap((qa) => qa.mediaIds || []) || [];
                 const allEvidenceIds = [...evidenceMediaIds, ...questionMediaIds];
@@ -838,9 +715,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
 
                 return (
                   <div key={risk.id} className={cn("p-4 rounded-lg border bg-surface-raised", statusStyle.border)}>
-                    {/* Header */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
+                        <StatusDot color={statusStyle.dot} className="w-2.5 h-2.5" />
                         <span className="text-sm font-semibold text-text-primary">{risk.title}</span>
                         <Badge variant={
                           risk.severity === "CRITICAL" ? "danger" :
@@ -852,15 +729,13 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                       <span className={cn("text-xs font-bold", statusStyle.text)}>{statusStyle.label}</span>
                     </div>
 
-                    {/* Description */}
                     {risk.description && (
                       <p className="text-xs text-text-secondary leading-relaxed mb-2">{risk.description}</p>
                     )}
 
-                    {/* How it was checked — questions + answers */}
                     {risk.inspectionQuestions && risk.inspectionQuestions.length > 0 && check?.questionAnswers && (
                       <div className="mb-2 space-y-1">
-                        <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Inspection Checks</p>
+                        <Overline className="block mb-1">Inspection Checks</Overline>
                         {risk.inspectionQuestions.map((q) => {
                           const qa = check.questionAnswers?.find((a) => a.questionId === q.id);
                           const answered = qa?.answer != null;
@@ -891,7 +766,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                       </div>
                     )}
 
-                    {/* Evidence photos */}
                     {evidencePhotos.length > 0 && (
                       <div className="flex gap-2 mt-2">
                         {evidencePhotos.map((p) => (
@@ -903,7 +777,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                       </div>
                     )}
 
-                    {/* Why it matters */}
                     {risk.whyItMatters && status === "CONFIRMED" && (
                       <p className="text-sm text-red-600 mt-2">{risk.whyItMatters}</p>
                     )}
@@ -912,9 +785,133 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               })}
             </div>
           ) : (
-            <Card className="p-8 text-center">
+            <Card className="py-8 text-center">
               <ShieldAlert className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
               <p className="text-sm text-text-secondary">No risk profile yet. Complete an inspection to generate risk analysis.</p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* History Tab */}
+      {activeTab === "history" && (
+        <div className="space-y-5">
+          {history ? (
+            <>
+              <div>
+                <Overline className="block mb-4">Vehicle History</Overline>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {[
+                    { label: "Title Status", value: history.titleStatus || "Unknown", bad: history.titleStatus !== "CLEAN" },
+                    { label: "Accidents", value: String(history.accidentCount ?? "Unknown"), bad: (history.accidentCount || 0) > 0 },
+                    { label: "Owners", value: String(history.ownerCount ?? "Unknown"), bad: (history.ownerCount || 0) > 3 },
+                    { label: "Structural Damage", value: history.structuralDamage ? "YES" : "No", bad: !!history.structuralDamage },
+                    { label: "Flood Damage", value: history.floodDamage ? "YES" : "No", bad: !!history.floodDamage },
+                  ].map(({ label, value, bad }) => (
+                    <div key={label} className="p-3 rounded-lg border border-border-default bg-surface-raised text-center">
+                      <p className="text-[10px] text-text-tertiary uppercase tracking-wider font-medium">{label}</p>
+                      <p className={cn("text-sm font-bold mt-0.5", bad ? "text-money-negative" : "text-text-primary")}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {history.rawData?.odometerReadings && history.rawData.odometerReadings.length > 0 && (
+                <div>
+                  <Overline className="block mb-3">Odometer History</Overline>
+                  <div className="space-y-1.5">
+                    {history.rawData.odometerReadings.slice(0, 10).map((reading, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs py-1.5 border-b border-border-default last:border-0">
+                        <span className="text-text-secondary">{reading.date || "—"}</span>
+                        <span className="font-medium text-text-primary tabular-nums">{reading.odometer?.toLocaleString()} mi</span>
+                        <span className="text-text-tertiary">{reading.source || ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <Card className="py-8 text-center">
+              <History className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
+              <p className="text-sm text-text-secondary">No history data yet. Complete an inspection to fetch vehicle history.</p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Market Tab */}
+      {activeTab === "market" && (
+        <div>
+          {market ? (
+            <MarketAnalysisSection data={market} compact hideHero targetMarginPercent={orgSettings?.targetMarginPercent} minProfitPerUnit={orgSettings?.minProfitPerUnit} reconCostOverride={reconEstimate > 0 ? reconEstimate : undefined} overallScore={condScore} marginOverride={marginOverride} />
+          ) : (
+            <Card className="py-8 text-center">
+              <TrendingUp className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
+              <p className="text-sm text-text-secondary">No market data yet. Complete an inspection to run market analysis.</p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Photos Tab */}
+      {activeTab === "photos" && (
+        <div>
+          {media.length > 0 ? (
+            <PhotoGallery media={media} findings={findings} />
+          ) : (
+            <Card className="py-8 text-center">
+              <Camera className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
+              <p className="text-sm text-text-secondary">No photos yet. Complete an inspection to capture vehicle photos.</p>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Report Tab */}
+      {activeTab === "report" && (
+        <div className="space-y-5">
+          {/* Generate / Regenerate */}
+          {inspection && market && (
+            <GenerateReportButton inspectionId={inspection.id} existingReportId={latestInspection?.report?.id} />
+          )}
+
+          {/* Offer Justification Builder */}
+          {inspection && (
+            <OfferBuilder
+              inspectionId={inspection.id}
+              inspection={inspection as { offerMode?: string | null; offerNotes?: string | null; offerCostBreakdown?: unknown }}
+            />
+          )}
+
+          {/* Seller Report Preview */}
+          {market && inspection && (
+            <>
+              <div className="divider-brand-gradient my-2" />
+              <div>
+                <Overline className="block mb-3">Seller Report Preview</Overline>
+                <div className="rounded-xl border-2 border-dashed border-border-strong p-4 bg-surface-raised">
+                  <MarketAnalysisSection
+                    data={market}
+                    audience="seller"
+                    overallScore={condScore}
+                    reconCostOverride={reconEstimate > 0 ? reconEstimate : undefined}
+                    targetMarginPercent={orgSettings?.targetMarginPercent}
+                    minProfitPerUnit={orgSettings?.minProfitPerUnit}
+                    marginOverride={marginOverride}
+                    offerMode={inspection.offerMode}
+                    offerNotes={inspection.offerNotes}
+                    offerCostBreakdown={inspection.offerCostBreakdown as MarketAnalysisSectionProps["offerCostBreakdown"]}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {!market && (
+            <Card className="py-8 text-center">
+              <FileText className="h-6 w-6 mx-auto mb-2 text-text-tertiary" />
+              <p className="text-sm text-text-secondary">No market data yet. Complete an inspection to build your report.</p>
             </Card>
           )}
         </div>
@@ -940,7 +937,6 @@ function OfferBuilder({ inspectionId, inspection }: {
   const [notes, setNotes] = useState(inspection.offerNotes || "");
   const [saved, setSaved] = useState(false);
 
-  // Editable cost items — initialized from inspection data
   const existingItems = ((inspection.offerCostBreakdown as { costItems?: CostItem[] })?.costItems) || [];
   const [costItems, setCostItems] = useState<CostItem[]>(existingItems);
   const [dirty, setDirty] = useState(false);
@@ -951,7 +947,6 @@ function OfferBuilder({ inspectionId, inspection }: {
       setSaved(true);
       utils.vehicle.getDetail.invalidate();
       setTimeout(() => setSaved(false), 2000);
-      // Update local cost items from AI result
       if ("breakdown" in data && data.breakdown) {
         const bd = data.breakdown as { costItems?: CostItem[] };
         if (bd.costItems) {
@@ -997,18 +992,15 @@ function OfferBuilder({ inspectionId, inspection }: {
   return (
     <div className="p-4 rounded-lg border border-border-default bg-surface-overlay">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-          Offer Justification
-        </p>
+        <Overline>Offer Justification</Overline>
         {saved && <span className="text-xs text-green-600 font-medium">Saved ✓</span>}
       </div>
 
-      {/* Mode toggle */}
       <div className="flex gap-2 mb-3">
         <button
           onClick={() => setMode("AI_ESTIMATED")}
           className={cn(
-            "flex-1 text-xs font-medium py-2 px-3 rounded-lg border transition-all cursor-pointer",
+            "flex-1 text-xs font-medium py-2 px-3 rounded-lg border transition-colors cursor-pointer",
             mode === "AI_ESTIMATED"
               ? "border-brand-600 bg-brand-50 text-brand-700"
               : "border-border-default bg-surface-raised text-text-secondary hover:bg-surface-hover"
@@ -1017,7 +1009,7 @@ function OfferBuilder({ inspectionId, inspection }: {
         <button
           onClick={() => setMode("CUSTOM_NOTES")}
           className={cn(
-            "flex-1 text-xs font-medium py-2 px-3 rounded-lg border transition-all cursor-pointer",
+            "flex-1 text-xs font-medium py-2 px-3 rounded-lg border transition-colors cursor-pointer",
             mode === "CUSTOM_NOTES"
               ? "border-brand-600 bg-brand-50 text-brand-700"
               : "border-border-default bg-surface-raised text-text-secondary hover:bg-surface-hover"
@@ -1027,11 +1019,10 @@ function OfferBuilder({ inspectionId, inspection }: {
 
       {mode === "AI_ESTIMATED" ? (
         <div className="space-y-3">
-          {/* Generate / Regenerate button */}
           <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="brand"
+              variant="primary"
               loading={setOfferMode.isPending}
               onClick={() => setOfferMode.mutate({ inspectionId, mode: "AI_ESTIMATED" })}
             >
@@ -1042,7 +1033,6 @@ function OfferBuilder({ inspectionId, inspection }: {
             </span>
           </div>
 
-          {/* Editable cost items */}
           {hasBreakdown && (
             <div className="space-y-2">
               {costItems.map((item, i) => (
@@ -1081,7 +1071,6 @@ function OfferBuilder({ inspectionId, inspection }: {
                 </div>
               ))}
 
-              {/* Total + Add/Save */}
               <div className="flex items-center justify-between pt-2 border-t border-border-default">
                 <button
                   onClick={addItem}
@@ -1152,7 +1141,7 @@ function GenerateReportButton({ inspectionId, existingReportId }: {
   return (
     <div className="flex flex-col items-center gap-2 pt-4">
       <Button
-        variant="brand"
+        variant="primary"
         size="lg"
         loading={generateReport.isPending}
         onClick={() => generateReport.mutate({ inspectionId })}

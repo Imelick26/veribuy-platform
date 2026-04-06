@@ -133,7 +133,7 @@ export default function SharedReportPage({
                 ].map((item) => {
                   const rawData = inspection.conditionRawData as Record<string, unknown> | null;
                   const detail = rawData?.[item.key] as { summary?: string; concerns?: string[] } | undefined;
-                  const dotColor = (item.score || 0) >= 7 ? "bg-green-500" : (item.score || 0) >= 6 ? "bg-yellow-400" : "bg-red-500";
+                  const dotColor = (item.score || 0) >= 7 ? "bg-green-500" : (item.score || 0) >= 6 ? "bg-caution-400" : "bg-red-500";
                   return (
                     <div key={item.label} className="pb-4 border-b border-border-default last:border-0 last:pb-0 pt-4 first:pt-0">
                       <div className="flex items-center justify-between">
