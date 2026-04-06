@@ -34,8 +34,8 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] mb-8"
           >
-            Understand Vehicle Condition{" "}
-            <span className="text-brand-gradient">Before Capital Is Deployed</span>
+            Vehicle Condition,{" "}
+            <span className="text-brand-gradient">Verified Before Purchase</span>
           </motion.h1>
 
           {/* Subheadline */}
@@ -45,9 +45,9 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="max-w-2xl text-lg md:text-xl text-gray-400 leading-relaxed mb-10 mx-auto"
           >
-            Standardized inspections, AI condition scoring, and verified market
-            data — in one platform. Reduce acquisition risk and move faster
-            with trusted vehicle intelligence.
+            The world&apos;s first AI platform that pinpoints a vehicle&apos;s true
+            condition in minutes — uncovering hidden issues a basic walk-around
+            can&apos;t. Verify Before You Buy with VeriBuy.
           </motion.p>
 
           {/* CTAs */}
