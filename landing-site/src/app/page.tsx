@@ -10,7 +10,6 @@ export default function Home() {
     <main className="min-h-screen">
       <Navbar />
       <Hero />
-      <TrustBar />
       <div className="section-divider" />
       <SolutionSection />
       <div className="section-divider" />

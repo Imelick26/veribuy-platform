@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Shield, CheckCircle } from "lucide-react";
+import { ArrowRight, Shield } from "lucide-react";
 import VehicleInspectionVisual from "./VehicleInspectionVisual";
 
 export default function Hero() {
@@ -75,25 +75,6 @@ export default function Hero() {
             </a>
           </motion.div>
 
-          {/* Trust Proof Points */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-gray-500"
-          >
-            {[
-              "NHTSA Data Integration",
-              "AI-Powered Scoring",
-              "6 Market Data Sources",
-              "Guided Photo Workflow",
-            ].map((item) => (
-              <div key={item} className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-emerald-500/70" />
-                <span>{item}</span>
-              </div>
-            ))}
-          </motion.div>
         </div>
 
         {/* Vehicle Inspection Visual */}
