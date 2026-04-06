@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/Progress";
 import Link from "next/link";
 import { Plus, ClipboardCheck, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { formatDate, formatCurrency, getDealRatingBadge, getStepProgress, relativeTime, cn } from "@/lib/utils";
+import { formatDate, formatCurrency, getStepProgress, relativeTime, cn } from "@/lib/utils";
 
 export default function InspectionsPage() {
   const { data, isLoading } = trpc.inspection.list.useQuery({ limit: 50 });
@@ -95,7 +95,6 @@ export default function InspectionsPage() {
                   <thead>
                     <tr className="border-b border-border-default">
                       <th className="text-left text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Vehicle</th>
-                      <th className="text-left text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Rating</th>
                       <th className="text-right text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Retail</th>
                       <th className="text-center text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Score</th>
                       <th className="text-right text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Recon</th>
@@ -106,11 +105,9 @@ export default function InspectionsPage() {
                   <tbody className="divide-y divide-border-default">
                     {completed.map((insp) => {
                       const ma = insp.marketAnalysis as {
-                        recommendation?: string;
                         estRetailPrice?: number;
                         estReconCost?: number;
                       } | null;
-                      const rating = getDealRatingBadge(ma?.recommendation);
                       const vehicleName = insp.vehicle
                         ? `${insp.vehicle.year} ${insp.vehicle.make} ${insp.vehicle.model}`
                         : "Vehicle pending";
@@ -120,9 +117,6 @@ export default function InspectionsPage() {
                           <td className="px-4 py-3">
                             <p className="text-sm font-medium text-text-primary">{vehicleName}</p>
                             <p className="text-xs text-text-tertiary font-mono">{insp.number}</p>
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge variant={rating.variant} className="text-[10px]">{rating.label}</Badge>
                           </td>
                           <td className="px-4 py-3 text-right">
                             {ma?.estRetailPrice ? (
@@ -172,22 +166,16 @@ export default function InspectionsPage() {
                 <div className="md:hidden divide-y divide-border-default">
                   {completed.map((insp) => {
                     const ma = insp.marketAnalysis as {
-                      recommendation?: string;
                       estRetailPrice?: number;
-                      estReconCost?: number;
                     } | null;
-                    const rating = getDealRatingBadge(ma?.recommendation);
                     const vehicleName = insp.vehicle
                       ? `${insp.vehicle.year} ${insp.vehicle.make} ${insp.vehicle.model}`
                       : "Vehicle pending";
 
                     return (
                       <Link key={insp.id} href={`/dashboard/inspections/${insp.id}`} className="block px-4 py-3 hover:bg-surface-hover transition-colors">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-text-primary">{vehicleName}</span>
-                          <Badge variant={rating.variant} className="text-[10px]">{rating.label}</Badge>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-text-secondary">
+                        <span className="text-sm font-medium text-text-primary">{vehicleName}</span>
+                        <div className="flex items-center gap-3 text-xs text-text-secondary mt-0.5">
                           <span className="font-mono">{insp.number}</span>
                           {insp.overallScore != null && (
                             <span className="font-semibold">{insp.overallScore}/100</span>

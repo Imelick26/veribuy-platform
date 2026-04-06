@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Overline } from "@/components/ui/Overline";
 import { trpc } from "@/lib/trpc";
 import { Car, ChevronRight } from "lucide-react";
-import { formatCurrency, cn, getDealRatingBadge } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 export default function VehiclesPage() {
   const { data, isLoading } = trpc.vehicle.list.useQuery({ limit: 50 });
@@ -35,7 +34,6 @@ export default function VehiclesPage() {
                   <th className="text-left text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Vehicle</th>
                   <th className="text-left text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">VIN</th>
                   <th className="text-center text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Score</th>
-                  <th className="text-left text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Rating</th>
                   <th className="text-center text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Status</th>
                   <th className="text-right text-[11px] font-semibold text-text-tertiary uppercase tracking-wider px-4 py-2.5">Inspections</th>
                 </tr>
@@ -44,8 +42,6 @@ export default function VehiclesPage() {
                 {vehicles.map((v) => {
                   const latest = v.inspections?.[0];
                   const score = latest?.overallScore;
-                  const ma = latest?.marketAnalysis as { recommendation?: string } | null | undefined;
-                  const rating = ma?.recommendation ? getDealRatingBadge(ma.recommendation) : null;
 
                   return (
                     <tr key={v.id} className="hover:bg-surface-hover transition-colors cursor-pointer" onClick={() => window.location.href = `/dashboard/vehicles/${v.id}`}>
@@ -68,13 +64,6 @@ export default function VehiclesPage() {
                           </span>
                         ) : (
                           <span className="text-text-tertiary">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {rating ? (
-                          <Badge variant={rating.variant} className="text-[10px]">{rating.label}</Badge>
-                        ) : (
-                          <span className="text-xs text-text-tertiary">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -100,21 +89,14 @@ export default function VehiclesPage() {
               {vehicles.map((v) => {
                 const latest = v.inspections?.[0];
                 const score = latest?.overallScore;
-                const ma = latest?.marketAnalysis as { recommendation?: string } | null | undefined;
-                const rating = ma?.recommendation ? getDealRatingBadge(ma.recommendation) : null;
 
                 return (
                   <Link key={v.id} href={`/dashboard/vehicles/${v.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-surface-hover transition-colors">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-medium text-text-primary truncate">
-                          {v.year} {v.make} {v.model} {v.trim || ""}
-                        </span>
-                        {rating && (
-                          <Badge variant={rating.variant} className="text-[9px] shrink-0">{rating.label}</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-text-secondary">
+                      <span className="text-sm font-medium text-text-primary truncate block">
+                        {v.year} {v.make} {v.model} {v.trim || ""}
+                      </span>
+                      <div className="flex items-center gap-3 text-xs text-text-secondary mt-0.5">
                         <span className="font-mono truncate">{v.vin}</span>
                         {score != null && (
                           <span className={cn(
