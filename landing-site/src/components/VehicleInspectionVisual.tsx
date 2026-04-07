@@ -14,7 +14,7 @@ const HOTSPOTS = [
   {
     label: "Steering Column",
     detail: "NHTSA Recalls 23V344 & 23V847 — upper coupling bolt loosening",
-    position: [1.0, 0.2, -0.3] as [number, number, number], // steering column, driver side dash
+    position: [0.4, 0.15, -0.7] as [number, number, number], // steering column behind wheel, driver side
     color: "#ff4289",
   },
   {
@@ -217,14 +217,17 @@ function HotspotLegend({ isVisible }: { isVisible: boolean }) {
       transition={{ duration: 0.6, delay: 1.2 }}
       className="absolute top-4 left-4 md:top-6 md:left-6 z-10 pointer-events-none"
     >
+      <p className="text-[8px] md:text-[9px] text-white/25 uppercase tracking-wider font-semibold mb-2">
+        Known Issues Found
+      </p>
       <div className="space-y-[5px]">
         {HOTSPOTS.map((h) => (
           <div key={h.label} className="flex items-center gap-1.5">
             <div
-              className="w-[6px] h-[6px] rounded-full shrink-0"
+              className="w-[5px] h-[5px] rounded-full shrink-0"
               style={{ backgroundColor: h.color }}
             />
-            <span className="text-[9px] md:text-[10px] text-white/50 font-medium leading-tight">
+            <span className="text-[8px] md:text-[9px] text-white/40 font-medium leading-tight">
               {h.label}
             </span>
           </div>

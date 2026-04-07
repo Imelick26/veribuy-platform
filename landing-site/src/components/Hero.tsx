@@ -2,11 +2,10 @@
 
 import { motion } from "framer-motion";
 import { ArrowRight, Shield } from "lucide-react";
-import VehicleInspectionVisual from "./VehicleInspectionVisual";
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <section className="relative flex items-center justify-center overflow-hidden">
       {/* Background Effects */}
       <div className="absolute inset-0 grid-bg" />
       <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] rounded-full bg-brand-600/15 blur-[150px] animate-pulse-glow" />
@@ -23,7 +22,7 @@ export default function Hero() {
           >
             <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-5 py-2.5 text-sm text-gray-300 mb-8 badge-shimmer">
               <Shield size={15} className="text-accent-pink" />
-              Enterprise Vehicle Verification Platform
+              AI-Powered Vehicle Verification
             </div>
           </motion.div>
 
@@ -55,7 +54,7 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
+            className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <a
               href="#demo"
@@ -74,18 +73,7 @@ export default function Hero() {
               See How It Works
             </a>
           </motion.div>
-
         </div>
-
-        {/* Vehicle Inspection Visual */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: 0.5 }}
-          className="mt-16"
-        >
-          <VehicleInspectionVisual />
-        </motion.div>
       </div>
 
       {/* Bottom gradient fade */}
