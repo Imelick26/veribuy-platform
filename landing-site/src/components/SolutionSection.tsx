@@ -73,8 +73,8 @@ export default function SolutionSection() {
             <span className="text-brand-gradient">All automated. That&apos;s VeriBuy.</span>
           </motion.h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Once condition is understood, VeriBuy uses trusted market data to
-            ensure you pay exactly what the vehicle is worth.
+            Every score, every estimate, every recommendation — backed by real
+            data and fully auditable.
           </p>
         </motion.div>
 
