@@ -12,16 +12,16 @@ import {
 
 const capabilities = [
   {
-    icon: Scan,
-    title: "VIN Intelligence",
+    icon: Camera,
+    title: "Guided Photo Capture",
     description:
-      "Decode any VIN to instantly surface vehicle specifications, open recalls, and known risk factors. A complete risk profile is built before the first photo is taken.",
+      "A structured, step-by-step workflow walks any inspector through 21 standardized photos — exterior, interior, and mechanical — ensuring every vehicle is documented to the same standard.",
   },
   {
-    icon: Camera,
-    title: "Guided Inspection Workflow",
+    icon: Scan,
+    title: "VIN Decode & Risk Profiling",
     description:
-      "A structured, step-by-step capture process ensures every vehicle is inspected to the same standard — whether the inspector is a 20-year veteran or brand new to the team.",
+      "Confirm the VIN, decode full vehicle specs, and automatically generate a risk profile from NHTSA complaints, recalls, and known failure patterns for that exact make, model, and year.",
   },
   {
     icon: Brain,
@@ -30,22 +30,22 @@ const capabilities = [
       "Computer vision analyzes every inspection photo to generate objective, auditable condition scores across four areas — removing subjectivity from the assessment process.",
   },
   {
-    icon: FileCheck,
-    title: "Shareable Condition Reports",
-    description:
-      "Generate professional PDF reports with condition scores, findings, photos, and market comparables — ready to share with buyers, sellers, lenders, or internal teams.",
-  },
-  {
     icon: ShieldCheck,
-    title: "Real-Time Risk Intelligence",
+    title: "Risk Inspection",
     description:
-      "NHTSA complaints, safety recalls, and known failure patterns are automatically surfaced for every vehicle — turning reactive inspections into proactive risk management.",
+      "Each known risk gets a targeted yes/no checklist. If an issue is flagged, the inspector is prompted for evidence — no wasted time photographing things that aren't broken.",
   },
   {
     icon: BarChart3,
     title: "Market Valuation Engine",
     description:
       "Fair acquisition pricing powered by six market data sources, regional adjustments, and condition-aware analysis — giving every stakeholder a defensible number.",
+  },
+  {
+    icon: FileCheck,
+    title: "Shareable Condition Reports",
+    description:
+      "Generate professional PDF reports with condition scores, findings, photos, and market comparables — ready to share with buyers, sellers, lenders, or internal teams.",
   },
 ];
 
