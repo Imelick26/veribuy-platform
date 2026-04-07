@@ -13,12 +13,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const HOTSPOTS = [
   {
     label: "Steering Column Recall",
-    position: [0.6, 0.0, -0.5] as [number, number, number],
-    color: "#ef4444",
-  },
-  {
-    label: "Death Wobble",
-    position: [2.8, -0.5, 0.6] as [number, number, number],
+    position: [0.8, 0.3, -0.6] as [number, number, number],
     color: "#ef4444",
   },
   {
