@@ -67,14 +67,12 @@ export default function SolutionSection() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="text-xl md:text-2xl text-gray-500 leading-relaxed mb-6"
+            className="text-base md:text-lg text-gray-500 mb-6 whitespace-nowrap"
           >
-            <span className="line-through decoration-white/20">History reports</span>,{" "}
-            <span className="line-through decoration-white/20">book values</span>,{" "}
-            <span className="line-through decoration-white/20">auction comps</span>,{" "}
-            <span className="line-through decoration-white/20">recon spreadsheets</span>,{" "}
-            <span className="line-through decoration-white/20">third-party inspections</span>,{" "}
-            <span className="line-through decoration-white/20">market pricing tools</span>.
+            <span className="line-through decoration-gray-400 decoration-2">History reports</span>,{" "}
+            <span className="line-through decoration-gray-400 decoration-2">book values</span>,{" "}
+            <span className="line-through decoration-gray-400 decoration-2">auction comps</span>,{" "}
+            <span className="line-through decoration-gray-400 decoration-2">recon spreadsheets</span>.
           </motion.p>
           <motion.h2
             initial={{ opacity: 0, y: 10 }}
