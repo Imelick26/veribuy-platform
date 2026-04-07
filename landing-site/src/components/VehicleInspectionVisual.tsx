@@ -8,55 +8,56 @@ import * as THREE from "three";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// Model: +X=front, -X=rear, +Y=up, +Z=passenger. Scale=6.5 → X≈±3.25, Y≈±1, Z≈±1.28
+// Real NHTSA data: 13 recalls + 82 complaints for 2023 Ford Super Duty (F-250/F-350/F-450)
+// Model coords: +X=front, -X=rear, +Y=up, +Z=passenger side. Scale=6.5
 const HOTSPOTS = [
   {
-    label: "Turbo",
-    detail: "VGT turbo vane sticking & actuator failure",
-    position: [2.4, 0.35, 0.0] as [number, number, number],
+    label: "Steering Column",
+    detail: "NHTSA Recalls 23V344 & 23V847 — upper coupling bolt loosening",
+    position: [1.0, 0.2, -0.3] as [number, number, number], // steering column, driver side dash
     color: "#ff4289",
   },
   {
-    label: "Death Wobble",
-    detail: "Track bar & ball joint wear — steering shimmy",
-    position: [2.8, -0.7, 0.0] as [number, number, number],
+    label: "Instrument Cluster",
+    detail: "NHTSA Recall 23V506 — blank/black screen, dash failure",
+    position: [0.8, 0.5, 0.0] as [number, number, number], // center dashboard
     color: "#f43f5e",
   },
   {
-    label: "DEF System",
-    detail: "Diesel exhaust fluid heater & injector failures",
-    position: [-1.2, -0.8, 1.0] as [number, number, number],
+    label: "Door Latches",
+    detail: "NHTSA Recall 23V507 — doors open while driving in cold weather",
+    position: [0.5, 0.2, 1.15] as [number, number, number], // front passenger door
     color: "#a855f7",
   },
   {
-    label: "Front Axle Seal",
-    detail: "Dana front axle hub seal leaks",
-    position: [2.2, -0.8, 1.2] as [number, number, number],
+    label: "Rear Camera",
+    detail: "NHTSA Recall 24V806 — water intrusion in tailgate camera",
+    position: [-3.1, 0.3, 0.0] as [number, number, number], // tailgate center, camera height
     color: "#f59e0b",
   },
   {
-    label: "FICM / Glow Plugs",
-    detail: "Hard cold starts, glow plug control module",
-    position: [1.8, 0.5, -0.4] as [number, number, number],
+    label: "Rear Axle Hubs",
+    detail: "NHTSA Recall 23V758 — hub fastener loosening on dually",
+    position: [-2.0, -0.7, 1.15] as [number, number, number], // rear axle, passenger dually
     color: "#06b6d4",
   },
   {
-    label: "Exhaust Manifold",
-    detail: "Up-pipe & exhaust manifold bolt failures",
-    position: [1.6, -0.1, -1.0] as [number, number, number],
+    label: "Fuel Pump",
+    detail: "NHTSA Recall 25V455 — low-pressure fuel pump failure, loss of power",
+    position: [-1.5, -0.8, -0.8] as [number, number, number], // under bed, driver side fuel tank
     color: "#22c55e",
   },
   {
-    label: "Rear Dually Wheels",
-    detail: "Inner tire wear & lug nut loosening",
-    position: [-2.0, -0.8, 1.2] as [number, number, number],
+    label: "Trailer Brake",
+    detail: "NHTSA Recall 26V104 — integrated trailer brake control failure",
+    position: [-2.8, -0.5, 0.0] as [number, number, number], // rear hitch area
     color: "#3b82f6",
   },
   {
-    label: "Tailgate",
-    detail: "Tailgate latch & damper cable failure",
-    position: [-3.15, 0.1, 0.0] as [number, number, number],
-    color: "#94a3b8",
+    label: "Suspension",
+    detail: "NHTSA complaints — death wobble, front end shimmy at highway speed",
+    position: [2.6, -0.6, 0.0] as [number, number, number], // front suspension center
+    color: "#e879f9",
   },
 ];
 

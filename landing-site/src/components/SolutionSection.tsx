@@ -15,37 +15,37 @@ const capabilities = [
     icon: Scan,
     title: "VIN Intelligence",
     description:
-      "Scan any VIN to instantly verify vehicle details, recall history, and known risk factors. VeriBuy builds a complete risk profile for every vehicle before the inspection even begins.",
+      "Decode any VIN to instantly surface vehicle specifications, open recalls, and known risk factors. A complete risk profile is built before the first photo is taken.",
   },
   {
     icon: Camera,
-    title: "Guided Photo Workflow",
+    title: "Guided Inspection Workflow",
     description:
-      "Our step-by-step guided capture makes it easy for anyone — even with zero automotive experience — to complete a thorough, professional-grade vehicle inspection in minutes.",
+      "A structured, step-by-step capture process ensures every vehicle is inspected to the same standard — whether the inspector is a 20-year veteran or brand new to the team.",
   },
   {
     icon: Brain,
     title: "AI Condition Scoring",
     description:
-      "Our proprietary AI engine analyzes every inspection photo to generate objective, auditable condition scores — giving you a trusted, unbiased picture of any vehicle's true state.",
+      "Computer vision analyzes every inspection photo to generate objective, auditable condition scores across four areas — removing subjectivity from the assessment process.",
   },
   {
     icon: FileCheck,
-    title: "PDF Condition Reports",
+    title: "Shareable Condition Reports",
     description:
-      "Generate detailed condition reports with scores, findings, photos, and market pricing from comparable vehicles near you — everything you need to make a confident purchase decision.",
+      "Generate professional PDF reports with condition scores, findings, photos, and market comparables — ready to share with buyers, sellers, lenders, or internal teams.",
   },
   {
     icon: ShieldCheck,
     title: "Real-Time Risk Intelligence",
     description:
-      "VeriBuy automatically surfaces known issues, safety recalls, and potential red flags for every vehicle — so you know exactly what to look for before you buy.",
+      "NHTSA complaints, safety recalls, and known failure patterns are automatically surfaced for every vehicle — turning reactive inspections into proactive risk management.",
   },
   {
     icon: BarChart3,
     title: "Market Valuation Engine",
     description:
-      "Get fair acquisition pricing powered by multiple market data sources, regional adjustments, and AI-driven analysis — so you never overpay for a vehicle.",
+      "Fair acquisition pricing powered by six market data sources, regional adjustments, and condition-aware analysis — giving every stakeholder a defensible number.",
   },
 ];
 

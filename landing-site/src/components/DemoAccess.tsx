@@ -3,8 +3,7 @@
 import { motion } from "framer-motion";
 import { CheckCircle, Calendar } from "lucide-react";
 
-// TODO: Replace with Isaac's actual Cal.com username/event-slug
-const CAL_LINK = "isaac-veribuy/demo";
+const CAL_LINK = "imelick26/veribuy-intro";
 
 export default function DemoAccess() {
   return (

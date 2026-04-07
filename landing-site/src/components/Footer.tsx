@@ -29,13 +29,12 @@ export default function Footer() {
               inspections, condition scoring, market valuation, and risk
               intelligence for the modern automotive ecosystem.
             </p>
-            <div className="flex items-center gap-4 text-[10px] text-gray-600 uppercase tracking-wider">
-              <span>AI-Powered</span>
-              <span className="w-px h-3 bg-white/10" />
-              <span>6 Data Sources</span>
-              <span className="w-px h-3 bg-white/10" />
-              <span>NHTSA</span>
-            </div>
+            <a
+              href="mailto:isaac@notibuy.com"
+              className="text-[11px] text-gray-600 hover:text-gray-400 transition-colors"
+            >
+              isaac@notibuy.com
+            </a>
           </div>
 
           {/* Links */}
