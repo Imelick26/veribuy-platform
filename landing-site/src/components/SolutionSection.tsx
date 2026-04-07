@@ -69,8 +69,7 @@ export default function SolutionSection() {
             transition={{ duration: 0.5 }}
             className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
           >
-            <span className="text-gray-500">Walk-arounds. Recon estimates. History pulls. Market comps.</span>
-            <br />
+            <span className="text-gray-500">Walk-arounds. Recon estimates. History pulls. Market comps.</span>{" "}
             <span className="text-brand-gradient">All automated. That&apos;s VeriBuy.</span>
           </motion.h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
