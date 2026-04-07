@@ -21,7 +21,8 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05] mb-8"
           >
-            Vehicle Condition,{" "}
+            Vehicle Condition,
+            <br />
             <span className="text-brand-gradient">Verified Before Purchase</span>
           </motion.h1>
 
