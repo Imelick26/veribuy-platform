@@ -69,9 +69,9 @@ export default function SolutionSection() {
             transition={{ duration: 0.5 }}
             className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
           >
-            <span className="line-through decoration-gray-400 decoration-2 text-gray-500">Inspections, appraisals, history reports, book values, auction comps.</span>
+            <span className="text-gray-500">Inspections. Appraisals. History. Market data.</span>
             <br />
-            <span className="text-brand-gradient">VeriBuy.</span>
+            <span className="text-brand-gradient">That&apos;s VeriBuy.</span>
           </motion.h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
             Once condition is understood, VeriBuy uses trusted market data to
