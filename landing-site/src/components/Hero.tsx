@@ -61,7 +61,7 @@ export default function Hero() {
               href="#demo"
               className="group bg-brand-gradient rounded-full px-8 py-4 text-base font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg transition-all duration-300 flex items-center gap-2"
             >
-              Request Access
+              Book a Demo
               <ArrowRight
                 size={18}
                 className="group-hover:translate-x-1 transition-transform"

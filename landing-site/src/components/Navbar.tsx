@@ -30,23 +30,13 @@ export default function Navbar() {
             <span className="text-lg font-bold tracking-tight">VeriBuy</span>
           </a>
 
-          {/* Desktop CTAs */}
-          <div className="hidden lg:flex items-center gap-4">
+          {/* Desktop CTA */}
+          <div className="hidden lg:flex items-center">
             <a
-              href="https://app.getveribuy.com/login"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[13px] font-medium text-gray-300 hover:text-white transition-colors duration-200"
+              href="#demo"
+              className="bg-brand-gradient rounded-full px-6 py-2.5 text-[13px] font-semibold text-white hover:opacity-90 transition-opacity shadow-brand-glow"
             >
-              Login
-            </a>
-            <a
-              href="https://app.getveribuy.com/register"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-brand-gradient rounded-full px-5 py-2 text-[13px] font-semibold text-white hover:opacity-90 transition-opacity shadow-brand-glow"
-            >
-              Get Started
+              Book a Demo
             </a>
           </div>
 
@@ -66,22 +56,11 @@ export default function Navbar() {
         <div className="lg:hidden bg-[#0c0f1a]/95 backdrop-blur-xl border-t border-white/5">
           <div className="px-6 py-6 space-y-3">
             <a
-              href="https://app.getveribuy.com/login"
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setMobileOpen(false)}
-              className="block text-center text-sm font-medium text-gray-300 hover:text-white py-2"
-            >
-              Login
-            </a>
-            <a
-              href="https://app.getveribuy.com/register"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#demo"
               onClick={() => setMobileOpen(false)}
               className="block text-center bg-brand-gradient rounded-full px-6 py-2.5 text-sm font-semibold text-white"
             >
-              Get Started
+              Book a Demo
             </a>
           </div>
         </div>

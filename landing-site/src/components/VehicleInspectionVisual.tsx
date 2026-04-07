@@ -2,12 +2,105 @@
 
 import React, { Suspense, useRef, useEffect, useState, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import { motion, useInView } from "framer-motion";
 import * as THREE from "three";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-/* ─── Enterprise wireframe truck — solid body + thin glowing wireframe overlay ─── */
+// Model: +X=front, -X=rear, +Y=up, +Z=passenger. Scale=6.5 → X≈±3.25, Y≈±1, Z≈±1.28
+const HOTSPOTS = [
+  {
+    label: "Turbo",
+    detail: "VGT turbo vane sticking & actuator failure",
+    position: [2.4, 0.35, 0.0] as [number, number, number],
+    color: "#ff4289",
+  },
+  {
+    label: "Death Wobble",
+    detail: "Track bar & ball joint wear — steering shimmy",
+    position: [2.8, -0.7, 0.0] as [number, number, number],
+    color: "#f43f5e",
+  },
+  {
+    label: "DEF System",
+    detail: "Diesel exhaust fluid heater & injector failures",
+    position: [-1.2, -0.8, 1.0] as [number, number, number],
+    color: "#a855f7",
+  },
+  {
+    label: "Front Axle Seal",
+    detail: "Dana front axle hub seal leaks",
+    position: [2.2, -0.8, 1.2] as [number, number, number],
+    color: "#f59e0b",
+  },
+  {
+    label: "FICM / Glow Plugs",
+    detail: "Hard cold starts, glow plug control module",
+    position: [1.8, 0.5, -0.4] as [number, number, number],
+    color: "#06b6d4",
+  },
+  {
+    label: "Exhaust Manifold",
+    detail: "Up-pipe & exhaust manifold bolt failures",
+    position: [1.6, -0.1, -1.0] as [number, number, number],
+    color: "#22c55e",
+  },
+  {
+    label: "Rear Dually Wheels",
+    detail: "Inner tire wear & lug nut loosening",
+    position: [-2.0, -0.8, 1.2] as [number, number, number],
+    color: "#3b82f6",
+  },
+  {
+    label: "Tailgate",
+    detail: "Tailgate latch & damper cable failure",
+    position: [-3.15, 0.1, 0.0] as [number, number, number],
+    color: "#94a3b8",
+  },
+];
+
+/* ─── 3D hotspot marker — pulses and glows, rotates with the truck ─── */
+function Hotspot3D({
+  position,
+  color,
+}: {
+  position: [number, number, number];
+  color: string;
+}) {
+  const innerRef = useRef<THREE.Mesh>(null);
+  const outerRef = useRef<THREE.Mesh>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    const pulse = 0.8 + Math.sin(t * 2.5 + position[0] * 3) * 0.2;
+    if (innerRef.current) {
+      innerRef.current.scale.setScalar(pulse);
+    }
+    if (outerRef.current) {
+      outerRef.current.scale.setScalar(0.8 + Math.sin(t * 1.5 + position[0] * 2) * 0.4);
+      (outerRef.current.material as THREE.MeshBasicMaterial).opacity =
+        0.08 + Math.sin(t * 2 + position[0] * 3) * 0.06;
+    }
+  });
+
+  return (
+    <group position={position}>
+      {/* Inner bright dot */}
+      <mesh ref={innerRef as React.RefObject<THREE.Mesh>}>
+        <sphereGeometry args={[0.09, 16, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={1.0} />
+      </mesh>
+      {/* Outer glow ring */}
+      <mesh ref={outerRef as React.RefObject<THREE.Mesh>}>
+        <sphereGeometry args={[0.22, 16, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.18} />
+      </mesh>
+    </group>
+  );
+}
+
+/* ─── Wireframe truck with hotspots ─── */
 function TruckModel() {
   const groupRef = useRef<THREE.Group>(null);
 
@@ -28,39 +121,20 @@ function TruckModel() {
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        const s = 6 / maxDim;
+        const s = 6.5 / maxDim;
 
-        // Base body: cool-toned matte grey with subtle depth
-        const bodyMat = new THREE.MeshStandardMaterial({
-          color: new THREE.Color("#a8adb3"),
-          roughness: 0.75,
-          metalness: 0.12,
-          transparent: true,
-          opacity: 0.88,
-          side: THREE.DoubleSide,
-        });
-
-        // Thin wireframe overlay: very subtle glowing lines
+        // Wireframe only — no solid fill
         const wireMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color("#c0d0e0"),
+          color: new THREE.Color("#b0c8e0"),
           wireframe: true,
           transparent: true,
-          opacity: 0.06,
+          opacity: 0.10,
         });
 
         scene.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             const mesh = child as THREE.Mesh;
-
-            // Apply body material
-            mesh.material = bodyMat;
-
-            // Add wireframe clone as sibling
-            const wireClone = mesh.clone();
-            wireClone.material = wireMat;
-            if (mesh.parent) {
-              mesh.parent.add(wireClone);
-            }
+            mesh.material = wireMat;
           }
         });
 
@@ -69,7 +143,6 @@ function TruckModel() {
 
         if (groupRef.current) {
           groupRef.current.add(scene);
-
         }
 
         dracoLoader.dispose();
@@ -82,14 +155,13 @@ function TruckModel() {
     );
   }, []);
 
-  // Smooth rotation
-  useFrame((_, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.12;
-    }
-  });
-
-  return <group ref={groupRef} />;
+  return (
+    <group ref={groupRef}>
+      {HOTSPOTS.map((h) => (
+        <Hotspot3D key={h.label} position={h.position} color={h.color} />
+      ))}
+    </group>
+  );
 }
 
 /* ─── Scanning line that sweeps over the vehicle ─── */
@@ -100,7 +172,8 @@ function ScanLine() {
     if (meshRef.current) {
       const t = clock.getElapsedTime();
       meshRef.current.position.x = Math.sin(t * 0.3) * 3;
-      meshRef.current.material.opacity = 0.03 + Math.sin(t * 0.6) * 0.02;
+      (meshRef.current.material as THREE.MeshBasicMaterial).opacity =
+        0.03 + Math.sin(t * 0.6) * 0.02;
     }
   });
 
@@ -115,7 +188,7 @@ function ScanLine() {
 /* ─── Ground grid ─── */
 function GroundGrid() {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.2, 0]}>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.6, 0]}>
       <planeGeometry args={[24, 24, 50, 50]} />
       <meshBasicMaterial color="#1a2040" wireframe transparent opacity={0.035} />
     </mesh>
@@ -134,6 +207,31 @@ function LoadingFallback() {
   );
 }
 
+/* ─── 2D Hotspot legend overlay ─── */
+function HotspotLegend({ isVisible }: { isVisible: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={isVisible ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
+      transition={{ duration: 0.6, delay: 1.2 }}
+      className="absolute top-4 left-4 md:top-6 md:left-6 z-10 pointer-events-none"
+    >
+      <div className="space-y-[5px]">
+        {HOTSPOTS.map((h) => (
+          <div key={h.label} className="flex items-center gap-1.5">
+            <div
+              className="w-[6px] h-[6px] rounded-full shrink-0"
+              style={{ backgroundColor: h.color }}
+            />
+            <span className="text-[9px] md:text-[10px] text-white/50 font-medium leading-tight">
+              {h.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
 
 /* ─── Premium phone — finished inspection report ─── */
 function PremiumPhone({ isVisible }: { isVisible: boolean }) {
@@ -144,21 +242,11 @@ function PremiumPhone({ isVisible }: { isVisible: boolean }) {
       transition={{ duration: 0.9, delay: 0.8, ease: "easeOut" }}
       className="w-[130px] md:w-[155px]"
     >
-      {/* Shadow underneath */}
       <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-[80%] h-4 bg-black/20 blur-xl rounded-full" />
-
-      {/* Phone body */}
       <div className="relative rounded-[24px] border border-white/8 bg-[#080c14]/95 backdrop-blur-md p-[5px] shadow-2xl shadow-black/60">
-        {/* Screen glare */}
         <div className="absolute top-4 right-3 w-12 h-24 bg-white/[0.015] rounded-full rotate-12 blur-sm pointer-events-none" />
-
-        {/* Dynamic Island */}
         <div className="mx-auto w-14 h-[6px] bg-black rounded-full mt-0.5 mb-1" />
-
-        {/* Screen */}
         <div className="rounded-[20px] bg-[#0c1220] overflow-hidden">
-
-          {/* Status bar */}
           <div className="flex items-center justify-between px-3 pt-1.5 pb-1">
             <span className="text-[4.5px] text-white/40 font-medium">9:41</span>
             <div className="flex items-center gap-[2px]">
@@ -167,8 +255,6 @@ function PremiumPhone({ isVisible }: { isVisible: boolean }) {
               <div className="w-[7px] h-[3px] bg-emerald-400/60 rounded-[0.5px]" />
             </div>
           </div>
-
-          {/* App header */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.04]">
             <div className="flex items-center gap-1.5">
               <div className="w-[14px] h-[14px] rounded-[5px] bg-gradient-to-br from-accent-pink to-[#1a3a7a] flex items-center justify-center">
@@ -180,17 +266,11 @@ function PremiumPhone({ isVisible }: { isVisible: boolean }) {
               <span className="text-[5px] text-white/20">↗</span>
             </div>
           </div>
-
-          {/* Report content */}
           <div className="px-3 py-2">
-
-            {/* Vehicle title */}
             <div className="mb-2">
               <p className="text-[5px] text-white/30 font-medium uppercase tracking-wider">2023 Ford F-450 Super Duty</p>
               <p className="text-[4px] text-white/15 font-mono mt-0.5">VIN: 1FT8W4DT2P•••4019</p>
             </div>
-
-            {/* Score circle */}
             <div className="flex items-center gap-2 mb-2.5">
               <div className="relative w-[32px] h-[32px]">
                 <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
@@ -212,8 +292,6 @@ function PremiumPhone({ isVisible }: { isVisible: boolean }) {
                 <p className="text-[4px] text-white/20 mt-0.5">4 areas inspected</p>
               </div>
             </div>
-
-            {/* Area scores — brand gradient bars */}
             <div className="space-y-[3px] mb-2.5">
               {[
                 { label: "Exterior", score: 82 },
@@ -236,11 +314,7 @@ function PremiumPhone({ isVisible }: { isVisible: boolean }) {
                 </div>
               ))}
             </div>
-
-            {/* Divider */}
             <div className="h-[1px] bg-white/[0.03] mb-2" />
-
-            {/* Pricing */}
             <div className="flex items-center justify-between mb-1.5">
               <div>
                 <p className="text-[4px] text-white/20 uppercase tracking-wider font-medium">Fair Acquisition</p>
@@ -251,15 +325,11 @@ function PremiumPhone({ isVisible }: { isVisible: boolean }) {
                 <p className="text-[8px] text-white/70 font-bold">$1,380</p>
               </div>
             </div>
-
-            {/* Deal rating badge — brand gradient border */}
             <div className="flex items-center gap-1 border border-white/[0.06] rounded-md px-1.5 py-[3px] mb-2 bg-white/[0.015]">
               <div className="w-[5px] h-[5px] rounded-full bg-accent-pink/50" />
               <span className="text-[4.5px] text-white/60 font-semibold">FAIR BUY</span>
               <span className="text-[3.5px] text-white/15 ml-auto">6 sources</span>
             </div>
-
-            {/* Findings */}
             <div className="space-y-[3px]">
               <div className="flex items-center gap-1 bg-white/[0.015] rounded px-1.5 py-[3px]">
                 <div className="w-[5px] h-[5px] rounded-full bg-white/15" />
@@ -278,15 +348,11 @@ function PremiumPhone({ isVisible }: { isVisible: boolean }) {
               </div>
             </div>
           </div>
-
-          {/* Bottom nav */}
           <div className="flex items-center justify-around px-3 py-1.5 border-t border-white/[0.03] mt-1">
             <div className="w-[4px] h-[4px] rounded-full bg-white/10" />
             <div className="w-[4px] h-[4px] rounded-sm bg-accent-pink/30" />
             <div className="w-[4px] h-[4px] rounded-full bg-white/10" />
           </div>
-
-          {/* Home indicator */}
           <div className="mx-auto w-10 h-[3px] bg-white/8 rounded-full my-1" />
         </div>
       </div>
@@ -301,38 +367,39 @@ export default function VehicleInspectionVisual() {
 
   return (
     <div ref={sectionRef} className="relative w-full max-w-6xl mx-auto">
-      {/* Ambient glow behind the scene */}
       <div className="absolute top-1/4 left-1/3 w-[500px] h-[300px] bg-accent-pink/[0.02] rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute top-1/3 right-1/4 w-[400px] h-[250px] bg-[#1a3a7a]/[0.03] rounded-full blur-[80px] pointer-events-none" />
 
       <div className="relative w-full aspect-[16/9] md:aspect-[2/1]">
+        <HotspotLegend isVisible={isInView} />
+
         <Suspense fallback={<LoadingFallback />}>
           <Canvas
             dpr={[1, 1.5]}
             gl={{ antialias: true, alpha: true }}
-            camera={{ position: [6, 3.5, 6], fov: 40 }}
+            camera={{ position: [5.5, 3, 5.5], fov: 40 }}
             style={{ background: "transparent" }}
           >
-            {/* Studio lighting */}
-            <ambientLight intensity={0.4} />
-            {/* Key light — top-right, warm */}
+            <ambientLight intensity={0.5} />
             <directionalLight position={[10, 14, 8]} intensity={0.85} color="#e4e8ec" />
-            {/* Fill — left, cooler */}
-            <directionalLight position={[-8, 8, -4]} intensity={0.3} color="#c0d0e4" />
-            {/* Under fill — subtle */}
-            <directionalLight position={[0, -3, 10]} intensity={0.12} color="#b0c0d0" />
-            {/* Rim light — edge definition from behind */}
-            <directionalLight position={[-10, 6, -10]} intensity={0.25} color="#5878a0" />
+            <directionalLight position={[-8, 8, -4]} intensity={0.35} color="#c0d0e4" />
+            <directionalLight position={[0, -3, 10]} intensity={0.15} color="#b0c0d0" />
+            <directionalLight position={[-10, 6, -10]} intensity={0.3} color="#5878a0" />
+            <OrbitControls
+              autoRotate
+              autoRotateSpeed={0.5}
+              enablePan={false}
+              minDistance={3}
+              maxDistance={8}
+              maxPolarAngle={Math.PI / 2.1}
+            />
             <TruckModel />
             <ScanLine />
             <GroundGrid />
           </Canvas>
         </Suspense>
-
-        {/* Hotspots are now 3D sprites inside the truck group — they rotate with it */}
       </div>
 
-      {/* Phone — overlapping bottom-right corner, connected to the scene */}
       <div className="absolute -bottom-6 right-2 md:right-8 z-10 pointer-events-none">
         <PremiumPhone isVisible={isInView} />
       </div>

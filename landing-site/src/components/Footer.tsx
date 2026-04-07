@@ -5,23 +5,6 @@ const footerLinks = {
     { label: "Features", href: "#platform" },
     { label: "Schedule Demo", href: "#demo" },
   ],
-  Solutions: [
-    { label: "Dealerships", href: "#solutions" },
-    { label: "Marketplaces", href: "#solutions" },
-    { label: "Lenders", href: "#solutions" },
-    { label: "Insurers", href: "#solutions" },
-  ],
-  Company: [
-    { label: "About", href: "#" },
-    { label: "Contact", href: "#contact" },
-    { label: "Careers", href: "#" },
-    { label: "Press", href: "#" },
-  ],
-  Legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
-    { label: "Security", href: "#" },
-  ],
 };
 
 export default function Footer() {
