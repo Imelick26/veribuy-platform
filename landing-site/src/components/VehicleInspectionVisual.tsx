@@ -13,23 +13,23 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const HOTSPOTS = [
   {
     label: "Steering Column Recall",
-    position: [0.6, 0.0, -0.5] as [number, number, number], // driver side, behind front wheel
-    color: "#ff4289",
+    position: [0.6, 0.0, -0.5] as [number, number, number],
+    color: "#ef4444",
   },
   {
     label: "Death Wobble",
-    position: [2.8, -0.5, 0.6] as [number, number, number], // front axle, passenger side
-    color: "#f59e0b",
+    position: [2.8, -0.5, 0.6] as [number, number, number],
+    color: "#ef4444",
   },
   {
     label: "Fuel Pump Failure",
-    position: [-1.4, -0.6, 0.8] as [number, number, number], // mid-undercarriage, passenger side
-    color: "#a855f7",
+    position: [-1.4, -0.6, 0.8] as [number, number, number],
+    color: "#ef4444",
   },
   {
     label: "Rear Camera Recall",
-    position: [-3.0, 0.2, 0.5] as [number, number, number], // tailgate, offset to be visible
-    color: "#3b82f6",
+    position: [-3.0, 0.2, 0.5] as [number, number, number],
+    color: "#ef4444",
   },
 ];
 
