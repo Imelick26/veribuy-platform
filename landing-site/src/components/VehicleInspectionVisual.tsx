@@ -2,86 +2,60 @@
 
 import React, { Suspense, useRef, useEffect, useState, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, Html } from "@react-three/drei";
 import { motion, useInView } from "framer-motion";
 import * as THREE from "three";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// Real NHTSA data: 13 recalls + 82 complaints for 2023 Ford Super Duty (F-250/F-350/F-450)
+// 4 key NHTSA issues for 2023 Ford Super Duty — spread across the truck for visibility
 // Model coords: +X=front, -X=rear, +Y=up, +Z=passenger side. Scale=6.5
 const HOTSPOTS = [
   {
-    label: "Steering Column",
-    detail: "NHTSA Recalls 23V344 & 23V847 — upper coupling bolt loosening",
-    position: [0.4, 0.15, -0.7] as [number, number, number], // steering column behind wheel, driver side
+    label: "Steering Column Recall",
+    position: [0.6, 0.0, -0.5] as [number, number, number], // driver side, behind front wheel
     color: "#ff4289",
   },
   {
-    label: "Instrument Cluster",
-    detail: "NHTSA Recall 23V506 — blank/black screen, dash failure",
-    position: [0.8, 0.5, 0.0] as [number, number, number], // center dashboard
-    color: "#f43f5e",
-  },
-  {
-    label: "Door Latches",
-    detail: "NHTSA Recall 23V507 — doors open while driving in cold weather",
-    position: [0.5, 0.2, 1.15] as [number, number, number], // front passenger door
-    color: "#a855f7",
-  },
-  {
-    label: "Rear Camera",
-    detail: "NHTSA Recall 24V806 — water intrusion in tailgate camera",
-    position: [-3.1, 0.3, 0.0] as [number, number, number], // tailgate center, camera height
+    label: "Death Wobble",
+    position: [2.8, -0.5, 0.6] as [number, number, number], // front axle, passenger side
     color: "#f59e0b",
   },
   {
-    label: "Rear Axle Hubs",
-    detail: "NHTSA Recall 23V758 — hub fastener loosening on dually",
-    position: [-2.0, -0.7, 1.15] as [number, number, number], // rear axle, passenger dually
-    color: "#06b6d4",
+    label: "Fuel Pump Failure",
+    position: [-1.4, -0.6, 0.8] as [number, number, number], // mid-undercarriage, passenger side
+    color: "#a855f7",
   },
   {
-    label: "Fuel Pump",
-    detail: "NHTSA Recall 25V455 — low-pressure fuel pump failure, loss of power",
-    position: [-1.5, -0.8, -0.8] as [number, number, number], // under bed, driver side fuel tank
-    color: "#22c55e",
-  },
-  {
-    label: "Trailer Brake",
-    detail: "NHTSA Recall 26V104 — integrated trailer brake control failure",
-    position: [-2.8, -0.5, 0.0] as [number, number, number], // rear hitch area
+    label: "Rear Camera Recall",
+    position: [-3.0, 0.2, 0.5] as [number, number, number], // tailgate, offset to be visible
     color: "#3b82f6",
-  },
-  {
-    label: "Suspension",
-    detail: "NHTSA complaints — death wobble, front end shimmy at highway speed",
-    position: [2.6, -0.6, 0.0] as [number, number, number], // front suspension center
-    color: "#e879f9",
   },
 ];
 
-/* ─── 3D hotspot marker — pulses and glows, rotates with the truck ─── */
+/* ─── 3D hotspot marker with label ─── */
 function Hotspot3D({
   position,
   color,
+  label,
 }: {
   position: [number, number, number];
   color: string;
+  label: string;
 }) {
   const innerRef = useRef<THREE.Mesh>(null);
   const outerRef = useRef<THREE.Mesh>(null);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    const pulse = 0.8 + Math.sin(t * 2.5 + position[0] * 3) * 0.2;
+    const pulse = 0.85 + Math.sin(t * 2.5 + position[0] * 3) * 0.15;
     if (innerRef.current) {
       innerRef.current.scale.setScalar(pulse);
     }
     if (outerRef.current) {
       outerRef.current.scale.setScalar(0.8 + Math.sin(t * 1.5 + position[0] * 2) * 0.4);
       (outerRef.current.material as THREE.MeshBasicMaterial).opacity =
-        0.08 + Math.sin(t * 2 + position[0] * 3) * 0.06;
+        0.1 + Math.sin(t * 2 + position[0] * 3) * 0.08;
     }
   });
 
@@ -89,14 +63,32 @@ function Hotspot3D({
     <group position={position}>
       {/* Inner bright dot */}
       <mesh ref={innerRef as React.RefObject<THREE.Mesh>}>
-        <sphereGeometry args={[0.09, 16, 16]} />
+        <sphereGeometry args={[0.12, 16, 16]} />
         <meshBasicMaterial color={color} transparent opacity={1.0} />
       </mesh>
       {/* Outer glow ring */}
       <mesh ref={outerRef as React.RefObject<THREE.Mesh>}>
-        <sphereGeometry args={[0.22, 16, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={0.18} />
+        <sphereGeometry args={[0.28, 16, 16]} />
+        <meshBasicMaterial color={color} transparent opacity={0.15} />
       </mesh>
+      {/* Label */}
+      <Html
+        position={[0, 0.35, 0]}
+        center
+        distanceFactor={6}
+        style={{ pointerEvents: "none" }}
+      >
+        <div
+          className="whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold"
+          style={{
+            backgroundColor: "rgba(0,0,0,0.7)",
+            borderLeft: `2px solid ${color}`,
+            color: "rgba(255,255,255,0.85)",
+          }}
+        >
+          {label}
+        </div>
+      </Html>
     </group>
   );
 }
@@ -159,7 +151,7 @@ function TruckModel() {
   return (
     <group ref={groupRef}>
       {HOTSPOTS.map((h) => (
-        <Hotspot3D key={h.label} position={h.position} color={h.color} />
+        <Hotspot3D key={h.label} position={h.position} color={h.color} label={h.label} />
       ))}
     </group>
   );
@@ -208,34 +200,6 @@ function LoadingFallback() {
   );
 }
 
-/* ─── 2D Hotspot legend overlay ─── */
-function HotspotLegend({ isVisible }: { isVisible: boolean }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={isVisible ? { opacity: 1, x: 0 } : { opacity: 0, x: -20 }}
-      transition={{ duration: 0.6, delay: 1.2 }}
-      className="absolute top-4 left-4 md:top-6 md:left-6 z-10 pointer-events-none"
-    >
-      <p className="text-[8px] md:text-[9px] text-white/25 uppercase tracking-wider font-semibold mb-2">
-        Known Issues Found
-      </p>
-      <div className="space-y-[5px]">
-        {HOTSPOTS.map((h) => (
-          <div key={h.label} className="flex items-center gap-1.5">
-            <div
-              className="w-[5px] h-[5px] rounded-full shrink-0"
-              style={{ backgroundColor: h.color }}
-            />
-            <span className="text-[8px] md:text-[9px] text-white/40 font-medium leading-tight">
-              {h.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
 
 /* ─── Premium phone — finished inspection report ─── */
 function PremiumPhone({ isVisible }: { isVisible: boolean }) {
@@ -375,8 +339,6 @@ export default function VehicleInspectionVisual() {
       <div className="absolute top-1/3 right-1/4 w-[400px] h-[250px] bg-[#1a3a7a]/[0.03] rounded-full blur-[80px] pointer-events-none" />
 
       <div className="relative w-full aspect-[16/9] md:aspect-[2/1]">
-        <HotspotLegend isVisible={isInView} />
-
         <Suspense fallback={<LoadingFallback />}>
           <Canvas
             dpr={[1, 1.5]}
