@@ -62,19 +62,22 @@ export default function SolutionSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <motion.h2
+          <motion.p
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="text-2xl md:text-3xl font-semibold tracking-tight"
+            className="text-lg md:text-xl text-gray-500 mb-6"
           >
-            <span className="line-through decoration-gray-400 decoration-2 text-gray-500">History reports</span>
-            <span className="text-gray-600 mx-2">/</span>
-            <span className="line-through decoration-gray-400 decoration-2 text-gray-500">Book values</span>
-            <span className="text-gray-600 mx-2">/</span>
-            <span className="line-through decoration-gray-400 decoration-2 text-gray-500">Auction comps</span>
-            <span className="text-gray-600 mx-2">/</span>
+            <span className="line-through decoration-gray-400 decoration-2">Inspections, appraisals, history reports, book values, auction comps.</span>
+          </motion.p>
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="text-5xl md:text-6xl font-bold tracking-tight"
+          >
             <span className="text-brand-gradient">VeriBuy.</span>
           </motion.h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
