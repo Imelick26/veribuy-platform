@@ -69,6 +69,10 @@ export default function SolutionSection() {
             With AI, VeriBuy turns anyone into an{" "}
             <span className="text-brand-gradient">expert vehicle inspector.</span>
           </h2>
+          <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
+            Once condition is understood, VeriBuy uses trusted market data to
+            ensure you pay exactly what the vehicle is worth.
+          </p>
         </motion.div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
