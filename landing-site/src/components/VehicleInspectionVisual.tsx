@@ -28,7 +28,7 @@ const HOTSPOTS = [
   },
   {
     label: "Rear Camera Recall",
-    position: [-3.0, 0.2, 0.5] as [number, number, number],
+    position: [-3.2, 0.15, 0.0] as [number, number, number],
     color: "#ef4444",
   },
 ];
