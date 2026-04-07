@@ -62,32 +62,25 @@ export default function SolutionSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <div className="space-y-2 mb-6">
-            {[
-              "History reports",
-              "Book values",
-              "Auction comps",
-              "Recon spreadsheets",
-              "Third-party inspections",
-              "Market pricing tools",
-            ].map((tool, i) => (
-              <motion.p
-                key={tool}
-                initial={{ opacity: 0, x: -10 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.3, delay: i * 0.1 }}
-                className="text-2xl md:text-3xl font-semibold text-gray-600 line-through decoration-white/20"
-              >
-                {tool}
-              </motion.p>
-            ))}
-          </div>
-          <motion.h2
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.7 }}
+            transition={{ duration: 0.5 }}
+            className="text-xl md:text-2xl text-gray-500 leading-relaxed mb-6"
+          >
+            <span className="line-through decoration-white/20">History reports</span>,{" "}
+            <span className="line-through decoration-white/20">book values</span>,{" "}
+            <span className="line-through decoration-white/20">auction comps</span>,{" "}
+            <span className="line-through decoration-white/20">recon spreadsheets</span>,{" "}
+            <span className="line-through decoration-white/20">third-party inspections</span>,{" "}
+            <span className="line-through decoration-white/20">market pricing tools</span>.
+          </motion.p>
+          <motion.h2
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.3 }}
             className="text-5xl md:text-6xl font-bold tracking-tight"
           >
             <span className="text-brand-gradient">VeriBuy.</span>
