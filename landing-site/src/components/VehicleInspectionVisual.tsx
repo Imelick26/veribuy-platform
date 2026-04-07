@@ -23,7 +23,7 @@ const HOTSPOTS = [
   },
   {
     label: "Fuel Pump Failure",
-    position: [-1.4, -0.6, 0.8] as [number, number, number],
+    position: [2.2, 0.2, -0.4] as [number, number, number],
     color: "#ef4444",
   },
   {
