@@ -66,12 +66,12 @@ export default function SolutionSection() {
             How It Works
           </p>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-            Simple enough for anyone.{" "}
-            <span className="text-brand-gradient">Thorough enough for experts.</span>
+            Six steps.{" "}
+            <span className="text-brand-gradient">Zero blind spots.</span>
           </h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            VeriBuy&apos;s AI-guided workflow turns any team member into an expert
-            vehicle inspector — no training manual required.
+            AI turns anyone into an expert vehicle inspector — just follow the
+            steps and VeriBuy handles the rest.
           </p>
         </motion.div>
 
