@@ -66,7 +66,7 @@ export default function SolutionSection() {
             How It Works
           </p>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-            With AI, VeriBuy turns anyone into an{" "}
+            VeriBuy turns anyone into an{" "}
             <span className="text-brand-gradient">expert vehicle inspector.</span>
           </h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
