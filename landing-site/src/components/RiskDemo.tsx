@@ -23,8 +23,9 @@ export default function RiskDemo() {
             <span className="text-brand-gradient">in Minutes.</span>
           </h2>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto leading-relaxed">
-            VeriBuy brings model-specific issues to light, turning a basic
-            walk-around into a quantifiable purchase decision.
+            VeriBuy brings model-specific issues to light and locates them
+            on an interactive diagram — turning a basic walk-around into a
+            quantifiable purchase decision.
           </p>
         </motion.div>
 
