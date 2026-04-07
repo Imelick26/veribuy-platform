@@ -66,11 +66,11 @@ export default function SolutionSection() {
             The Platform
           </p>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-            From VIN to Verified{" "}
+            From Capture to Confidence{" "}
             <span className="text-brand-gradient">in Minutes.</span>
           </h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Every step from VIN decode to buy/pass recommendation — standardized,
+            Every step from first photo to final recommendation — standardized,
             auditable, and powered by AI. No guesswork. No blind spots.
           </p>
         </motion.div>
