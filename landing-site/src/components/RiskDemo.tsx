@@ -23,9 +23,8 @@ export default function RiskDemo() {
             <span className="text-brand-gradient">in Minutes.</span>
           </h2>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto leading-relaxed">
-            From the first photo to full risk intelligence — VeriBuy pulls NHTSA
-            recalls, complaints, and known failure patterns to surface what a
-            walk-around can&apos;t. Here&apos;s a 2023 Ford F-450 Super Duty.
+            VeriBuy brings model-specific issues to light, turning a basic
+            walk-around into a quantifiable purchase decision.
           </p>
         </motion.div>
 
