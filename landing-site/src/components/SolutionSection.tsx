@@ -64,12 +64,12 @@ export default function SolutionSection() {
         >
           <div className="space-y-2 mb-6">
             {[
-              "Carfax",
-              "AutoCheck",
+              "History reports",
               "Book values",
               "Auction comps",
               "Recon spreadsheets",
               "Third-party inspections",
+              "Market pricing tools",
             ].map((tool, i) => (
               <motion.p
                 key={tool}
