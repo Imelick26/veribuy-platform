@@ -51,7 +51,7 @@ const capabilities = [
 
 export default function SolutionSection() {
   return (
-    <section id="platform" className="relative py-24 lg:py-32">
+    <section className="relative py-24 lg:py-32">
       <div className="absolute inset-0 bg-brand-gradient-subtle" />
 
       <div className="relative mx-auto max-w-7xl px-6 lg:px-8">
@@ -63,15 +63,15 @@ export default function SolutionSection() {
           className="text-center mb-16"
         >
           <p className="text-sm font-medium text-accent-magenta uppercase tracking-[0.15em] mb-4">
-            The Platform
+            How It Works
           </p>
           <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-            From Capture to Confidence{" "}
-            <span className="text-brand-gradient">in Minutes.</span>
+            Six steps.{" "}
+            <span className="text-brand-gradient">Zero blind spots.</span>
           </h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
             Every step from first photo to final recommendation — standardized,
-            auditable, and powered by AI. No guesswork. No blind spots.
+            auditable, and powered by AI.
           </p>
         </motion.div>
 
