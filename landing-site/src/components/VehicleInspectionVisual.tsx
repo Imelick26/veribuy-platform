@@ -13,17 +13,17 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const HOTSPOTS = [
   {
     label: "Steering Column Recall",
-    position: [0.2, 0.1, -0.5] as [number, number, number], // inside cab at steering wheel
+    position: [-0.2, 0.1, 0.5] as [number, number, number], // inside cab at steering wheel
     color: "#ef4444",
   },
   {
     label: "Fuel Pump Failure",
-    position: [2.6, 0.1, 0.0] as [number, number, number], // front engine bay
+    position: [-2.6, 0.1, 0.0] as [number, number, number], // front engine bay
     color: "#ef4444",
   },
   {
     label: "Rear Camera Recall",
-    position: [-3.25, 0.0, 0.0] as [number, number, number], // very rear of tailgate
+    position: [3.25, 0.0, 0.0] as [number, number, number], // very rear of tailgate
     color: "#ef4444",
   },
 ];
