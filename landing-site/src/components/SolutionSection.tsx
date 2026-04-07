@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Camera,
   BarChart3,
+  ArrowRight,
 } from "lucide-react";
 
 const capabilities = [
@@ -98,6 +99,23 @@ export default function SolutionSection() {
             </motion.div>
           ))}
         </div>
+
+        {/* CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="text-center mt-14"
+        >
+          <a
+            href="#demo"
+            className="inline-flex items-center gap-2 bg-brand-gradient rounded-full px-8 py-4 text-base font-semibold text-white shadow-brand-glow hover:shadow-brand-glow-lg transition-all duration-300"
+          >
+            Book a Demo
+            <ArrowRight size={18} />
+          </a>
+        </motion.div>
       </div>
     </section>
   );

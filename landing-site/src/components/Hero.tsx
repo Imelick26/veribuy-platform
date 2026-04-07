@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Shield } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export default function Hero() {
   return (
@@ -14,18 +14,6 @@ export default function Hero() {
       {/* Content */}
       <div className="relative z-10 mx-auto max-w-7xl px-6 lg:px-8 pt-32 pb-20">
         <div className="text-center max-w-4xl mx-auto">
-          {/* Enterprise Badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-5 py-2.5 text-sm text-gray-300 mb-8 badge-shimmer">
-              <Shield size={15} className="text-accent-pink" />
-              AI-Powered Vehicle Verification
-            </div>
-          </motion.div>
-
           {/* Headline */}
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
@@ -65,12 +53,6 @@ export default function Hero() {
                 size={18}
                 className="group-hover:translate-x-1 transition-transform"
               />
-            </a>
-            <a
-              href="#platform"
-              className="rounded-full border border-white/15 bg-white/5 px-8 py-4 text-base font-semibold text-white hover:bg-white/10 hover:border-white/25 transition-all duration-300"
-            >
-              See How It Works
             </a>
           </motion.div>
         </div>
