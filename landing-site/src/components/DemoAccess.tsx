@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CheckCircle, Calendar } from "lucide-react";
 
 const CAL_LINK = "imelick26/veribuy-intro";
 
@@ -31,47 +30,16 @@ export default function DemoAccess() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="grid lg:grid-cols-5 gap-10 items-start"
+          className="relative overflow-hidden rounded-2xl bg-brand-gradient p-px"
         >
-          {/* Left — Value props */}
-          <div className="lg:col-span-2 space-y-6">
-            <ul className="space-y-4">
-              {[
-                "15-minute live walkthrough",
-                "See AI-powered inspections in action",
-                "Get your questions answered directly",
-                "No commitment required",
-              ].map((item) => (
-                <li
-                  key={item}
-                  className="flex items-center gap-3 text-gray-300"
-                >
-                  <CheckCircle
-                    size={18}
-                    className="text-emerald-400 shrink-0"
-                  />
-                  {item}
-                </li>
-              ))}
-            </ul>
-
-            <div className="flex items-center gap-3 text-gray-500 text-sm pt-2">
-              <Calendar size={16} />
-              <span>Select a date &amp; time to get started</span>
-            </div>
-          </div>
-
-          {/* Right — Cal.com Embed */}
-          <div className="lg:col-span-3 relative overflow-hidden rounded-2xl bg-brand-gradient p-px">
-            <div className="rounded-2xl bg-[#0c0f1a]/95 overflow-hidden">
-              <iframe
-                src={`https://cal.com/${CAL_LINK}?embed=true&theme=dark&layout=month_view`}
-                className="w-full border-0"
-                style={{ minHeight: "550px", height: "100%" }}
-                allow="payment"
-                loading="lazy"
-              />
-            </div>
+          <div className="rounded-2xl bg-[#0c0f1a]/95 overflow-hidden">
+            <iframe
+              src={`https://cal.com/${CAL_LINK}?embed=true&theme=dark&layout=month_view`}
+              className="w-full border-0"
+              style={{ minHeight: "550px", height: "100%" }}
+              allow="payment"
+              loading="lazy"
+            />
           </div>
         </motion.div>
       </div>
