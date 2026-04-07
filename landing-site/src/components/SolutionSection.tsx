@@ -31,15 +31,15 @@ const capabilities = [
   },
   {
     icon: ShieldCheck,
-    title: "Risk Inspection",
+    title: "Risk Inspection & Recon Estimates",
     description:
-      "Each known risk gets a targeted yes/no checklist. If an issue is flagged, the inspector is prompted for evidence — no wasted time photographing things that aren't broken.",
+      "Each known risk gets a targeted yes/no checklist. Confirmed issues automatically generate repair cost estimates — giving you a recon number before you even make an offer.",
   },
   {
     icon: BarChart3,
     title: "Market Valuation Engine",
     description:
-      "Fair acquisition pricing powered by six market data sources, regional adjustments, and condition-aware analysis — giving every stakeholder a defensible number.",
+      "Fair acquisition pricing powered by six market data sources, regional adjustments, and condition-aware analysis — with recon costs factored in to give every stakeholder a defensible number.",
   },
   {
     icon: FileCheck,
