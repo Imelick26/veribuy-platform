@@ -62,13 +62,36 @@ export default function SolutionSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-16"
         >
-          <p className="text-sm font-medium text-accent-magenta uppercase tracking-[0.15em] mb-4">
-            How It Works
-          </p>
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tight">
-            VeriBuy turns anyone into an{" "}
-            <span className="text-brand-gradient">expert vehicle inspector.</span>
-          </h2>
+          <div className="space-y-2 mb-6">
+            {[
+              "Carfax",
+              "AutoCheck",
+              "Book values",
+              "Auction comps",
+              "Recon spreadsheets",
+              "Third-party inspections",
+            ].map((tool, i) => (
+              <motion.p
+                key={tool}
+                initial={{ opacity: 0, x: -10 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.3, delay: i * 0.1 }}
+                className="text-2xl md:text-3xl font-semibold text-gray-600 line-through decoration-white/20"
+              >
+                {tool}
+              </motion.p>
+            ))}
+          </div>
+          <motion.h2
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.7 }}
+            className="text-5xl md:text-6xl font-bold tracking-tight"
+          >
+            <span className="text-brand-gradient">VeriBuy.</span>
+          </motion.h2>
           <p className="mt-6 text-lg text-gray-400 max-w-2xl mx-auto leading-relaxed">
             Once condition is understood, VeriBuy uses trusted market data to
             ensure you pay exactly what the vehicle is worth.
