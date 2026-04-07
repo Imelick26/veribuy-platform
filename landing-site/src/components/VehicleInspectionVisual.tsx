@@ -13,7 +13,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const HOTSPOTS = [
   {
     label: "Steering Column Recall",
-    position: [-0.8, 0.45, 0.5] as [number, number, number], // steering wheel, driver side cab
+    position: [-1.1, 0.45, 0.5] as [number, number, number], // steering wheel, driver side cab
     color: "#ef4444",
   },
   {
