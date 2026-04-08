@@ -215,23 +215,28 @@ async function getTireSecondOpinion(
   const centerDepth = firstRead.center?.grooveDepth || "unknown";
   const firstOverall = firstRead.overall || "WORN";
 
-  const systemPrompt = `You are a tire safety auditor reviewing a previous inspection of a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}). Your job: challenge the initial assessment by looking SPECIFICALLY at the center tread zone compared to the edges.
+  const systemPrompt = `You are a tire safety auditor reviewing a previous inspection of a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}). Your job: challenge the initial assessment. The first read said "${firstOverall}" — your job is to look for reasons this should be WORSE, not to confirm it.
 
 RESPOND WITH EXACTLY THIS JSON:
 {
   "centerGrooveDepth": "deep|shallow|flush|bald",
   "centerVsEdgeRatio": "describe how center compares to edge groove depth",
+  "overallTreadAssessment": "describe the overall tread condition — is there significant rubber remaining or does the tire look worn down?",
   "shouldUpgrade": true/false,
   "upgradeTo": "WORN|REPLACE",
   "reasoning": "1-2 sentences explaining your verdict"
 }
 
 RULES:
+- Look at the ENTIRE tread surface. Does this tire look like it has significant life left, or does it look worn down?
+- A tire with deep, clearly visible grooves that cast shadows = GOOD. If you can't clearly see deep grooves, it's at least WORN.
+- A tire that looks smooth, flat, or "low on tread" across ANY zone = REPLACE.
 - Compare the CENTER zone groove depth to the EDGE zone groove depth.
 - If center grooves are less than HALF the depth of the edge grooves → centerGrooveDepth = "flush" → shouldUpgrade to REPLACE.
 - If ANY zone's surface appears flat or smooth while other zones have deep channels → that zone is "flush" regardless of tire type.
 - "flush" = tread blocks nearly level with groove floor. Surface appears smooth or flat compared to deeper zones.
-- If you agree with the initial "${firstOverall}" rating, set shouldUpgrade = false.`;
+- IMPORTANT: On high-mileage vehicles, the most common error is rating worn tires as GOOD. When in doubt, upgrade severity.
+- If you agree with the initial "${firstOverall}" rating AND the tire genuinely looks like it has plenty of tread remaining, set shouldUpgrade = false.`;
 
   const userPrompt = `INITIAL ASSESSMENT said this tire is "${firstOverall}" with center tread "${centerDepth}" — "${centerNotes}".
 

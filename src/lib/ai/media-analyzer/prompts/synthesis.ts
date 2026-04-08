@@ -38,24 +38,32 @@ Your job:
 
 SCORING RUBRIC (1-10 per area):
 9-10: Like-new. No visible wear or damage. Exceptional for any age.
-8: Very good. Minor wear only. Outstanding for a ${ageStr} vehicle.
-7: Good. Normal age-appropriate wear for a ${ageStr} vehicle with ${mileageStr}. THIS IS THE TARGET SCORE for a well-maintained vehicle of this age.
-6: Above average. Wear slightly beyond what's normal for ${ageStr}/${mileageStr}.
-5: Average. Noticeable issues beyond normal aging.
-4: Below average. Multiple issues or premature wear for the age.
-3: Poor. Significant damage or neglect.
+8: Very good. Minor cosmetic wear only — small chips, light scratches. No dents, no damage.
+7: Good. Normal age-appropriate wear. Well-maintained. No significant damage, stains, or dents.
+6: Above average wear. Some issues beyond normal aging — a noticeable dent, moderate staining, visible wear patterns.
+5: Average. Multiple noticeable issues — dents, worn seats, stains, fading beyond normal.
+4: Below average. Significant damage or heavy wear — large dents, torn/heavily worn upholstery, multiple areas of damage.
+3: Poor. Major damage or neglect clearly visible. Extensive wear, damage, or deterioration.
 1-2: Very poor. Severe damage or extreme neglect.
 
-CRITICAL — AGE-RELATIVE SCORING:
-This is a ${vehicleAge}-year-old vehicle. You MUST calibrate your expectations:
-- Cosmetic: Minor paint fade, small chips, light surface scratches are NORMAL on a ${ageStr} vehicle. These are NOT defects — they are expected aging. Score 7+ unless damage goes significantly beyond normal age-related wear.
-- Interior: Light seat wear, dashboard UV fade, minor carpet wear are EXPECTED at ${ageStr}. Score 7+ unless there's unusual damage, staining, or neglect.
-- Underbody: Light surface oxidation is NORMAL on any vehicle over 10 years old, especially trucks. Only score below 7 if there is active structural corrosion, perforation, or compromised integrity.
-- Mechanical: Judge by function, not appearance. Aged hoses, faded plastic, surface patina on an engine bay are cosmetic — not mechanical defects.
+CRITICAL — DISTINGUISH AGE-RELATED WEAR FROM ACTUAL DAMAGE:
+Age-related wear (minor paint fade, small rock chips, light surface scratches, slight UV fade) is expected and should NOT heavily penalize the score. But DAMAGE is NOT age-related and MUST be penalized regardless of age:
 
-A ${ageStr} vehicle scoring 7/10 in each area means "well-maintained for its age" — that's a GOOD vehicle. Reserve 8+ for vehicles that look remarkably better than their age suggests. Reserve 5-6 for vehicles showing wear significantly beyond what age explains.
+EXTERIOR — things that ARE age-related (don't penalize heavily): minor paint fade, small rock chips, light surface scratches, slightly faded trim
+EXTERIOR — things that are DAMAGE (penalize significantly): dents of any size, cracked or broken panels, deep scratches/gouges, significant paint peeling, rust holes, misaligned panels from collision, broken lights
+- A single noticeable dent = no higher than 6. A large dent = no higher than 5. Multiple dents = 4 or lower.
+- Visible body damage from impact (crumpled metal, creased panels) = 4 or lower regardless of age.
 
-IMPORTANT: Score relative to BOTH age (${ageStr}) and mileage (${mileageStr}). Normal age-related cosmetic wear on a ${vehicleAge}-year-old vehicle is a 7, NOT a 5-6. Only penalize below 7 for wear that goes BEYOND what the vehicle's age explains.
+INTERIOR — things that ARE age-related (don't penalize heavily): slight UV fade on dashboard, minor wear on driver seat bolster, light carpet wear
+INTERIOR — things that are DAMAGE/NEGLECT (penalize significantly): torn or heavily worn upholstery, stains, cracked dashboard, broken controls/switches, heavy soiling, pet damage, smoke damage, sagging headliner, worn-through carpet, broken trim pieces
+- An interior that "doesn't look good" or shows heavy wear throughout = no higher than 5.
+- Visible neglect (stains + wear + broken pieces) = 4 or lower.
+
+UNDERBODY: Light surface oxidation is normal on older vehicles. Active structural corrosion, perforation, or compromised integrity = score below 5.
+
+MECHANICAL: Judge by function, not appearance. Aged hoses and faded plastic are cosmetic. Active leaks, worn belts, corroded battery terminals, loose components = penalize.
+
+IMPORTANT: Be honest about what you see. A dealer needs accurate scores to make a buy decision. Inflated scores lead to overpaying. If the vehicle looks rough, score it accordingly — don't rationalize damage as "age-appropriate wear." Age explains fade and minor chips, NOT dents, tears, stains, or broken components.
 
 RESPOND WITH EXACTLY THIS JSON (no markdown):
 {

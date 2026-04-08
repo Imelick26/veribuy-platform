@@ -34,10 +34,15 @@ HOW TO EXAMINE EACH ZONE:
 - OUTER EDGE (ribs farthest from vehicle): Are the outermost grooves deep or worn smooth?
 
 GROOVE DEPTH — compare groove depth to tread block height:
-- "deep": Grooves are deep channels. The bottom is far below the block tops. Significant rubber remains.
-- "shallow": Grooves exist but blocks have worn partway down. Less than half the original depth remains.
-- "flush": Blocks have worn nearly level with the groove floor. Surface appears almost flat or smooth. Minimal transition from block to groove. Wear bars may be level with tread.
-- "bald": Flat smooth rubber. No groove structure. No block-to-groove distinction.
+- "deep": Grooves are clearly visible channels with significant depth. You can see deep shadows in the grooves. Tread blocks stand well above the groove floor. This tire has LOTS of rubber remaining.
+- "shallow": Grooves exist but are noticeably worn down. Tread blocks are low. The tire looks "used" but grooves are still clearly present. Less than half the original depth remains.
+- "flush": Surface appears smooth or nearly flat. Grooves are barely visible or gone. The tire surface looks like it's been sanded down. You cannot easily distinguish tread blocks from grooves. Wear bars (the small raised bridges between grooves) are level with or nearly level with the tread surface.
+- "bald": Flat smooth rubber. The tire contact surface is essentially a smooth band. No groove structure whatsoever.
+
+CRITICAL — HOW TO TELL "GOOD" FROM "WORN" AND "REPLACE":
+A GOOD tire has DEEP, clearly visible grooves that cast shadows. The tread pattern is prominently 3-dimensional. If the tire surface looks even SOMEWHAT flat, smooth, or the grooves look shallow — it is NOT "GOOD." A tire that is "okay" or "decent" or "still has some tread" is WORN, not GOOD.
+
+MILEAGE CONTEXT: This vehicle has ${mileageStr}. Tires typically last 40,000-60,000 miles. If this vehicle has over 40,000 miles on the odometer and the tires appear to be original (matching the vehicle's age), they are almost certainly WORN or REPLACE, not GOOD. Factor this into your assessment.
 
 KEY TEST — compare zones against each other:
 - If ANY zone's grooves are less than HALF the depth of another zone's grooves, the shallower zone is "flush" → REPLACE.
@@ -46,9 +51,9 @@ KEY TEST — compare zones against each other:
 
 CLASSIFICATION RULES:
 - The OVERALL rating equals the WORST zone. If one zone is REPLACE but the others are GOOD, overall = REPLACE.
-- GOOD: All three zones have deep grooves (7+/32")
-- WORN: Any zone has shallow grooves (3-6/32") but none are flush/bald
-- REPLACE: Any zone is flush or bald (<3/32"), OR wear bars are visible, OR any bald patches exist
+- GOOD: All three zones have deep, prominent grooves with clear 3D tread pattern. The tire looks nearly new. This should be RARE on a used vehicle.
+- WORN: Any zone has shallow grooves (3-6/32") but none are flush/bald. Tread is visibly reduced but still present.
+- REPLACE: Any zone is flush or bald (<3/32"), OR wear bars are visible/level with tread, OR any smooth/bald patches exist, OR the tire surface looks flat/smooth in any zone.
 
 ALSO CHECK:
 1. Uneven wear pattern — center wear = overinflation, inner edge = alignment, outer edge = underinflation, cupping = suspension
@@ -63,8 +68,10 @@ ALSO CHECK:
 
 CRITICAL — CONSERVATIVE BIAS FOR DEALER USE:
 This is a dealer acquisition tool. Dealers need worst-case tire cost, not best-case. Err on the side of flagging tires for replacement. A dealer would rather over-budget for tires and be pleasantly surprised than miss a bad tire.
+- "GOOD" should be RARE on used vehicles — most used car tires are at least WORN. Only rate GOOD if the tread is clearly deep and prominent with obvious 3D pattern.
 - When uncertain between GOOD and WORN → choose WORN
 - When uncertain between WORN and REPLACE → choose REPLACE
-- If tread looks "okay but low" → WORN or REPLACE, never GOOD
-- Dry rot, any sidewall cracking, or tires over 6 years old → REPLACE regardless of tread depth`;
+- If tread looks "okay but low" or "still has some tread" → WORN or REPLACE, never GOOD
+- Dry rot, any sidewall cracking, or tires over 6 years old → REPLACE regardless of tread depth
+- A high-mileage vehicle (80K+) with what appear to be original tires → almost certainly WORN or REPLACE`;
 }

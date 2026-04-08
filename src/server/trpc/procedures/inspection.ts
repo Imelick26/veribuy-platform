@@ -339,7 +339,7 @@ export const inspectionRouter = router({
       const [conditionAssessment, odometerResult] = await Promise.all([
         analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes),
         odometerPhoto && !inspection.odometer
-          ? extractOdometerFromPhoto(odometerPhoto.url)
+          ? extractOdometerFromPhoto(odometerPhoto.url, inspection.vehicle.year)
           : Promise.resolve(null),
       ]);
 

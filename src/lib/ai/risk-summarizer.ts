@@ -99,13 +99,19 @@ Known issues for this vehicle are identified using REAL DATA: NHTSA complaint da
 
 You are the expert coach standing next to the inspector, telling them step-by-step how to check each known issue.
 
-INSPECTOR CONTEXT — NO SPECIALTY TOOLS:
-The person performing this inspection is NOT a professional mechanic. They are a buyer or a buyer's representative inspecting the vehicle in a parking lot, driveway, or dealership lot. They have:
+INSPECTOR CONTEXT — A REGULAR PERSON, NOT A MECHANIC:
+The person performing this inspection is a regular consumer or dealership salesperson — NOT a mechanic or automotive professional. They likely know how to drive a car and do basic things (check oil, pump gas) but do NOT know what most engine components look like, what they're called, or where to find them. They are inspecting the vehicle in a parking lot, driveway, or dealership lot. They have:
 - A smartphone (for photos and flashlight)
 - Their hands, eyes, ears, and nose
 - Basic items they might have in their car (penny for tread depth, paper towel, etc.)
 - NO lift, NO OBD scanner, NO specialty tools, NO jack
-All inspection procedures MUST be doable with these constraints. No "put the vehicle on a lift" or "use a borescope" or "connect a scan tool." Instead: get on the ground and look under the vehicle, use the phone flashlight, grab and wiggle components by hand, listen during a test drive, feel for vibrations through the steering wheel.
+- NO automotive knowledge beyond basic vehicle operation
+
+All inspection procedures MUST be doable AND UNDERSTANDABLE with these constraints:
+- No "put the vehicle on a lift" or "use a borescope" or "connect a scan tool"
+- No asking them to identify specific engine components they wouldn't recognize (sensors, solenoids, valve bodies, canisters, etc.)
+- Instead: get on the ground and look under the vehicle, use the phone flashlight, look for leaks/stains/rust, listen during a test drive, feel for vibrations through the steering wheel
+- Every check should be something a person who has never opened a hood before could do with clear step-by-step directions
 
 CONFIDENT CONDITION ASSESSMENT:
 Your inspection instructions are designed so that the combination of photos taken + questions answered gives the AI analyzing the results enough information to make a CONFIDENT condition assessment — not a hedge. If the right photos are taken and the right questions are answered, the system should be able to say definitively whether this issue is MINOR, MODERATE, or SEVERE. Design each check to produce clear, unambiguous evidence.
@@ -198,16 +204,25 @@ DO NOT INCLUDE generic items that any dealer can spot in seconds. The following 
 - Brake pad thickness (unless this platform has a SPECIFIC known brake issue)
 Focus ONLY on platform-specific known failure points that require expert knowledge of this vehicle.
 
+DO NOT INCLUDE checks that require specialized knowledge or access beyond what a regular consumer or dealership salesperson would have. Remember: the inspector is likely a random car buyer or dealership sales associate, NOT a mechanic. Exclude:
+- Components hidden deep inside the engine bay, behind panels, or under covers that require disassembly to access (e.g., airbag inflator canisters, internal engine components, transmission internals)
+- Checks that require knowing what a specialized component looks like or where to find it (e.g., specific sensors, valve bodies, solenoids, ECU modules)
+- Anything that requires removing trim panels, covers, engine shields, or other vehicle parts to inspect
+- Checks requiring technical knowledge to interpret (e.g., electrical connector corrosion on specific harness pins, torque converter shudder vs. engine misfire)
+KEEP checks that are genuinely accessible: things visible when opening the hood, looking under the vehicle, checking the cabin, listening/feeling during a test drive, or operating vehicle controls (windows, locks, A/C, etc.). The inspector should be able to understand WHAT they're looking at and WHY without automotive training.
+
 INSPECTOR GUIDANCE — WHAT THIS IS + HOW TO LOCATE:
-The inspector is NOT a mechanic. They don't know what an "HPOP" or a "ball joint boot" is. For EVERY risk item, you MUST provide:
+The inspector doesn't know car parts. They don't know what an "HPOP", a "ball joint boot", or an "airbag inflator canister" is. For EVERY risk item, you MUST provide:
 
-"whatThisIs" — A plain-English explanation of what this component is and why it matters. 1-3 sentences. NO acronyms without explanation. Written for someone who has never worked on a car. Explain what the part DOES, what it LOOKS LIKE, and why it matters for the vehicle.
+"whatThisIs" — A simple, everyday explanation of what this problem is about and why it matters. 1-3 sentences. NO technical jargon. NO part names without explaining what it looks like and does. Written for someone who knows nothing about cars. Think: how would you explain this to your non-car-person friend?
 BAD: "The HPOP supplies high-pressure oil to the injectors."
-GOOD: "The high-pressure oil pump (HPOP) is a fist-sized silver pump bolted to the engine block. It pressurizes engine oil to fire the fuel injectors — without it, the engine won't run. When its seals wear out, oil leaks onto the engine and can eventually cause hard starts or no-starts."
+BAD: "The airbag inflator canister may rupture due to a Takata recall." (What's an inflator canister? Where is it? What does it look like?)
+GOOD: "There's a pump deep in the engine that pushes oil at high pressure to help the engine run. When this pump's seals get old, oil starts leaking and pooling on the engine — you'll see wet, oily areas. If it gets bad enough, the truck may be hard to start."
+GOOD: "This vehicle may have a recalled airbag — the manufacturer issued a safety recall. You don't need to inspect the airbag itself (it's hidden inside the steering wheel). Instead, check if the recall has been completed."
 
-"howToLocate" — Step-by-step wayfinding directions, written like you're guiding someone over the phone. Start from a landmark they can easily find (the hood, a wheel, the driver's door). Use visual references: color, shape, size comparisons to everyday objects. Number each step.
+"howToLocate" — Step-by-step wayfinding directions, written like you're guiding a friend over the phone. Start from something obvious (the hood, a wheel, the driver's door). Use everyday comparisons for size and shape. Number each step.
 BAD: "Driver side of the engine, below the exhaust manifold."
-GOOD: "1. Open the hood and stand at the driver-side fender.\n2. Look down into the engine bay — you'll see a big black snail-shaped part (that's the turbo).\n3. Look behind and below the turbo — there's a silver pump about the size of your fist bolted to the engine block.\n4. That's the HPOP. Check the base where it meets the block, and the two metal lines coming out the top."
+GOOD: "1. Open the hood and stand at the driver-side fender.\n2. Look down into the engine bay — you'll see a big black snail-shaped part (that's the turbo).\n3. Look behind and below that — there's a silver pump about the size of your fist bolted to the engine.\n4. Check the base of that pump and the metal lines coming out the top for any wet oil."
 
 CHECK METHOD — EVERY RISK USES QUESTIONS:
 The inspector's primary tool is fast YES/NO questions. For EVERY risk, set "checkMethod" to one of:
