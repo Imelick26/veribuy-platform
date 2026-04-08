@@ -76,7 +76,7 @@ export const mediaRouter = router({
       };
     }),
 
-  // Confirm upload completed successfully
+  // Confirm upload completed successfully — verifies file exists in storage
   confirmUpload: protectedProcedure
     .input(
       z.object({
@@ -95,13 +95,53 @@ export const mediaRouter = router({
       if (mediaItem.inspection.orgId !== ctx.orgId)
         throw new Error("Not authorized");
 
-      // Update with dimensions if provided
+      // Verify the file actually exists in Supabase Storage
+      const storagePath = mediaItem.s3Key;
+      const lastSlash = storagePath.lastIndexOf("/");
+      const parentDir = storagePath.slice(0, lastSlash);
+      const fileName = storagePath.slice(lastSlash + 1);
+
+      const { data: fileList, error: listError } = await supabaseAdmin.storage
+        .from(mediaItem.s3Bucket)
+        .list(parentDir, { search: fileName, limit: 1 });
+
+      const fileExists = !listError && fileList && fileList.some((f) => f.name === fileName);
+
+      if (!fileExists) {
+        // Mark as FAILED so the client can retry
+        await ctx.db.mediaItem.update({
+          where: { id: input.mediaItemId },
+          data: { uploadStatus: "FAILED" },
+        });
+        throw new Error("File not found in storage — upload may have failed");
+      }
+
+      // File verified — mark as CONFIRMED
       return ctx.db.mediaItem.update({
         where: { id: input.mediaItemId },
         data: {
+          uploadStatus: "CONFIRMED",
           width: input.width,
           height: input.height,
         },
+      });
+    }),
+
+  // Mark a media item as FAILED (called when client-side retries are exhausted)
+  markFailed: protectedProcedure
+    .input(z.object({ mediaItemId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const mediaItem = await ctx.db.mediaItem.findUnique({
+        where: { id: input.mediaItemId },
+        include: { inspection: true },
+      });
+      if (!mediaItem) throw new Error("Media item not found");
+      if (mediaItem.inspection.orgId !== ctx.orgId)
+        throw new Error("Not authorized");
+
+      return ctx.db.mediaItem.update({
+        where: { id: input.mediaItemId },
+        data: { uploadStatus: "FAILED" },
       });
     }),
 

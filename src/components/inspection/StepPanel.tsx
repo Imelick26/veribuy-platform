@@ -14,6 +14,7 @@ import {
   BarChart3,
   FileText,
   CheckCircle,
+  CheckCircle2,
   AlertTriangle,
   Loader2,
   Download,
@@ -94,6 +95,7 @@ interface StepPanelProps {
   // Market Analysis
   onFetchMarket?: () => void;
   isFetchingMarket?: boolean;
+  completionPhase?: "history" | "market" | "finalizing" | null;
   // Report
   onViewReport?: () => void;
   // Confidence
@@ -136,12 +138,15 @@ export function StepPanel({
   isFetchingHistory,
   onFetchMarket,
   isFetchingMarket,
+  completionPhase,
   onViewReport,
   inspectionConfidence,
 }: StepPanelProps) {
-  // Count captured photos for gating
+  // Count captured photos for gating — only CONFIRMED uploads count
   const capturedPhotos = (inspection.media || []).filter(
-    (m) => m.url && m.captureType && GUIDED_SHOTS.some((s) => s.type === m.captureType)
+    (m) => m.url && m.captureType
+      && GUIDED_SHOTS.some((s) => s.type === m.captureType)
+      && ((m as { uploadStatus?: string }).uploadStatus || "CONFIRMED") === "CONFIRMED"
   ).length;
   const allPhotosCaptured = capturedPhotos >= GUIDED_SHOTS.length;
 
@@ -508,7 +513,43 @@ export function StepPanel({
             </div>
           </CardHeader>
 
-          {!market ? (
+          {completionPhase ? (
+            // Multi-step progress during auto-completion chain
+            <div className="space-y-3 py-6 px-4">
+              <div className="flex items-center gap-3">
+                {completionPhase === "history" ? (
+                  <div className="spinner-gradient h-4 w-4 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-success-500 shrink-0" />
+                )}
+                <span className={cn("text-sm", completionPhase === "history" ? "text-text-primary font-medium" : "text-text-secondary")}>
+                  Fetching vehicle history
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {completionPhase === "market" ? (
+                  <div className="spinner-gradient h-4 w-4 shrink-0" />
+                ) : completionPhase === "finalizing" ? (
+                  <CheckCircle2 className="h-4 w-4 text-success-500 shrink-0" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border-2 border-border-default shrink-0" />
+                )}
+                <span className={cn("text-sm", completionPhase === "market" ? "text-text-primary font-medium" : completionPhase === "finalizing" ? "text-text-secondary" : "text-text-tertiary")}>
+                  Running market analysis
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {completionPhase === "finalizing" ? (
+                  <div className="spinner-gradient h-4 w-4 shrink-0" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border-2 border-border-default shrink-0" />
+                )}
+                <span className={cn("text-sm", completionPhase === "finalizing" ? "text-text-primary font-medium" : "text-text-tertiary")}>
+                  Redirecting to vehicle dashboard
+                </span>
+              </div>
+            </div>
+          ) : !market ? (
             <div className="space-y-4">
               <div className="text-center py-6">
                 <BarChart3 className="h-6 w-6 mx-auto text-brand-600 mb-3" />
@@ -526,6 +567,7 @@ export function StepPanel({
               </Button>
             </div>
           ) : (
+            // Fallback: market data exists but auto-redirect didn't fire (e.g., page refresh)
             <div className="space-y-3">
               <MarketAnalysisSection
                 data={market as unknown as MarketAnalysisData}

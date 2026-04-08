@@ -200,24 +200,35 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
-  // "Complete Inspection" — auto-chains: history → advance → market
+  // "Complete Inspection" — auto-chains: history → market → advance → redirect
   const [isCompleting, setIsCompleting] = useState(false);
+  const [completionPhase, setCompletionPhase] = useState<"history" | "market" | "finalizing" | null>(null);
   async function handleCompleteInspection() {
     setIsCompleting(true);
     try {
-      // Auto-fetch history if not already done
+      // Phase 1: Fetch vehicle history
+      setCompletionPhase("history");
       const historyStep = inspection?.steps.find((s) => s.step === "VEHICLE_HISTORY");
       if (historyStep && historyStep.status !== "COMPLETED") {
         await fetchHistory.mutateAsync({ inspectionId: id });
         await advanceStep.mutateAsync({ inspectionId: id, step: "VEHICLE_HISTORY" as never });
       }
-      // Run market analysis
+      // Phase 2: Run market analysis
+      setCompletionPhase("market");
       await fetchMarket.mutateAsync({ inspectionId: id });
+      // Phase 3: Finalize — advance step + redirect
+      setCompletionPhase("finalizing");
+      await advanceStep.mutateAsync({ inspectionId: id, step: "MARKET_ANALYSIS" as never });
       await utils.inspection.get.invalidate({ id });
+      // Redirect to vehicle page
+      if (inspection?.vehicle) {
+        router.push(`/dashboard/vehicles/${inspection.vehicle.id}`);
+      }
     } catch (err) {
       console.error("[CompleteInspection] Failed:", err);
-    } finally {
+      setCompletionPhase(null);
       setIsCompleting(false);
+      // Don't redirect — user can retry or use the manual fallback
     }
   }
 
@@ -711,6 +722,7 @@ export default function InspectionDetailPage({
           isFetchingHistory={fetchHistory.isPending}
           onFetchMarket={handleCompleteInspection}
           isFetchingMarket={isCompleting || fetchMarket.isPending}
+          completionPhase={completionPhase}
           onViewReport={() => setShowReportModal(true)}
           inspectionConfidence={inspectionConfidence}
         />
@@ -735,6 +747,7 @@ export default function InspectionDetailPage({
             captureType: m.captureType as string,
             url: m.url || undefined,
             thumbnailUrl: m.thumbnailUrl || m.url || undefined,
+            uploadStatus: (m as { uploadStatus?: string }).uploadStatus || "CONFIRMED",
           }))}
           onCapture={(captureType, file) => mediaUpload.upload(file, captureType)}
           isUploading={mediaUpload.currentCaptureType}
@@ -744,6 +757,11 @@ export default function InspectionDetailPage({
             setShowGuidedCapture(false);
             if (notes) setInspectorNotes(notes);
           }}
+          failedUploads={mediaUpload.failedUploads.map((f) => ({
+            captureType: f.captureType,
+            error: f.error,
+          }))}
+          onRetryUpload={(captureType) => mediaUpload.retryUpload(captureType)}
         />
       )}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -8,6 +9,16 @@ import { Car, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function VehiclesPage() {
+  // Self-heal: recover any inspections stuck with MARKET_ANALYSIS completed
+  // but inspection.status not set to COMPLETED (e.g., client-side advanceStep failed)
+  const recoverOrphans = trpc.inspection.recoverOrphanedInspections.useMutation();
+  const recoveryTriggered = React.useRef(false);
+  React.useEffect(() => {
+    if (recoveryTriggered.current) return;
+    recoveryTriggered.current = true;
+    recoverOrphans.mutate();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { data, isLoading } = trpc.vehicle.list.useQuery({ limit: 50 });
   const vehicles = data?.vehicles || [];
 

@@ -365,6 +365,7 @@ model MediaItem {
   s3Bucket     String @default("veribuy-media")
   url          String
   thumbnailUrl String?
+  uploadStatus UploadStatus @default(PENDING)
 
   mimeType   String
   sizeBytes  Int
@@ -386,6 +387,12 @@ model MediaItem {
 
   @@index([inspectionId])
   @@index([findingId])
+}
+
+enum UploadStatus {
+  PENDING
+  CONFIRMED
+  FAILED
 }
 
 enum MediaType {

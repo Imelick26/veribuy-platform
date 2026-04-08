@@ -119,8 +119,9 @@ export const inspectionRouter = router({
   get: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      const isSuperAdmin = (ctx.session.user as Record<string, unknown>).role === "SUPER_ADMIN";
       const inspection = await ctx.db.inspection.findUnique({
-        where: { id: input.id, orgId: ctx.orgId },
+        where: { id: input.id, ...(isSuperAdmin ? {} : { orgId: ctx.orgId }) },
         include: {
           vehicle: true,
           inspector: { select: { id: true, name: true, email: true, avatar: true } },
@@ -1358,6 +1359,33 @@ export const inspectionRouter = router({
         },
       });
 
+      // Server-side completion guarantee: mark inspection as COMPLETED
+      // so the vehicle appears in the vehicles list even if the client-side
+      // advanceStep call fails or never fires
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+
+      // Auto-complete REPORT_GENERATION step (mirrors advanceStep logic)
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "REPORT_GENERATION",
+          },
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      }).catch(() => {
+        // REPORT_GENERATION step might not exist on older inspections
+      });
+
       return marketAnalysis;
     }),
 
@@ -1383,8 +1411,9 @@ export const inspectionRouter = router({
       purchasePrice: z.number().int().positive().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const isSuperAdmin = (ctx.session.user as Record<string, unknown>).role === "SUPER_ADMIN";
       await ctx.db.inspection.update({
-        where: { id: input.inspectionId, orgId: ctx.orgId },
+        where: { id: input.inspectionId, ...(isSuperAdmin ? {} : { orgId: ctx.orgId }) },
         data: {
           purchaseOutcome: input.outcome,
           purchasePrice: input.outcome === "PURCHASED" ? (input.purchasePrice ?? null) : null,
@@ -1402,8 +1431,9 @@ export const inspectionRouter = router({
       notes: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      const isSuperAdmin = (ctx.session.user as Record<string, unknown>).role === "SUPER_ADMIN";
       const inspection = await ctx.db.inspection.findFirstOrThrow({
-        where: { id: input.inspectionId, orgId: ctx.orgId },
+        where: { id: input.inspectionId, ...(isSuperAdmin ? {} : { orgId: ctx.orgId }) },
         include: { vehicle: true, marketAnalysis: true },
       });
 
@@ -1486,8 +1516,9 @@ export const inspectionRouter = router({
         totalCostsCents: input.costItems.reduce((s, c) => s + c.amountCents, 0),
         reasoning: "Dealer-edited cost breakdown",
       };
+      const isSuperAdmin = (ctx.session.user as Record<string, unknown>).role === "SUPER_ADMIN";
       await ctx.db.inspection.update({
-        where: { id: input.inspectionId, orgId: ctx.orgId },
+        where: { id: input.inspectionId, ...(isSuperAdmin ? {} : { orgId: ctx.orgId }) },
         data: {
           offerMode: "AI_ESTIMATED",
           offerCostBreakdown: JSON.parse(JSON.stringify(breakdown)) as Prisma.InputJsonValue,
@@ -1710,6 +1741,38 @@ export const inspectionRouter = router({
       bonusInspections: org?.bonusInspections ?? 0,
     };
   }),
+
+  // Recover inspections that have a completed MARKET_ANALYSIS step but
+  // whose inspection.status was never set to COMPLETED (e.g., client-side
+  // advanceStep call failed). Called on vehicles list page load as a self-heal.
+  recoverOrphanedInspections: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const orphaned = await ctx.db.inspection.findMany({
+        where: {
+          orgId: ctx.orgId,
+          status: { not: "COMPLETED" },
+          steps: {
+            some: {
+              step: "MARKET_ANALYSIS",
+              status: "COMPLETED",
+            },
+          },
+        },
+        select: { id: true },
+      });
+
+      if (orphaned.length === 0) return { recovered: 0 };
+
+      await ctx.db.inspection.updateMany({
+        where: { id: { in: orphaned.map((o) => o.id) } },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+
+      return { recovered: orphaned.length };
+    }),
 });
 
 // Score calculation is now in @/lib/scoring.ts (shared with report generation)

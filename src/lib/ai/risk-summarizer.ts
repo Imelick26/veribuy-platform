@@ -507,6 +507,125 @@ function buildCuratedContext(curatedRisks: CuratedRisk[]): string {
   return parts.join("\n");
 }
 
+// ---------------------------------------------------------------------------
+//  Post-generation filter: remove risks for components this vehicle doesn't have
+// ---------------------------------------------------------------------------
+
+interface VehicleConfigForFilter {
+  year: number;
+  make: string;
+  model: string;
+  trim?: string | null;
+  engine?: string | null;
+  transmission?: string | null;
+  drivetrain?: string | null;
+  bodyStyle?: string | null;
+}
+
+/**
+ * Uses GPT-4o to review a generated risk list and filter out risks that reference
+ * components this specific vehicle configuration does not have (e.g., rear window
+ * regulators on an extended cab, power window issues on a truck with manual windows).
+ *
+ * Returns the filtered list. If the AI call fails, returns the original unfiltered list.
+ */
+export async function filterRisksByVehicleConfig(
+  risks: KnownIssueOutput[],
+  vehicle: VehicleConfigForFilter,
+): Promise<KnownIssueOutput[]> {
+  if (risks.length === 0) return risks;
+
+  const openai = getOpenAI();
+
+  const vehicleDesc = [
+    `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+    vehicle.trim,
+    vehicle.engine ? `(${vehicle.engine})` : null,
+    vehicle.transmission ? `${vehicle.transmission}` : null,
+    vehicle.drivetrain,
+    vehicle.bodyStyle,
+  ].filter(Boolean).join(" ");
+
+  // Build a lightweight summary of each risk for the AI to review
+  const riskSummaries = risks.map((r, i) => ({
+    index: i,
+    title: r.title,
+    category: r.category,
+    componentHint: r.componentHint,
+  }));
+
+  const systemPrompt = `You are an expert vehicle technician reviewing a risk inspection checklist that was generated for a specific vehicle. Your job is to identify and REMOVE any risks that reference components this specific vehicle configuration does NOT have.
+
+EXAMPLES OF WHAT TO REMOVE:
+- Rear window regulator/motor risks on regular cab or extended cab trucks (they have FIXED rear windows that don't open — only crew/supercrew cabs have opening rear windows)
+- Power window motor/regulator risks on vehicles with manual (hand-crank) windows
+- Rear door lock/hinge risks on 2-door vehicles
+- Sunroof/moonroof drain risks on vehicles without a sunroof
+- Third-row seat risks on vehicles without a third row
+- Turbo/supercharger risks on naturally-aspirated engines
+- 4WD/AWD transfer case risks on 2WD vehicles
+- DPF/DEF/urea risks on gasoline engines
+
+IMPORTANT:
+- When in doubt, KEEP the risk. Only remove risks you are CERTAIN don't apply.
+- Use the trim name and body style to infer the vehicle's configuration.
+- Extended cab trucks (SuperCab, King Cab, Access Cab, etc.) typically have fixed rear windows and small rear access doors that may not have power window motors.
+- Base/XL/XLT trims from the early-to-mid 2000s often have manual windows and locks.
+
+Return a JSON object: { "keepIndices": [0, 1, 3, ...], "removedExplanations": [{"index": 2, "reason": "..."}] }
+"keepIndices" should list the indices of risks to KEEP. "removedExplanations" explains why each removed risk was filtered.`;
+
+  const userPrompt = `Vehicle: ${vehicleDesc}
+
+Risk checklist to review:
+${JSON.stringify(riskSummaries, null, 2)}
+
+Which risks should be KEPT for this specific vehicle? Return the indices to keep.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.1,
+      max_tokens: 2000,
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      console.warn("[filterRisksByVehicleConfig] Empty response — returning unfiltered");
+      return risks;
+    }
+
+    const parsed = JSON.parse(content);
+    const keepIndices: number[] = parsed.keepIndices || parsed.keep_indices || [];
+    const removed = parsed.removedExplanations || parsed.removed || [];
+
+    if (keepIndices.length === 0) {
+      console.warn("[filterRisksByVehicleConfig] AI returned empty keepIndices — returning unfiltered");
+      return risks;
+    }
+
+    // Log what was filtered for debugging
+    if (removed.length > 0) {
+      console.log(`[filterRisksByVehicleConfig] Filtered ${removed.length} risks for ${vehicleDesc}:`);
+      for (const r of removed) {
+        console.log(`  - Removed "${risks[r.index]?.title}": ${r.reason}`);
+      }
+    }
+
+    // Return only the kept risks
+    const keepSet = new Set(keepIndices);
+    return risks.filter((_, i) => keepSet.has(i));
+  } catch (err) {
+    console.error("[filterRisksByVehicleConfig] Failed — returning unfiltered:", err);
+    return risks;
+  }
+}
+
 /** Check if two risk titles are similar enough to be duplicates */
 function titlesSimilar(a: string, b: string): boolean {
   const stopWords = new Set(["the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "with", "from", "issue", "issues", "problem", "problems", "failure"]);

@@ -75,6 +75,12 @@ interface CapturedPhoto {
   captureType: string;
   url?: string;
   thumbnailUrl?: string;
+  uploadStatus?: string; // "PENDING" | "CONFIRMED" | "FAILED"
+}
+
+interface FailedUploadInfo {
+  captureType: string;
+  error: string;
 }
 
 interface GuidedCaptureProps {
@@ -85,11 +91,18 @@ interface GuidedCaptureProps {
   uploadError?: string | null;
   onClearError?: () => void;
   onClose: (inspectorNotes?: string) => void;
+  failedUploads?: FailedUploadInfo[];
+  onRetryUpload?: (captureType: string) => void;
 }
 
 // ---------------------------------------------------------------------------
 //  Component
 // ---------------------------------------------------------------------------
+
+// Helper: a photo is truly "captured" only if CONFIRMED (or legacy records without status)
+function isPhotoConfirmed(c: CapturedPhoto): boolean {
+  return !!(c.url && (!c.uploadStatus || c.uploadStatus === "CONFIRMED"));
+}
 
 export function GuidedCapture({
   inspectionId,
@@ -99,13 +112,15 @@ export function GuidedCapture({
   uploadError,
   onClearError,
   onClose,
+  failedUploads = [],
+  onRetryUpload,
 }: GuidedCaptureProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Find the first uncaptured shot as the starting index
   const firstUncaptured = useMemo(() => {
     const idx = GUIDED_SHOTS.findIndex(
-      (s) => !captures.some((c) => c.captureType === s.type && c.url)
+      (s) => !captures.some((c) => c.captureType === s.type && isPhotoConfirmed(c))
     );
     return idx === -1 ? 0 : idx;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -119,7 +134,7 @@ export function GuidedCapture({
 
   const currentShot = GUIDED_SHOTS[currentIndex];
   const isCurrentCaptured = captures.some(
-    (c) => c.captureType === currentShot.type && c.url
+    (c) => c.captureType === currentShot.type && isPhotoConfirmed(c)
   );
   const currentCapture = captures.find(
     (c) => c.captureType === currentShot.type
@@ -127,7 +142,7 @@ export function GuidedCapture({
   const isCurrentUploading = isUploading === currentShot.type;
 
   const capturedCount = GUIDED_SHOTS.filter((s) =>
-    captures.some((c) => c.captureType === s.type && c.url)
+    captures.some((c) => c.captureType === s.type && isPhotoConfirmed(c))
   ).length;
 
   // Section progress
@@ -136,7 +151,7 @@ export function GuidedCapture({
     for (const sec of SECTIONS) {
       const shots = GUIDED_SHOTS.filter((s) => s.section === sec.key);
       const captured = shots.filter((s) =>
-        captures.some((c) => c.captureType === s.type && c.url)
+        captures.some((c) => c.captureType === s.type && isPhotoConfirmed(c))
       ).length;
       result[sec.key] = { captured, total: shots.length };
     }
@@ -147,14 +162,14 @@ export function GuidedCapture({
   const advanceToNext = useCallback(() => {
     // Find next uncaptured after current
     for (let i = currentIndex + 1; i < GUIDED_SHOTS.length; i++) {
-      if (!captures.some((c) => c.captureType === GUIDED_SHOTS[i].type && c.url)) {
+      if (!captures.some((c) => c.captureType === GUIDED_SHOTS[i].type && isPhotoConfirmed(c))) {
         setCurrentIndex(i);
         return;
       }
     }
     // Wrap around — find first uncaptured
     for (let i = 0; i < currentIndex; i++) {
-      if (!captures.some((c) => c.captureType === GUIDED_SHOTS[i].type && c.url)) {
+      if (!captures.some((c) => c.captureType === GUIDED_SHOTS[i].type && isPhotoConfirmed(c))) {
         setCurrentIndex(i);
         return;
       }
@@ -184,6 +199,7 @@ export function GuidedCapture({
           });
         })
         .catch(() => {
+          // Upload failed — remove from pending (failedUploads tracks it in the parent)
           setPendingUploads((prev) => {
             const next = new Set(prev);
             next.delete(captureType);
@@ -256,8 +272,9 @@ export function GuidedCapture({
               <div className="flex gap-0.5">
                 {sectionShots.map((shot, i) => {
                   const globalIdx = sectionStartIdx + i;
-                  const isCaptured = captures.some(
-                    (c) => c.captureType === shot.type && c.url
+                  const isFailed = failedUploads.some((f) => f.captureType === shot.type);
+                  const isCaptured = !isFailed && captures.some(
+                    (c) => c.captureType === shot.type && isPhotoConfirmed(c)
                   );
                   const isCurrent = globalIdx === currentIndex;
                   return (
@@ -268,6 +285,8 @@ export function GuidedCapture({
                         "h-2 w-2 rounded-full transition-all",
                         isCurrent
                           ? "bg-brand-500 scale-125 ring-2 ring-brand-500/30"
+                          : isFailed
+                          ? "bg-red-500 animate-pulse"
                           : isCaptured
                           ? "bg-emerald-500"
                           : "bg-slate-600 hover:bg-slate-500"
@@ -294,6 +313,31 @@ export function GuidedCapture({
         <div className="mx-4 mt-2 flex items-center gap-2 rounded-xl bg-red-500/20 border border-red-500/40 px-4 py-2.5">
           <span className="text-sm text-red-300 flex-1">Upload failed: {uploadError}. Please retake the photo.</span>
           <button onClick={onClearError} className="text-red-400 hover:text-red-200 text-xs font-medium shrink-0">Dismiss</button>
+        </div>
+      )}
+
+      {/* ── Failed uploads retry banner ── */}
+      {failedUploads.length > 0 && (
+        <div className="mx-4 mt-2 rounded-xl bg-red-500/15 border border-red-500/30 px-4 py-2.5">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-medium text-red-300">
+              {failedUploads.length} photo{failedUploads.length > 1 ? "s" : ""} failed to upload
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {failedUploads.map((f) => {
+              const shot = GUIDED_SHOTS.find((s) => s.type === f.captureType);
+              return (
+                <button
+                  key={f.captureType}
+                  onClick={() => onRetryUpload?.(f.captureType)}
+                  className="text-xs bg-red-500/30 hover:bg-red-500/50 text-red-200 rounded-lg px-3 py-1.5 transition-colors"
+                >
+                  Retry {shot?.label || f.captureType}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

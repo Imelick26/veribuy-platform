@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { router, protectedProcedure } from "../init";
 import { fetchComplaints, fetchRecalls, fetchInvestigations } from "@/lib/nhtsa";
 import { buildRiskProfile } from "@/lib/risk-engine";
-import { generateKnownIssues } from "@/lib/ai/risk-summarizer";
+import { generateKnownIssues, filterRisksByVehicleConfig } from "@/lib/ai/risk-summarizer";
 import type { AggregatedRiskProfile } from "@/types/risk";
 
 // NHTSA API base URL
@@ -78,8 +78,9 @@ export const vehicleRouter = router({
   getDetail: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      const isSuperAdmin = (ctx.session.user as Record<string, unknown>).role === "SUPER_ADMIN";
       return ctx.db.vehicle.findUnique({
-        where: { id: input.id, orgId: ctx.orgId },
+        where: { id: input.id, ...(isSuperAdmin ? {} : { orgId: ctx.orgId }) },
         include: {
           inspections: {
             where: { status: "COMPLETED" },
@@ -267,6 +268,25 @@ export const vehicleRouter = router({
         });
       } catch (err) {
         console.error("[enrichRiskProfile] AI known issues generation failed:", err);
+      }
+
+      // Post-filter: remove risks for components this specific vehicle doesn't have
+      // (e.g., rear window regulator on an extended cab, power windows on a manual truck)
+      if (knownIssues.length > 0) {
+        try {
+          knownIssues = await filterRisksByVehicleConfig(knownIssues, {
+            year,
+            make,
+            model,
+            trim: vehicle.trim,
+            engine: vehicle.engine,
+            transmission: vehicle.transmission,
+            drivetrain: vehicle.drivetrain,
+            bodyStyle: vehicle.bodyStyle,
+          });
+        } catch (err) {
+          console.error("[enrichRiskProfile] Risk filter failed — using unfiltered list:", err);
+        }
       }
 
       // Build unified risk profile: AI issues + recalls + investigations
