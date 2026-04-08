@@ -192,14 +192,27 @@ export function useMediaUpload(inspectionId: string) {
     [inspectionId, getUploadUrl, confirmUpload, markFailed, utils]
   );
 
+  const deleteMedia = trpc.media.delete.useMutation();
+
   // Retry a failed upload — deletes the old FAILED record and starts fresh
   const retryUpload = useCallback(
     async (captureType: string): Promise<UploadResult | null> => {
       const failed = failedUploads.find((f) => f.captureType === captureType);
       if (!failed) return null;
+
+      // Delete the old FAILED MediaItem to prevent duplicates
+      try {
+        await deleteMedia.mutateAsync({ mediaItemId: failed.mediaItemId });
+      } catch {
+        // If delete fails (already gone), proceed anyway
+      }
+
+      // Remove from failed list before re-uploading
+      setFailedUploads((prev) => prev.filter((f) => f.captureType !== captureType));
+
       return upload(failed.file, captureType);
     },
-    [failedUploads, upload]
+    [failedUploads, upload, deleteMedia]
   );
 
   const clearError = useCallback(() => {

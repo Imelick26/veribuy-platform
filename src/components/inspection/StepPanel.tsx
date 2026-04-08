@@ -167,6 +167,7 @@ export function StepPanel({
               captureType: m.captureType as string,
               url: m.url || undefined,
               thumbnailUrl: m.thumbnailUrl || m.url || undefined,
+              uploadStatus: (m as { uploadStatus?: string }).uploadStatus || "CONFIRMED",
             }))}
             onCapture={onMediaCapture}
             isUploading={uploadingCaptureType}

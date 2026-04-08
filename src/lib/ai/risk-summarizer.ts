@@ -601,11 +601,15 @@ Which risks should be KEPT for this specific vehicle? Return the indices to keep
     }
 
     const parsed = JSON.parse(content);
-    const keepIndices: number[] = parsed.keepIndices || parsed.keep_indices || [];
+    const rawKeep = parsed.keepIndices || parsed.keep_indices || [];
     const removed = parsed.removedExplanations || parsed.removed || [];
 
+    // Validate indices are numbers within bounds
+    const keepIndices: number[] = rawKeep
+      .filter((i: unknown) => typeof i === "number" && i >= 0 && i < risks.length);
+
     if (keepIndices.length === 0) {
-      console.warn("[filterRisksByVehicleConfig] AI returned empty keepIndices — returning unfiltered");
+      console.warn("[filterRisksByVehicleConfig] AI returned no valid keepIndices — returning unfiltered");
       return risks;
     }
 

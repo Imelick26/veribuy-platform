@@ -22,6 +22,7 @@ interface CaptureItem {
   captureType: string;
   url?: string;
   thumbnailUrl?: string;
+  uploadStatus?: string; // "PENDING" | "CONFIRMED" | "FAILED"
 }
 
 interface CaptureGridProps {
@@ -157,7 +158,7 @@ export function CaptureGrid({
 
   const totalRequired = GUIDED_SHOTS.length;
   const capturedCount = GUIDED_SHOTS.filter((s) =>
-    captures.some((c) => c.captureType === s.type && c.url)
+    captures.some((c) => c.captureType === s.type && c.url && (!c.uploadStatus || c.uploadStatus === "CONFIRMED"))
   ).length;
   const remaining = totalRequired - capturedCount;
   const allDone = remaining === 0;
@@ -225,7 +226,7 @@ export function CaptureGrid({
       {/* ── Section grids ── */}
       {SECTIONS.map((section) => {
         const sectionCaptured = section.shots.filter((s) =>
-          captures.some((c) => c.captureType === s.type && c.url)
+          captures.some((c) => c.captureType === s.type && c.url && (!c.uploadStatus || c.uploadStatus === "CONFIRMED"))
         ).length;
 
         return (
