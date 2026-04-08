@@ -19,7 +19,11 @@ export function buildSynthesisPrompt(
     ? `${vehicle.mileage.toLocaleString()} miles`
     : "unknown mileage";
 
-  const system = `You are a senior automotive appraiser producing the final condition assessment for a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
+  const currentYear = new Date().getFullYear();
+  const vehicleAge = currentYear - vehicle.year;
+  const ageStr = `${vehicleAge} years old`;
+
+  const system = `You are a senior automotive appraiser producing the final condition assessment for a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}, ${ageStr}).
 
 You are receiving:
 1. ALL exterior photos of the vehicle — use these to VISUALLY VERIFY the findings and catch anything that may have been missed
@@ -33,16 +37,25 @@ Your job:
 - LOOK AT THE PHOTOS — if you see something the findings list missed, add it
 
 SCORING RUBRIC (1-10 per area):
-9-10: Like-new. No visible wear or damage.
-8: Very good. Extremely minor wear only.
-7: Good. Normal age-appropriate wear for ${mileageStr}.
-6: Above average. Some wear beyond normal.
-5: Average. Noticeable issues.
-4: Below average. Multiple issues.
-3: Poor. Significant damage or wear.
+9-10: Like-new. No visible wear or damage. Exceptional for any age.
+8: Very good. Minor wear only. Outstanding for a ${ageStr} vehicle.
+7: Good. Normal age-appropriate wear for a ${ageStr} vehicle with ${mileageStr}. THIS IS THE TARGET SCORE for a well-maintained vehicle of this age.
+6: Above average. Wear slightly beyond what's normal for ${ageStr}/${mileageStr}.
+5: Average. Noticeable issues beyond normal aging.
+4: Below average. Multiple issues or premature wear for the age.
+3: Poor. Significant damage or neglect.
 1-2: Very poor. Severe damage or extreme neglect.
 
-IMPORTANT: Score relative to ${mileageStr}. A truck with 120K miles showing moderate wear is normal (7). The same wear at 20K miles is concerning (4-5).
+CRITICAL — AGE-RELATIVE SCORING:
+This is a ${vehicleAge}-year-old vehicle. You MUST calibrate your expectations:
+- Cosmetic: Minor paint fade, small chips, light surface scratches are NORMAL on a ${ageStr} vehicle. These are NOT defects — they are expected aging. Score 7+ unless damage goes significantly beyond normal age-related wear.
+- Interior: Light seat wear, dashboard UV fade, minor carpet wear are EXPECTED at ${ageStr}. Score 7+ unless there's unusual damage, staining, or neglect.
+- Underbody: Light surface oxidation is NORMAL on any vehicle over 10 years old, especially trucks. Only score below 7 if there is active structural corrosion, perforation, or compromised integrity.
+- Mechanical: Judge by function, not appearance. Aged hoses, faded plastic, surface patina on an engine bay are cosmetic — not mechanical defects.
+
+A ${ageStr} vehicle scoring 7/10 in each area means "well-maintained for its age" — that's a GOOD vehicle. Reserve 8+ for vehicles that look remarkably better than their age suggests. Reserve 5-6 for vehicles showing wear significantly beyond what age explains.
+
+IMPORTANT: Score relative to BOTH age (${ageStr}) and mileage (${mileageStr}). Normal age-related cosmetic wear on a ${vehicleAge}-year-old vehicle is a 7, NOT a 5-6. Only penalize below 7 for wear that goes BEYOND what the vehicle's age explains.
 
 RESPOND WITH EXACTLY THIS JSON (no markdown):
 {
@@ -74,7 +87,7 @@ additionalFindings: ONLY include defects you can clearly see in the photos that 
 
   // Build the findings inventory
   const sections: string[] = [];
-  sections.push(`VEHICLE: ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr})`);
+  sections.push(`VEHICLE: ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}, ${ageStr})`);
 
   // Group findings by area
   const byArea: Record<string, DetectedFinding[]> = {
