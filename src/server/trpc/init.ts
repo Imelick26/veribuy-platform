@@ -47,7 +47,7 @@ const enforceManager = t.middleware(async ({ ctx, next }) => {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   const role = (ctx.session.user as Record<string, unknown>).role;
-  if (role !== "OWNER" && role !== "MANAGER") {
+  if (role !== "OWNER" && role !== "MANAGER" && role !== "SUPER_ADMIN") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Manager or owner access required" });
   }
   return next({

@@ -1,8 +1,53 @@
 import { z } from "zod/v4";
 import { router, superAdminProcedure } from "../init";
+import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
+import type { Prisma } from "@/generated/prisma/client";
 
 export const adminRouter = router({
+  // ─── Platform Stats ─────────────────────────────────────────
+  stats: superAdminProcedure.query(async ({ ctx }) => {
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      totalOrgs,
+      totalUsers,
+      totalInspections,
+      inspectionsThisMonth,
+      completedInspections,
+      totalReports,
+      reportViewsAgg,
+      orgsByTier,
+    ] = await Promise.all([
+      ctx.db.organization.count(),
+      ctx.db.user.count(),
+      ctx.db.inspection.count(),
+      ctx.db.inspection.count({ where: { createdAt: { gte: firstOfMonth } } }),
+      ctx.db.inspection.count({ where: { status: "COMPLETED" } }),
+      ctx.db.report.count(),
+      ctx.db.report.aggregate({ _sum: { viewCount: true } }),
+      ctx.db.organization.groupBy({ by: ["subscription"], _count: true }),
+    ]);
+
+    const tierCounts: Record<string, number> = { BASE: 0, PRO: 0, ENTERPRISE: 0 };
+    for (const g of orgsByTier) {
+      tierCounts[g.subscription] = g._count;
+    }
+
+    return {
+      totalOrgs,
+      totalUsers,
+      totalInspections,
+      inspectionsThisMonth,
+      completedInspections,
+      activeInspections: totalInspections - completedInspections,
+      totalReports,
+      totalReportViews: reportViewsAgg._sum.viewCount ?? 0,
+      orgsByTier: tierCounts,
+    };
+  }),
+
   // List all organizations with stats
   listOrgs: superAdminProcedure.query(async ({ ctx }) => {
     const startOfMonth = new Date();
@@ -137,5 +182,186 @@ export const adminRouter = router({
       });
 
       return { ...org, inspectionsThisMonth, totalInspections };
+    }),
+
+  // ─── Users (cross-org) ─────────────────────────────────────
+  listUsers: superAdminProcedure
+    .input(
+      z.object({
+        cursor: z.string().optional(),
+        limit: z.number().min(1).max(100).default(50),
+        search: z.string().optional(),
+        role: z.enum(["SUPER_ADMIN", "OWNER", "MANAGER", "INSPECTOR", "VIEWER"]).optional(),
+        orgId: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { cursor, limit, search, role, orgId } = input;
+      const where: Record<string, unknown> = {};
+      if (role) where.role = role;
+      if (orgId) where.orgId = orgId;
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+        ];
+      }
+
+      const users = await ctx.db.user.findMany({
+        where,
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          lastLoginAt: true,
+          createdAt: true,
+          org: { select: { id: true, name: true, slug: true } },
+          _count: { select: { inspections: true } },
+        },
+      });
+
+      let nextCursor: string | undefined;
+      if (users.length > limit) {
+        const next = users.pop()!;
+        nextCursor = next.id;
+      }
+      return { users, nextCursor };
+    }),
+
+  updateUser: superAdminProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        role: z.enum(["SUPER_ADMIN", "OWNER", "MANAGER", "INSPECTOR", "VIEWER"]).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, role } = input;
+      const user = await ctx.db.user.findUnique({ where: { id } });
+      if (!user) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const data: Record<string, unknown> = {};
+      if (role !== undefined) data.role = role;
+
+      const updated = await ctx.db.user.update({ where: { id }, data });
+
+      await ctx.db.auditLog.create({
+        data: {
+          action: "USER_ROLE_CHANGE",
+          entityType: "User",
+          entityId: id,
+          metadata: { newRole: role, previousRole: user.role } as unknown as Prisma.InputJsonValue,
+          userId: ctx.userId,
+        },
+      });
+
+      return updated;
+    }),
+
+  setTempPassword: superAdminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.user.findUnique({ where: { id: input.id } });
+      if (!user) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const tempPassword = Math.random().toString(36).slice(-12);
+      const passwordHash = await bcrypt.hash(tempPassword, 12);
+
+      await ctx.db.user.update({
+        where: { id: input.id },
+        data: { passwordHash },
+      });
+
+      await ctx.db.auditLog.create({
+        data: {
+          action: "PASSWORD_RESET",
+          entityType: "User",
+          entityId: input.id,
+          metadata: { resetBy: ctx.userId },
+          userId: ctx.userId,
+        },
+      });
+
+      return { tempPassword };
+    }),
+
+  // ─── Inspections (cross-org) ────────────────────────────────
+  listInspections: superAdminProcedure
+    .input(
+      z.object({
+        cursor: z.string().optional(),
+        limit: z.number().min(1).max(100).default(25),
+        status: z.enum([
+          "CREATED", "VIN_DECODED", "RISK_REVIEWED", "MEDIA_CAPTURE",
+          "FINDINGS_RECORDED", "MARKET_PRICED", "REVIEWED", "COMPLETED", "CANCELLED",
+        ]).optional(),
+        orgId: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { cursor, limit, status, orgId } = input;
+      const where: Record<string, unknown> = {};
+      if (status) where.status = status;
+      if (orgId) where.orgId = orgId;
+
+      const inspections = await ctx.db.inspection.findMany({
+        where,
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        orderBy: { createdAt: "desc" },
+        include: {
+          vehicle: { select: { year: true, make: true, model: true, vin: true } },
+          inspector: { select: { name: true } },
+          org: { select: { id: true, name: true } },
+          _count: { select: { findings: true, media: true } },
+        },
+      });
+
+      let nextCursor: string | undefined;
+      if (inspections.length > limit) {
+        const next = inspections.pop()!;
+        nextCursor = next.id;
+      }
+      return { inspections, nextCursor };
+    }),
+
+  // ─── Audit Logs ─────────────────────────────────────────────
+  listAuditLogs: superAdminProcedure
+    .input(
+      z.object({
+        cursor: z.string().optional(),
+        limit: z.number().min(1).max(200).default(50),
+        userId: z.string().optional(),
+        entityType: z.string().optional(),
+        action: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { cursor, limit, userId, entityType, action } = input;
+      const where: Record<string, unknown> = {};
+      if (userId) where.userId = userId;
+      if (entityType) where.entityType = entityType;
+      if (action) where.action = { contains: action, mode: "insensitive" };
+
+      const logs = await ctx.db.auditLog.findMany({
+        where,
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      let nextCursor: string | undefined;
+      if (logs.length > limit) {
+        const next = logs.pop()!;
+        nextCursor = next.id;
+      }
+      return { logs, nextCursor };
     }),
 });
