@@ -111,11 +111,12 @@ RESPOND WITH EXACTLY THIS JSON (no markdown):
 }
 
 Condition tiers — A tire is only as good as its WORST zone:
-- GOOD: 7+/32" tread across the full face (inner, center, outer all have deep grooves)
-- WORN: 3-6/32" in any zone. Shallow grooves, wear bars starting to show
-- REPLACE: <3/32" in ANY zone — bald center, bald edges, or bald patches anywhere. A tire that is bald in the center but has tread on the edges is REPLACE. Wear bars flush, smooth rubber, or visible cord = REPLACE.
+- GOOD: 7+/32" tread across the full face (inner, center, outer all have deep grooves with clearly visible depth)
+- WORN: 3-6/32" in any zone. Shallow grooves, wear bars starting to show, tread that looks low
+- REPLACE: <3/32" in ANY zone — bald center, bald edges, or bald patches anywhere. A tire that is bald in the center but has tread on the edges is REPLACE. Wear bars flush, smooth rubber, or visible cord = REPLACE. Dry rot, sidewall cracking, or bulges = REPLACE regardless of tread.
 
-When uncertain between tiers, classify as the worse tier — a dealer can verify on the lot.`,
+CRITICAL — ERR ON THE SIDE OF REPLACEMENT:
+This is a dealer tool. Dealers need worst-case tire cost, not best-case. If a tire looks questionable, borderline, or you're unsure — classify it as the WORSE tier. A dealer would rather budget for tire replacement and be pleasantly surprised than miss a bad tire and have it blow out on a test drive. When in doubt between GOOD and WORN, choose WORN. When in doubt between WORN and REPLACE, choose REPLACE.`,
 
     user: `Compare all 4 tires on this ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
 

@@ -61,5 +61,10 @@ ALSO CHECK:
 8. Tire brand, model, size (read from sidewall if visible)
 9. DOT date code (tires over 6 years old are a concern regardless of tread)
 
-When uncertain between WORN and REPLACE, choose REPLACE — a dealer can verify on the lot.`;
+CRITICAL — CONSERVATIVE BIAS FOR DEALER USE:
+This is a dealer acquisition tool. Dealers need worst-case tire cost, not best-case. Err on the side of flagging tires for replacement. A dealer would rather over-budget for tires and be pleasantly surprised than miss a bad tire.
+- When uncertain between GOOD and WORN → choose WORN
+- When uncertain between WORN and REPLACE → choose REPLACE
+- If tread looks "okay but low" → WORN or REPLACE, never GOOD
+- Dry rot, any sidewall cracking, or tires over 6 years old → REPLACE regardless of tread depth`;
 }

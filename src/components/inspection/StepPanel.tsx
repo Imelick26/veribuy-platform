@@ -92,6 +92,9 @@ interface StepPanelProps {
   // Vehicle History
   onFetchHistory?: () => void;
   isFetchingHistory?: boolean;
+  // Complete Inspection (advances risk → runs history → market → redirect)
+  onCompleteInspection?: () => void;
+  isCompletingInspection?: boolean;
   // Market Analysis
   onFetchMarket?: () => void;
   isFetchingMarket?: boolean;
@@ -134,6 +137,8 @@ export function StepPanel({
   isDetectingVin,
   onConfirmOdometer,
   isConfirmingOdometer,
+  onCompleteInspection,
+  isCompletingInspection,
   onFetchHistory,
   isFetchingHistory,
   onFetchMarket,
@@ -318,14 +323,54 @@ export function StepPanel({
                 Querying NHTSA databases and generating inspection checklist...
               </p>
             </div>
+          ) : completionPhase ? (
+            // Multi-step progress during auto-completion chain
+            <div className="space-y-3 py-6 px-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="h-4 w-4 text-success-500 shrink-0" />
+                <span className="text-sm text-text-secondary">Risk inspection complete</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {completionPhase === "history" ? (
+                  <div className="spinner-gradient h-4 w-4 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4 text-success-500 shrink-0" />
+                )}
+                <span className={cn("text-sm", completionPhase === "history" ? "text-text-primary font-medium" : "text-text-secondary")}>
+                  Fetching vehicle history
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {completionPhase === "market" ? (
+                  <div className="spinner-gradient h-4 w-4 shrink-0" />
+                ) : completionPhase === "finalizing" ? (
+                  <CheckCircle2 className="h-4 w-4 text-success-500 shrink-0" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border-2 border-border-default shrink-0" />
+                )}
+                <span className={cn("text-sm", completionPhase === "market" ? "text-text-primary font-medium" : completionPhase === "finalizing" ? "text-text-secondary" : "text-text-tertiary")}>
+                  Running market analysis
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {completionPhase === "finalizing" ? (
+                  <div className="spinner-gradient h-4 w-4 shrink-0" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border-2 border-border-default shrink-0" />
+                )}
+                <span className={cn("text-sm", completionPhase === "finalizing" ? "text-text-primary font-medium" : "text-text-tertiary")}>
+                  Redirecting to vehicle dashboard
+                </span>
+              </div>
+            </div>
           ) : (
             <div>
               <Button
-                onClick={() => onAdvanceStep("RISK_INSPECTION")}
-                loading={isAdvancingStep}
+                onClick={onCompleteInspection}
+                loading={isCompletingInspection}
                 className="w-full bg-brand-gradient text-white"
               >
-                Continue to Vehicle History
+                Complete Inspection
               </Button>
             </div>
           )}

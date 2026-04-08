@@ -230,11 +230,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
       {/* ═══ THE DEAL — Hero Card ═══ */}
       {market && estRetail > 0 ? (
         <Card hero>
-          {/* Deal rating + condition */}
+          {/* Condition score */}
           <div className="flex items-center justify-between mb-6">
-            <Badge variant={dealRating.variant} className="text-sm px-3 py-1">
-              {dealRating.label}
-            </Badge>
+            <div />
             {conditionScore != null && (
               <div className="flex items-center gap-2">
                 <Overline>Condition</Overline>

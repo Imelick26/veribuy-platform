@@ -232,6 +232,21 @@ export default function InspectionDetailPage({
     }
   }
 
+  // "Complete from Risk" — advances RISK_INSPECTION then triggers the full chain
+  async function handleCompleteFromRisk() {
+    setIsCompleting(true);
+    try {
+      // First advance RISK_INSPECTION
+      await advanceStep.mutateAsync({ inspectionId: id, step: "RISK_INSPECTION" as never });
+      // Then run the full completion chain (history → market → advance → redirect)
+      await handleCompleteInspection();
+    } catch (err) {
+      console.error("[CompleteFromRisk] Failed:", err);
+      setCompletionPhase(null);
+      setIsCompleting(false);
+    }
+  }
+
   // VIN Detection (server-side GPT-4o Vision OCR)
   const [detectedVin, setDetectedVin] = useState<string | null>(null);
   const [isDetectingVin, setIsDetectingVin] = useState(false);
@@ -378,7 +393,7 @@ export default function InspectionDetailPage({
   });
   let currentStep = currentStepIndex >= 0 ? STEP_ORDER[currentStepIndex] : "COMPLETED";
   // Skip steps that are now handled automatically (not shown in UI)
-  const AUTO_SKIP_STEPS = new Set(["VEHICLE_HISTORY", "REPORT_GENERATION"]);
+  const AUTO_SKIP_STEPS = new Set(["VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION"]);
   if (AUTO_SKIP_STEPS.has(currentStep)) {
     // Find the next non-skipped step
     let idx = currentStepIndex + 1;
@@ -718,6 +733,8 @@ export default function InspectionDetailPage({
           isDetectingVin={isDetectingVin}
           onConfirmOdometer={(mileage) => confirmOdometer.mutate({ inspectionId: id, odometer: mileage })}
           isConfirmingOdometer={confirmOdometer.isPending}
+          onCompleteInspection={handleCompleteFromRisk}
+          isCompletingInspection={isCompleting}
           onFetchHistory={() => fetchHistory.mutate({ inspectionId: id })}
           isFetchingHistory={fetchHistory.isPending}
           onFetchMarket={handleCompleteInspection}

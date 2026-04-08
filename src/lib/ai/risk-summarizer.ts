@@ -565,6 +565,9 @@ EXAMPLES OF WHAT TO REMOVE:
 - Turbo/supercharger risks on naturally-aspirated engines
 - 4WD/AWD transfer case risks on 2WD vehicles
 - DPF/DEF/urea risks on gasoline engines
+- Automatic transmission issues (overdrive problems, torque converter shudder, transmission adaptive learning, shift solenoids, valve body) on vehicles with MANUAL transmissions
+- CVT-specific issues (belt/chain wear, judder) on vehicles with conventional automatic or manual transmissions
+- Electronic throttle body issues on vehicles with cable-operated throttle
 
 IMPORTANT:
 - When in doubt, KEEP the risk. Only remove risks you are CERTAIN don't apply.

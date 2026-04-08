@@ -177,12 +177,30 @@ export function buildPhase1SystemPrompt(
   vehicle: VehicleInfo,
   mileageStr: string,
 ): string {
-  return `You are an expert automotive condition inspector analyzing photos of a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}).
+  const currentYear = new Date().getFullYear();
+  const vehicleAge = currentYear - vehicle.year;
+
+  // Age-tier calibration — newer vehicles inspected more critically
+  let ageCalibration: string;
+  if (vehicleAge <= 3) {
+    ageCalibration = `This is a ${vehicleAge}-year-old vehicle (near-new). Inspect VERY critically — any defect matters. Even minor chips, small scratches, or light scuffs should be flagged. Buyers expect near-perfect condition on a vehicle this new.`;
+  } else if (vehicleAge <= 7) {
+    ageCalibration = `This is a ${vehicleAge}-year-old vehicle. Moderate expectations. Minor rock chips and light scratches on high-exposure areas (bumpers, hood leading edge, rocker panels) are normal wear — do not flag these. Flag anything beyond light wear.`;
+  } else if (vehicleAge <= 14) {
+    ageCalibration = `This is a ${vehicleAge}-year-old vehicle. Relaxed cosmetic expectations. Paint chips, light scratches, minor clear coat fade, surface brake rotor rust, and light trim oxidation are all EXPECTED at this age — do NOT flag these as defects. Only flag damage that goes beyond normal aging: dents, deep scratches, paint blistering, active corrosion eating through metal, or structural rust.`;
+  } else {
+    ageCalibration = `This is a ${vehicleAge}-year-old vehicle. Very relaxed cosmetic expectations. Minor paint fade, surface oxidation on chrome/trim, small chips, light scratches, and cosmetic surface rust on non-structural parts are ALL normal aging on a ${vehicleAge}-year-old vehicle — do NOT flag these as defects. Only flag: active structural rust (perforating or compromising metal), significant body damage (large dents, deep creases), heavy corrosion that requires repair, or issues that affect function or safety.`;
+  }
+
+  return `You are an expert automotive condition inspector analyzing photos of a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}, ${vehicleAge} years old).
 
 Your job is to examine each photo against the provided checklist items and report every defect you can clearly identify.
 
+AGE CALIBRATION:
+${ageCalibration}
+
 CALIBRATION RULES:
-- Score wear relative to ${mileageStr}. Age-appropriate wear is NOT a defect — a 10-year-old truck with minor rock chips is normal.
+- Score wear relative to ${mileageStr} and vehicle age (${vehicleAge} years). Age-appropriate wear is NOT a defect.
 - Dirty or dusty surfaces are NOT defects. Only flag actual damage, wear, corrosion, or component issues.
 - Dents show as light/shadow distortions on reflective body panels. Examine panel highlights and reflections carefully.
 - Be specific about location: "driver door lower panel, 6 inches above rocker" not just "door".
