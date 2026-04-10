@@ -138,8 +138,8 @@ async function inspectSinglePhoto(
       captureType: photo.captureType,
       photoId: photo.id,
       findings: [],
-      areaCondition: "fair",
-      notes: "API call failed",
+      areaCondition: "good",
+      notes: "",
       error: "API call failed",
     };
   }

@@ -174,7 +174,7 @@ async function executePipeline(
         const finalCondition: "GOOD" | "WORN" | "REPLACE" = hasReplaceFinding ? "REPLACE" : condition;
         tireMap[result.captureType] = {
           condition: finalCondition,
-          observations: result.notes ? [result.notes] : [],
+          observations: result.notes && !result.error ? [result.notes] : [],
         };
       }
     }
