@@ -126,37 +126,55 @@ export async function callVision<T = Record<string, unknown>>(
     })),
   ];
 
-  try {
-    const response = await openai.chat.completions.create({
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: userText },
-            ...imageBlocks,
-          ],
-        },
-      ],
-      temperature,
-      max_tokens: maxTokens,
-      response_format: { type: "json_object" },
-    });
+  const MAX_RETRIES = 3;
 
-    const raw = response.choices[0]?.message?.content;
-    if (!raw) {
-      console.warn(`[media-analyzer:${label}] empty response from ${model}`);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: userText },
+              ...imageBlocks,
+            ],
+          },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+        response_format: { type: "json_object" },
+      });
+
+      const raw = response.choices[0]?.message?.content;
+      if (!raw) {
+        console.warn(`[media-analyzer:${label}] empty response from ${model}`);
+        return null;
+      }
+
+      const parsed = JSON.parse(raw) as T;
+      return { result: parsed, raw };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const is429 = msg.includes("429") || msg.includes("Rate limit");
+      const isTimeout = msg.includes("timeout") || msg.includes("Timeout");
+
+      if ((is429 || isTimeout) && attempt < MAX_RETRIES) {
+        // Extract wait time from error message if available (e.g., "Please try again in 5.108s")
+        const waitMatch = msg.match(/try again in (\d+\.?\d*)/);
+        const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) : (attempt + 1) * 5;
+        console.warn(`[media-analyzer:${label}] ${is429 ? "rate limited" : "timeout"}, retrying in ${waitSec}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await new Promise((r) => setTimeout(r, waitSec * 1000));
+        continue;
+      }
+
+      console.error(`[media-analyzer:${label}] ${model} call failed: ${msg}`);
       return null;
     }
-
-    const parsed = JSON.parse(raw) as T;
-    return { result: parsed, raw };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[media-analyzer:${label}] ${model} call failed: ${msg}`);
-    return null;
   }
+
+  return null;
 }
 
 /**

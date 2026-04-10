@@ -18,7 +18,9 @@ import type {
 import { getPhotoChecklist, buildPhase1SystemPrompt, buildTireSystemPrompt } from "../prompts/detection";
 import { callVision, validatePhotoUrls, processWithConcurrency, buildPhotoLabels } from "../utils";
 
-const MAX_CONCURRENT = 6;
+// 3 concurrent keeps us under the 30K TPM rate limit for gpt-4o
+// Each vision call uses ~2-3K tokens; 3 concurrent = ~9K TPM headroom
+const MAX_CONCURRENT = 3;
 
 /** Capture types to skip (handled separately) */
 const SKIP_TYPES = new Set(["ODOMETER"]);

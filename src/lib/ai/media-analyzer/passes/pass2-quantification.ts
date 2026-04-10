@@ -65,16 +65,20 @@ export async function runPhase2(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
 ): Promise<ComparisonResults> {
-  console.log("[phase2] Running 5 comparison scans in parallel");
+  console.log("[phase2] Running 5 comparison scans (2 batches to avoid rate limits)");
 
-  const [paintFindings, alignmentFindings, tireResult, interiorFindings, wearFindings] =
-    await Promise.all([
-      runPaintScan(vehicle, media),
-      runAlignmentScan(vehicle, media),
-      runTireComparison(vehicle, media),
-      runInteriorConsistency(vehicle, media),
-      runWearVsMileage(vehicle, media),
-    ]);
+  // Batch 1: exterior scans (paint + alignment)
+  const [paintFindings, alignmentFindings] = await Promise.all([
+    runPaintScan(vehicle, media),
+    runAlignmentScan(vehicle, media),
+  ]);
+
+  // Batch 2: remaining scans (tires + interior + wear)
+  const [tireResult, interiorFindings, wearFindings] = await Promise.all([
+    runTireComparison(vehicle, media),
+    runInteriorConsistency(vehicle, media),
+    runWearVsMileage(vehicle, media),
+  ]);
 
   const apiCalls = 5; // All 5 always run
 
