@@ -126,9 +126,11 @@ export async function callVision<T = Record<string, unknown>>(
     })),
   ];
 
-  const MAX_RETRIES = 3;
+  // Never give up on retryable errors (429 rate limit, timeouts).
+  // The inspection depends on every photo being analyzed.
+  let attempt = 0;
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  while (true) {
     try {
       const response = await openai.chat.completions.create({
         model,
@@ -160,16 +162,18 @@ export async function callVision<T = Record<string, unknown>>(
       const is429 = msg.includes("429") || msg.includes("Rate limit");
       const isTimeout = msg.includes("timeout") || msg.includes("Timeout");
 
-      if ((is429 || isTimeout) && attempt < MAX_RETRIES) {
+      if (is429 || isTimeout) {
+        attempt++;
         // Extract wait time from error message if available (e.g., "Please try again in 5.108s")
         const waitMatch = msg.match(/try again in (\d+\.?\d*)/);
-        const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) : (attempt + 1) * 5;
-        console.warn(`[media-analyzer:${label}] ${is429 ? "rate limited" : "timeout"}, retrying in ${waitSec}s (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        const waitSec = waitMatch ? Math.ceil(parseFloat(waitMatch[1])) + 1 : Math.min(attempt * 5, 30);
+        console.warn(`[media-analyzer:${label}] ${is429 ? "rate limited" : "timeout"}, retrying in ${waitSec}s (attempt ${attempt})`);
         await new Promise((r) => setTimeout(r, waitSec * 1000));
         continue;
       }
 
-      console.error(`[media-analyzer:${label}] ${model} call failed: ${msg}`);
+      // Non-retryable error (bad request, auth, etc.) — give up on this call
+      console.error(`[media-analyzer:${label}] ${model} call failed (non-retryable): ${msg}`);
       return null;
     }
   }
