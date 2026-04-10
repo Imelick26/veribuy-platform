@@ -46,6 +46,7 @@ export async function persistConditionScores(
 }
 
 // 9-bucket default weights (sum = 100) matching compat.ts
+// Weights for overall score — tires excluded (scored separately)
 const AREA_WEIGHTS = {
   paintBody: 15,
   panelAlignment: 10,
@@ -53,7 +54,6 @@ const AREA_WEIGHTS = {
   interiorSurfaces: 10,
   interiorControls: 5,
   engineBay: 20,
-  tiresWheels: 10,
   underbodyFrame: 15,
   exhaust: 7,
 };
@@ -121,7 +121,7 @@ export function recalculateScores(
   reviews: Record<string, FindingReview>,
   weights?: ConditionWeights,
 ): ConditionAssessment {
-  // Start with the original AI 9-bucket area scores (1-10)
+  // Start with the original AI 8-bucket area scores (1-10) — tires excluded from overall
   const areaScores: Record<keyof typeof AREA_WEIGHTS, number> = {
     paintBody: originalAssessment.paintBodyScore,
     panelAlignment: originalAssessment.panelAlignmentScore,
@@ -129,10 +129,11 @@ export function recalculateScores(
     interiorSurfaces: originalAssessment.interiorSurfacesScore,
     interiorControls: originalAssessment.interiorControlsScore,
     engineBay: originalAssessment.engineBayScore,
-    tiresWheels: originalAssessment.tiresWheelsScore,
     underbodyFrame: originalAssessment.underbodyFrameScore,
     exhaust: originalAssessment.exhaustScore,
   };
+  // Tire score carried through separately (not in overall)
+  const tiresWheelsScore = originalAssessment.tiresWheelsScore;
 
   // Severity weight for confirmed findings (how much a confirmed finding should depress the score)
   const severityPenalty: Record<string, number> = {
@@ -202,7 +203,6 @@ export function recalculateScores(
     (finalScores.interiorSurfaces / 10) * (w.interiorSurfaces / wSum) * 100 +
     (finalScores.interiorControls / 10) * (w.interiorControls / wSum) * 100 +
     (finalScores.engineBay / 10) * (w.engineBay / wSum) * 100 +
-    (finalScores.tiresWheels / 10) * (w.tiresWheels / wSum) * 100 +
     (finalScores.underbodyFrame / 10) * (w.underbodyFrame / wSum) * 100 +
     (finalScores.exhaust / 10) * (w.exhaust / wSum) * 100,
   );
@@ -215,7 +215,7 @@ export function recalculateScores(
     (finalScores.interiorSurfaces + finalScores.interiorControls) / 2,
   );
   const legacyMechanicalVisual = Math.round(
-    (finalScores.engineBay + finalScores.tiresWheels + finalScores.exhaust) / 3,
+    (finalScores.engineBay + finalScores.exhaust) / 2,
   );
 
   // Count confirmed vs dismissed for summary
@@ -252,7 +252,7 @@ export function recalculateScores(
     interiorSurfacesScore: finalScores.interiorSurfaces,
     interiorControlsScore: finalScores.interiorControls,
     engineBayScore: finalScores.engineBay,
-    tiresWheelsScore: finalScores.tiresWheels,
+    tiresWheelsScore,
     exhaustScore: finalScores.exhaust,
 
     // 9-bucket detail objects (update score field)
@@ -262,7 +262,7 @@ export function recalculateScores(
     interiorSurfaces: { ...originalAssessment.interiorSurfaces, score: finalScores.interiorSurfaces },
     interiorControls: { ...originalAssessment.interiorControls, score: finalScores.interiorControls },
     engineBay: { ...originalAssessment.engineBay, score: finalScores.engineBay },
-    tiresWheels: { ...originalAssessment.tiresWheels, score: finalScores.tiresWheels },
+    tiresWheels: { ...originalAssessment.tiresWheels, score: tiresWheelsScore },
     exhaust: { ...originalAssessment.exhaust, score: finalScores.exhaust },
 
     summary: summaryParts.join(" "),

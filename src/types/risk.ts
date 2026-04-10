@@ -174,7 +174,7 @@ export interface ConditionAssessment {
   // Legacy 4-area scores (backward compat — computed from 9-bucket scores)
   exteriorBodyScore: number;      // 1-10 avg of paintBody + panelAlignment + glassLighting
   interiorScore: number;          // 1-10 avg of interiorSurfaces + interiorControls
-  mechanicalVisualScore: number;  // 1-10 avg of engineBay + tiresWheels + exhaust
+  mechanicalVisualScore: number;  // 1-10 avg of engineBay + exhaust (tires scored separately)
   underbodyFrameScore: number;    // 1-10 (same as 9-bucket underbodyFrame)
 
   // Legacy 4-area detail objects (backward compat)

@@ -20,6 +20,7 @@ import { runPipeline } from "../pipeline";
 //  this layer uses the static defaults.
 // ---------------------------------------------------------------------------
 
+// Weights for overall score calculation — tires excluded (scored separately)
 const DEFAULT_WEIGHTS = {
   paintBody: 15,
   panelAlignment: 10,
@@ -27,7 +28,6 @@ const DEFAULT_WEIGHTS = {
   interiorSurfaces: 10,
   interiorControls: 5,
   engineBay: 20,
-  tiresWheels: 10,
   underbodyFrame: 15,
   exhaust: 7,
 };
@@ -68,13 +68,13 @@ export async function analyzeVehicleCondition(
 
   // --- 9-bucket overall score using default weights ---
   const overallScore = Math.round(
+    // Tires excluded from overall — scored separately
     (scores.paintBody.score / 10) * (DEFAULT_WEIGHTS.paintBody / WEIGHT_SUM) * 100 +
     (scores.panelAlignment.score / 10) * (DEFAULT_WEIGHTS.panelAlignment / WEIGHT_SUM) * 100 +
     (scores.glassLighting.score / 10) * (DEFAULT_WEIGHTS.glassLighting / WEIGHT_SUM) * 100 +
     (scores.interiorSurfaces.score / 10) * (DEFAULT_WEIGHTS.interiorSurfaces / WEIGHT_SUM) * 100 +
     (scores.interiorControls.score / 10) * (DEFAULT_WEIGHTS.interiorControls / WEIGHT_SUM) * 100 +
     (scores.engineBay.score / 10) * (DEFAULT_WEIGHTS.engineBay / WEIGHT_SUM) * 100 +
-    (scores.tiresWheels.score / 10) * (DEFAULT_WEIGHTS.tiresWheels / WEIGHT_SUM) * 100 +
     (scores.underbodyFrame.score / 10) * (DEFAULT_WEIGHTS.underbodyFrame / WEIGHT_SUM) * 100 +
     (scores.exhaust.score / 10) * (DEFAULT_WEIGHTS.exhaust / WEIGHT_SUM) * 100,
   );
@@ -87,7 +87,7 @@ export async function analyzeVehicleCondition(
     (scores.interiorSurfaces.score + scores.interiorControls.score) / 2,
   );
   const mechanicalVisualScore = Math.round(
-    (scores.engineBay.score + scores.tiresWheels.score + scores.exhaust.score) / 3,
+    (scores.engineBay.score + scores.exhaust.score) / 2,
   );
 
   const summary = [

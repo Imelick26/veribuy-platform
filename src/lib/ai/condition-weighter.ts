@@ -33,7 +33,7 @@ export interface ConditionWeighterInput {
   mileage?: number | null;
 }
 
-/** 9-bucket weights — must sum to 100 */
+/** 8-area condition weights — must sum to 100. Tires are scored separately. */
 export interface ConditionWeights {
   paintBody: number;
   panelAlignment: number;
@@ -41,7 +41,6 @@ export interface ConditionWeights {
   interiorSurfaces: number;
   interiorControls: number;
   engineBay: number;
-  tiresWheels: number;
   underbodyFrame: number;
   exhaust: number;
 }
@@ -57,36 +56,36 @@ export interface ConditionWeighterResult {
 
 const DEFAULT_WEIGHTS: Record<string, ConditionWeights> = {
   truck: {
-    paintBody: 10, panelAlignment: 8, glassLighting: 5,
-    interiorSurfaces: 8, interiorControls: 4, engineBay: 25,
-    tiresWheels: 10, underbodyFrame: 22, exhaust: 8,
+    paintBody: 11, panelAlignment: 9, glassLighting: 6,
+    interiorSurfaces: 9, interiorControls: 5, engineBay: 27,
+    underbodyFrame: 24, exhaust: 9,
   },
   suv: {
-    paintBody: 12, panelAlignment: 8, glassLighting: 8,
-    interiorSurfaces: 10, interiorControls: 5, engineBay: 20,
-    tiresWheels: 10, underbodyFrame: 18, exhaust: 9,
+    paintBody: 14, panelAlignment: 9, glassLighting: 9,
+    interiorSurfaces: 11, interiorControls: 6, engineBay: 22,
+    underbodyFrame: 20, exhaust: 9,
   },
   sedan: {
-    paintBody: 18, panelAlignment: 10, glassLighting: 8,
-    interiorSurfaces: 12, interiorControls: 7, engineBay: 18,
-    tiresWheels: 10, underbodyFrame: 12, exhaust: 5,
+    paintBody: 20, panelAlignment: 11, glassLighting: 9,
+    interiorSurfaces: 13, interiorControls: 8, engineBay: 20,
+    underbodyFrame: 13, exhaust: 6,
   },
   luxury: {
-    paintBody: 20, panelAlignment: 12, glassLighting: 8,
-    interiorSurfaces: 15, interiorControls: 8, engineBay: 15,
-    tiresWheels: 8, underbodyFrame: 10, exhaust: 4,
+    paintBody: 22, panelAlignment: 13, glassLighting: 9,
+    interiorSurfaces: 16, interiorControls: 9, engineBay: 16,
+    underbodyFrame: 11, exhaust: 4,
   },
   default: {
-    paintBody: 15, panelAlignment: 10, glassLighting: 8,
-    interiorSurfaces: 10, interiorControls: 5, engineBay: 20,
-    tiresWheels: 10, underbodyFrame: 15, exhaust: 7,
+    paintBody: 17, panelAlignment: 11, glassLighting: 9,
+    interiorSurfaces: 11, interiorControls: 6, engineBay: 22,
+    underbodyFrame: 16, exhaust: 8,
   },
 };
 
 const WEIGHT_KEYS: (keyof ConditionWeights)[] = [
   "paintBody", "panelAlignment", "glassLighting",
   "interiorSurfaces", "interiorControls", "engineBay",
-  "tiresWheels", "underbodyFrame", "exhaust",
+  "underbodyFrame", "exhaust",
 ];
 
 /* ------------------------------------------------------------------ */
@@ -114,18 +113,17 @@ function detectBodyCategory(vehicle: ConditionWeighterInput["vehicle"]): string 
 function buildSystemPrompt(): string {
   return `You are a vehicle acquisition specialist who understands what condition areas matter most for different vehicle types when determining market value.
 
-Given a vehicle's specs, determine the ideal inspection weight for each of 9 condition areas. Weights must sum to exactly 100.
+Given a vehicle's specs, determine the ideal inspection weight for each of 8 condition areas. Weights must sum to exactly 100. (Tires are scored separately and not included here.)
 
-THE 9 CONDITION AREAS:
+THE 8 CONDITION AREAS:
 1. paintBody — Dents, scratches, rust, paint chips, fade, respray evidence
 2. panelAlignment — Gap asymmetry, bumper fitment, door gaps, collision repair evidence
 3. glassLighting — Windshield, headlights, taillights, fog lights, mirrors
 4. interiorSurfaces — Seats, carpet, headliner, door panels, steering wheel, dashboard
 5. interiorControls — Infotainment, HVAC, gauges, switches, electronics
 6. engineBay — Fluid leaks, belts, hoses, battery, aftermarket mods
-7. tiresWheels — Tread depth, sidewalls, rims, wear patterns
-8. underbodyFrame — Frame rails, structural rust, suspension, splash shields
-9. exhaust — Pipes, muffler, catalytic converter, hangers, tips
+7. underbodyFrame — Frame rails, structural rust, suspension, splash shields
+8. exhaust — Pipes, muffler, catalytic converter, hangers, tips
 
 RESPOND WITH EXACTLY THIS JSON (no markdown):
 {
@@ -136,7 +134,6 @@ RESPOND WITH EXACTLY THIS JSON (no markdown):
     "interiorSurfaces": <number>,
     "interiorControls": <number>,
     "engineBay": <number>,
-    "tiresWheels": <number>,
     "underbodyFrame": <number>,
     "exhaust": <number>
   },

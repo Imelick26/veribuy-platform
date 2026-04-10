@@ -349,7 +349,7 @@ function normalizeSynthesis(
   // Legacy 3 computed areas (averages of the 9-bucket scores)
   const exteriorBody = averageAreaScores([paintBody, panelAlignment, glassLighting], "Exterior Body");
   const interior = averageAreaScores([interiorSurfaces, interiorControls], "Interior");
-  const mechanicalVisual = averageAreaScores([engineBay, tiresWheels, exhaust], "Mechanical / Visual");
+  const mechanicalVisual = averageAreaScores([engineBay, exhaust], "Mechanical / Visual");
 
   return {
     areaScores: {
@@ -500,7 +500,7 @@ function buildFallbackSynthesis(
   // Legacy 3 computed areas
   const exteriorBody = averageAreaScores([paintBody, panelAlignment, glassLighting], "Exterior Body");
   const interior = averageAreaScores([interiorSurfaces, interiorControls], "Interior");
-  const mechanicalVisual = averageAreaScores([engineBay, tiresWheels, exhaust], "Mechanical / Visual");
+  const mechanicalVisual = averageAreaScores([engineBay, exhaust], "Mechanical / Visual");
 
   return {
     areaScores: {
