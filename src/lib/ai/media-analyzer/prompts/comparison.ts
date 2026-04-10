@@ -61,11 +61,31 @@ Compare EVERY pair of adjacent panels you can see across the photos.`,
 //  Panel alignment scan (all 9 exterior photos)
 // ---------------------------------------------------------------------------
 
+// Trucks and body-on-frame SUVs have wider factory panel tolerances
+const TRUCK_MODELS = [
+  "f-150", "f-250", "f-350", "silverado", "sierra", "ram", "tundra", "titan",
+  "tacoma", "ranger", "colorado", "canyon", "gladiator", "ridgeline", "maverick",
+  "santa cruz", "frontier",
+];
+const TRUCK_BODY_STYLES = ["truck", "pickup", "crew cab", "double cab", "regular cab", "supercab", "supercrew"];
+
+function isLikelyTruck(vehicle: VehicleInfo): boolean {
+  const style = (vehicle.bodyStyle || "").toLowerCase();
+  if (TRUCK_BODY_STYLES.some((t) => style.includes(t))) return true;
+  const model = `${vehicle.make} ${vehicle.model}`.toLowerCase();
+  return TRUCK_MODELS.some((t) => model.includes(t));
+}
+
 export function buildPanelAlignmentPrompt(vehicle: VehicleInfo, mileageStr: string): { system: string; user: string } {
+  const truckCalibration = isLikelyTruck(vehicle)
+    ? `\n\nBODY-ON-FRAME CALIBRATION: This is a truck/pickup. Trucks have wider factory panel gaps (4-8mm vs 3-5mm on unibody cars) and more fitment variation from the factory. Slight asymmetry (1-2mm side-to-side difference) is NORMAL on body-on-frame vehicles and should NOT be flagged. Only flag gaps with 3mm+ side-to-side difference or clear evidence of prior collision repair (paint overspray, mismatched texture, fresh sealant).`
+    : "";
+
   return {
     system: `You are a body alignment specialist examining a ${vehicle.year} ${vehicle.make} ${vehicle.model} (${mileageStr}) for panel fit issues.
 
 You are receiving ALL exterior photos. Your ONLY job: compare panel gaps and alignment across the entire vehicle.
+${truckCalibration}
 
 ${COMPARISON_RESPONSE_FORMAT}`,
 
@@ -80,7 +100,7 @@ CHECK FOR:
 6. Quarter panel alignment — rear quarter fitting differently than factory spec
 7. Headlight/taillight housing fitment — one side tighter than the other
 
-Factory panel gaps are typically 3-5mm and even on both sides. Compare left side to right side for EVERY panel pair. Uneven gaps = collision repair or structural damage.`,
+Compare left side to right side for EVERY panel pair. Significantly uneven gaps may indicate prior collision repair — but minor variation is normal, especially on trucks and body-on-frame vehicles.`,
   };
 }
 

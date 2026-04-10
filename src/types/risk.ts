@@ -170,15 +170,38 @@ export interface AreaConditionDetail {
 
 export interface ConditionAssessment {
   overallScore: number;           // 0-100 weighted composite
-  exteriorBodyScore: number;      // 1-10
-  interiorScore: number;          // 1-10
-  mechanicalVisualScore: number;  // 1-10
-  underbodyFrameScore: number;    // 1-10
 
+  // Legacy 4-area scores (backward compat — computed from 9-bucket scores)
+  exteriorBodyScore: number;      // 1-10 avg of paintBody + panelAlignment + glassLighting
+  interiorScore: number;          // 1-10 avg of interiorSurfaces + interiorControls
+  mechanicalVisualScore: number;  // 1-10 avg of engineBay + tiresWheels + exhaust
+  underbodyFrameScore: number;    // 1-10 (same as 9-bucket underbodyFrame)
+
+  // Legacy 4-area detail objects (backward compat)
   exteriorBody: AreaConditionDetail;
   interior: AreaConditionDetail;
   mechanicalVisual: AreaConditionDetail;
   underbodyFrame: AreaConditionDetail;
+
+  // 9-bucket detailed scores (1-10 each)
+  paintBodyScore: number;
+  panelAlignmentScore: number;
+  glassLightingScore: number;
+  interiorSurfacesScore: number;
+  interiorControlsScore: number;
+  engineBayScore: number;
+  tiresWheelsScore: number;
+  exhaustScore: number;
+
+  // 9-bucket detail objects
+  paintBody: AreaConditionDetail;
+  panelAlignment: AreaConditionDetail;
+  glassLighting: AreaConditionDetail;
+  interiorSurfaces: AreaConditionDetail;
+  interiorControls: AreaConditionDetail;
+  engineBay: AreaConditionDetail;
+  tiresWheels: AreaConditionDetail;
+  exhaust: AreaConditionDetail;
 
   summary: string;
   photoCoverage: {

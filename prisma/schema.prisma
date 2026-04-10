@@ -200,10 +200,22 @@ model Inspection {
   notes    String?
 
   overallScore         Int?
-  exteriorBodyScore    Int?    // 1-10 AI condition assessment
-  interiorScore        Int?    // 1-10 AI condition assessment
-  mechanicalVisualScore Int?   // 1-10 AI condition assessment
-  underbodyFrameScore  Int?    // 1-10 AI condition assessment
+  // Legacy 4-area scores (backward compat — computed from 9-bucket scores)
+  exteriorBodyScore    Int?    // 1-10 avg of paintBody + panelAlignment + glassLighting
+  interiorScore        Int?    // 1-10 avg of interiorSurfaces + interiorControls
+  mechanicalVisualScore Int?   // 1-10 avg of engineBay + tiresWheels + exhaust
+  underbodyFrameScore  Int?    // 1-10 (same as 9-bucket underbodyFrame)
+  // 9-bucket detailed condition scores (1-10 each)
+  paintBodyScore       Int?    // Dents, scratches, rust, paint chips, fade, respray
+  panelAlignmentScore  Int?    // Gap asymmetry, bumper fitment, collision evidence
+  glassLightingScore   Int?    // Windshield, headlights, taillights, mirrors
+  interiorSurfacesScore Int?   // Seats, carpet, headliner, door panels, steering wheel
+  interiorControlsScore Int?   // Infotainment, HVAC, gauges, switches
+  engineBayScore       Int?    // Leaks, belts, hoses, battery, aftermarket
+  tiresWheelsScore     Int?    // Tread, sidewalls, rims, wear patterns
+  // underbodyFrameScore reused from legacy (frame rails, rust, suspension)
+  exhaustScore         Int?    // Pipes, muffler, catalytic converter, hangers
+  conditionWeights     Json?   // AI-determined per-vehicle weights { paintBody: 15, ... }
   conditionSummary     String? // AI-generated condition summary
   conditionRawData     Json?   // Full AI response for audit trail
 
@@ -249,6 +261,7 @@ model Inspection {
 enum InspectionStatus {
   CREATED
   VIN_DECODED
+  CONDITION_REVIEWED
   RISK_REVIEWED
   MEDIA_CAPTURE
   AI_ANALYZED
@@ -278,6 +291,7 @@ enum WorkflowStep {
   MEDIA_CAPTURE
   VIN_CONFIRM
   AI_CONDITION_SCAN
+  CONDITION_REVIEW
   RISK_INSPECTION
   VEHICLE_HISTORY
   MARKET_ANALYSIS

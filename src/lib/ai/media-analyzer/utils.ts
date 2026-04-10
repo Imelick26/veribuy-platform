@@ -51,11 +51,17 @@ export async function validatePhotoUrls(
   await Promise.all(
     photos.map(async (m) => {
       try {
+        // Use GET with Range header to fetch only the first byte.
+        // HEAD requests fail on some storage providers (e.g., Supabase Storage
+        // returns 400/405 for HEAD on public object URLs). A ranged GET is
+        // equally lightweight but universally supported.
         const res = await fetch(m.url, {
-          method: "HEAD",
+          method: "GET",
+          headers: { Range: "bytes=0-0" },
           signal: AbortSignal.timeout(5000),
         });
-        if (res.ok) {
+        // 200 (full body) or 206 (partial content) both mean the URL is valid
+        if (res.ok || res.status === 206) {
           valid.push(m);
         } else {
           console.warn(

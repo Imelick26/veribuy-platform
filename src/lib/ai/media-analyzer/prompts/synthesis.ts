@@ -2,7 +2,7 @@
  * Phase 4: Score synthesis prompt.
  *
  * Receives ALL findings + all exterior photos for visual verification.
- * Produces final 4-area condition scores, tire assessment, red flags, and summary.
+ * Produces final 9-area condition scores, tire assessment, red flags, and summary.
  */
 
 import type { VehicleInfo, DetectedFinding, ComparisonFinding } from "../types";
@@ -12,7 +12,7 @@ export function buildSynthesisPrompt(
   vehicle: VehicleInfo,
   allFindings: DetectedFinding[],
   comparisonFindings: ComparisonFinding[],
-  tireAssessment: TireAssessment | undefined,
+  tireAssessment: TireAssessment | null | undefined,
   inspectorNotes?: string,
 ): { system: string; user: string } {
   const mileageStr = vehicle.mileage
@@ -31,7 +31,7 @@ You are receiving:
 3. Comparison scan results (paint consistency, panel alignment, tire comparison, wear assessment)
 
 Your job:
-- Produce final 1-10 condition scores for 4 areas
+- Produce final 1-10 condition scores for 9 areas
 - Synthesize all comparison findings into cross-correlation red flags
 - Provide an overall dealer-focused vehicle summary
 - LOOK AT THE PHOTOS — if you see something the findings list missed, add it
@@ -47,38 +47,68 @@ SCORING RUBRIC (1-10 per area):
 1-2: Very poor. Severe damage or extreme neglect.
 
 CRITICAL — DISTINGUISH AGE-RELATED WEAR FROM ACTUAL DAMAGE:
-Age-related wear (minor paint fade, small rock chips, light surface scratches, slight UV fade) is expected and should NOT heavily penalize the score. But DAMAGE is NOT age-related and MUST be penalized regardless of age:
+Age-related wear is expected and should NOT heavily penalize the score. But DAMAGE is NOT age-related and MUST be penalized regardless of age. Area-specific guidance:
 
-EXTERIOR — things that ARE age-related (don't penalize heavily): minor paint fade, small rock chips, light surface scratches, slightly faded trim
-EXTERIOR — things that are DAMAGE (penalize significantly): dents of any size, cracked or broken panels, deep scratches/gouges, significant paint peeling, rust holes, misaligned panels from collision, broken lights
-- A single noticeable dent = no higher than 6. A large dent = no higher than 5. Multiple dents = 4 or lower.
-- Visible body damage from impact (crumpled metal, creased panels) = 4 or lower regardless of age.
+paintBody — Dents, scratches, rust, paint chips, fade, respray evidence.
+  Age-related (don't penalize heavily): minor paint fade, small rock chips, light surface scratches, slightly faded trim.
+  DAMAGE (penalize significantly): dents of any size, deep scratches/gouges, significant paint peeling, rust holes, respray evidence, cracked or broken panels.
+  - A single noticeable dent = no higher than 6. A large dent = no higher than 5. Multiple dents = 4 or lower.
+  - Visible body damage from impact (crumpled metal, creased panels) = 4 or lower regardless of age.
 
-INTERIOR — things that ARE age-related (don't penalize heavily): slight UV fade on dashboard, minor wear on driver seat bolster, light carpet wear
-INTERIOR — things that are DAMAGE/NEGLECT (penalize significantly): torn or heavily worn upholstery, stains, cracked dashboard, broken controls/switches, heavy soiling, pet damage, smoke damage, sagging headliner, worn-through carpet, broken trim pieces
-- An interior that "doesn't look good" or shows heavy wear throughout = no higher than 5.
-- Visible neglect (stains + wear + broken pieces) = 4 or lower.
+panelAlignment — Gap asymmetry, bumper fitment, door gaps, collision repair evidence. Trucks have wider factory gaps (4-8mm).
+  Age-related (don't penalize heavily): minor gap variation within factory spec.
+  DAMAGE (penalize significantly): misaligned panels from collision, uneven gaps between sides, bumper fitment issues, evidence of prior body work.
 
-UNDERBODY: Light surface oxidation is normal on older vehicles. Active structural corrosion, perforation, or compromised integrity = score below 5.
+glassLighting — Windshield chips/cracks, headlight oxidation/moisture, taillights, fog lights, mirrors.
+  Age-related (don't penalize heavily): minor headlight haze, light pitting on windshield.
+  DAMAGE (penalize significantly): windshield cracks, broken/missing lights, heavy oxidation, moisture intrusion in housings, cracked mirrors.
 
-MECHANICAL: Judge by function, not appearance. Aged hoses and faded plastic are cosmetic. Active leaks, worn belts, corroded battery terminals, loose components = penalize.
+interiorSurfaces — Seats (tears, stains, wear), carpet, headliner, door panels, steering wheel, dashboard surface.
+  Age-related (don't penalize heavily): slight UV fade on dashboard, minor wear on driver seat bolster, light carpet wear.
+  DAMAGE/NEGLECT (penalize significantly): torn or heavily worn upholstery, stains, cracked dashboard, heavy soiling, pet damage, smoke damage, sagging headliner, worn-through carpet, broken trim pieces.
+  - An interior that "doesn't look good" or shows heavy wear throughout = no higher than 5.
+  - Visible neglect (stains + wear + broken pieces) = 4 or lower.
+
+interiorControls — Infotainment screen, HVAC vents, gauges, control buttons/knobs, switches, electronics.
+  Age-related (don't penalize heavily): minor button wear, slight screen scratches.
+  DAMAGE (penalize significantly): broken controls/switches, non-functional screens, cracked gauges, missing knobs, dead pixels, inoperable electronics.
+
+engineBay — Fluid leaks, belts, hoses, battery, sludge, aftermarket mods. Judge by function not appearance.
+  Age-related (don't penalize heavily): aged hoses, faded plastic covers, minor dust/grime.
+  DAMAGE (penalize significantly): active leaks, worn/cracked belts, corroded battery terminals, loose components, sludge buildup, unauthorized aftermarket modifications.
+
+tiresWheels — Tread depth per zone, sidewalls, rims, wear patterns, DOT age.
+  Penalize significantly: uneven wear patterns (alignment/suspension issue), bald zones, sidewall damage, curb rash, DOT date > 6 years, mismatched tires.
+
+underbodyFrame — Frame rails, structural rust, suspension, splash shields. Light surface oxidation is normal on older vehicles.
+  Age-related (don't penalize heavily): light surface oxidation, minor surface rust on non-structural components.
+  DAMAGE (penalize significantly): active structural corrosion, perforation, compromised frame integrity, damaged suspension components, missing splash shields = score below 5.
+
+exhaust — Pipes, muffler, catalytic converter shield, hangers, tips. Surface rust is normal on older vehicles.
+  Age-related (don't penalize heavily): surface rust on exposed pipes, minor discoloration.
+  DAMAGE (penalize significantly): perforated pipes/muffler, missing catalytic converter shield, broken hangers, excessive rust-through, loud exhaust indicating leaks.
 
 IMPORTANT: Be honest about what you see. A dealer needs accurate scores to make a buy decision. Inflated scores lead to overpaying. If the vehicle looks rough, score it accordingly — don't rationalize damage as "age-appropriate wear." Age explains fade and minor chips, NOT dents, tears, stains, or broken components.
 
 RESPOND WITH EXACTLY THIS JSON (no markdown):
 {
   "areaScores": {
-    "exteriorBody": {
+    "paintBody": {
       "score": 1-10,
       "confidence": 0.0-1.0,
       "keyObservations": ["observation 1", "observation 2", "observation 3"],
       "concerns": ["concern 1", ...],
-      "summary": "1-2 sentence exterior summary",
+      "summary": "1-2 sentence summary",
       "scoreJustification": "Why this score. What would make it higher or lower."
     },
-    "interior": { same structure },
-    "mechanicalVisual": { same structure },
-    "underbodyFrame": { same structure }
+    "panelAlignment": { same structure },
+    "glassLighting": { same structure },
+    "interiorSurfaces": { same structure },
+    "interiorControls": { same structure },
+    "engineBay": { same structure },
+    "tiresWheels": { same structure },
+    "underbodyFrame": { same structure },
+    "exhaust": { same structure }
   },
   "additionalFindings": [
     {

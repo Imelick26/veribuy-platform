@@ -183,7 +183,7 @@ export async function runPhase4(
   media: MediaForAnalysis[],
   allFindings: DetectedFinding[],
   comparisonFindings: ComparisonFinding[],
-  tireAssessment: TireAssessment | undefined,
+  tireAssessment: TireAssessment | null | undefined,
   inspectorNotes?: string,
 ): Promise<{ synthesis: SynthesisResult; apiCalls: number }> {
   console.log(`[phase4] Running score synthesis with ${allFindings.length} findings + exterior photos`);
@@ -215,7 +215,7 @@ export async function runPhase4(
   }
 
   const synthesis = normalizeSynthesis(response.result, vehicle, allFindings, tireAssessment);
-  console.log(`[phase4] Complete: scores ext=${synthesis.areaScores.exteriorBody.score} int=${synthesis.areaScores.interior.score} mech=${synthesis.areaScores.mechanicalVisual.score} under=${synthesis.areaScores.underbodyFrame.score}`);
+  console.log(`[phase4] Complete: 9-area scores paint=${synthesis.areaScores.paintBody.score} panels=${synthesis.areaScores.panelAlignment.score} glass=${synthesis.areaScores.glassLighting.score} intSurf=${synthesis.areaScores.interiorSurfaces.score} intCtrl=${synthesis.areaScores.interiorControls.score} engine=${synthesis.areaScores.engineBay.score} tires=${synthesis.areaScores.tiresWheels.score} under=${synthesis.areaScores.underbodyFrame.score} exhaust=${synthesis.areaScores.exhaust.score} | legacy ext=${synthesis.areaScores.exteriorBody.score} int=${synthesis.areaScores.interior.score} mech=${synthesis.areaScores.mechanicalVisual.score}`);
 
   return { synthesis, apiCalls: 1 };
 }
@@ -243,10 +243,20 @@ interface RescanFindingResponse {
 
 interface SynthesisResponse {
   areaScores?: {
+    // 9 primary areas (expected from GPT-4o)
+    paintBody?: AreaScoreResponse;
+    panelAlignment?: AreaScoreResponse;
+    glassLighting?: AreaScoreResponse;
+    interiorSurfaces?: AreaScoreResponse;
+    interiorControls?: AreaScoreResponse;
+    engineBay?: AreaScoreResponse;
+    tiresWheels?: AreaScoreResponse;
+    underbodyFrame?: AreaScoreResponse;
+    exhaust?: AreaScoreResponse;
+    // Legacy 4-area keys (accepted for backward compat if GPT returns old format)
     exteriorBody?: AreaScoreResponse;
     interior?: AreaScoreResponse;
     mechanicalVisual?: AreaScoreResponse;
-    underbodyFrame?: AreaScoreResponse;
   };
   additionalFindings?: RescanFindingResponse[];
   redFlags?: string[];
@@ -321,16 +331,40 @@ function normalizeSynthesis(
   response: SynthesisResponse,
   vehicle: VehicleInfo,
   allFindings: DetectedFinding[],
-  tireAssessment: TireAssessment | undefined,
+  tireAssessment: TireAssessment | null | undefined,
 ): SynthesisResult {
   const scores = response.areaScores || {};
 
+  // 9 primary area scores
+  const paintBody = normalizeAreaScore(scores.paintBody, "Paint & Body", allFindings, "exterior");
+  const panelAlignment = normalizeAreaScore(scores.panelAlignment, "Panel Alignment", allFindings, "exterior");
+  const glassLighting = normalizeAreaScore(scores.glassLighting, "Glass & Lighting", allFindings, "exterior");
+  const interiorSurfaces = normalizeAreaScore(scores.interiorSurfaces, "Interior Surfaces", allFindings, "interior");
+  const interiorControls = normalizeAreaScore(scores.interiorControls, "Interior Controls", allFindings, "interior");
+  const engineBay = normalizeAreaScore(scores.engineBay, "Engine Bay", allFindings, "mechanical");
+  const tiresWheels = normalizeAreaScore(scores.tiresWheels, "Tires & Wheels", allFindings, "mechanical");
+  const underbodyFrame = normalizeAreaScore(scores.underbodyFrame, "Underbody / Frame", allFindings, "underbody");
+  const exhaust = normalizeAreaScore(scores.exhaust, "Exhaust", allFindings, "mechanical");
+
+  // Legacy 3 computed areas (averages of the 9-bucket scores)
+  const exteriorBody = averageAreaScores([paintBody, panelAlignment, glassLighting], "Exterior Body");
+  const interior = averageAreaScores([interiorSurfaces, interiorControls], "Interior");
+  const mechanicalVisual = averageAreaScores([engineBay, tiresWheels, exhaust], "Mechanical / Visual");
+
   return {
     areaScores: {
-      exteriorBody: normalizeAreaScore(scores.exteriorBody, "Exterior Body", allFindings, "exterior"),
-      interior: normalizeAreaScore(scores.interior, "Interior", allFindings, "interior"),
-      mechanicalVisual: normalizeAreaScore(scores.mechanicalVisual, "Mechanical / Visual", allFindings, "mechanical"),
-      underbodyFrame: normalizeAreaScore(scores.underbodyFrame, "Underbody / Frame", allFindings, "underbody"),
+      paintBody,
+      panelAlignment,
+      glassLighting,
+      interiorSurfaces,
+      interiorControls,
+      engineBay,
+      tiresWheels,
+      underbodyFrame,
+      exhaust,
+      exteriorBody,
+      interior,
+      mechanicalVisual,
     },
     tireAssessment: tireAssessment || {
       frontDriver: { condition: "GOOD", observations: [] },
@@ -376,11 +410,30 @@ function normalizeAreaScore(
   };
 }
 
+/** Compute a legacy area score as the average of multiple 9-bucket scores */
+function averageAreaScores(areas: AreaConditionDetail[], legacyName: string): AreaConditionDetail {
+  if (areas.length === 0) {
+    return { score: 5, confidence: 0.3, keyObservations: [], concerns: [], summary: `${legacyName} (no data).` };
+  }
+  const avgScore = Math.max(1, Math.min(10, Math.round(areas.reduce((s, a) => s + a.score, 0) / areas.length)));
+  const avgConfidence = Math.max(0, Math.min(1, areas.reduce((s, a) => s + a.confidence, 0) / areas.length));
+  const allObservations = areas.flatMap((a) => a.keyObservations);
+  const allConcerns = areas.flatMap((a) => a.concerns);
+  return {
+    score: avgScore,
+    confidence: avgConfidence,
+    keyObservations: allObservations.slice(0, 6),
+    concerns: allConcerns.slice(0, 6),
+    summary: `${legacyName}: averaged from ${areas.length} sub-areas (score ${avgScore}/10).`,
+    scoreJustification: `Computed as average of ${areas.map((a) => a.score).join(", ")}.`,
+  };
+}
+
 function buildFallbackSynthesis(
   vehicle: VehicleInfo,
   findings: DetectedFinding[],
   comparisonFindings: ComparisonFinding[],
-  tireAssessment: TireAssessment | undefined,
+  tireAssessment: TireAssessment | null | undefined,
 ): SynthesisResult {
   const buildArea = (area: string, name: string): AreaConditionDetail => {
     const areaFindings = findings.filter((f) => f.affectsArea === area);
@@ -395,12 +448,74 @@ function buildFallbackSynthesis(
     };
   };
 
+  // Map findings to 9 buckets using captureType and affectsArea
+  const buildBucket = (name: string, filterFn: (f: DetectedFinding) => boolean): AreaConditionDetail => {
+    const bucketFindings = findings.filter(filterFn);
+    const score = Math.max(1, Math.min(10, 10 - bucketFindings.length));
+    return {
+      score,
+      confidence: 0.3,
+      keyObservations: [`${bucketFindings.length} defects detected`],
+      concerns: bucketFindings.slice(0, 4).map((f) => `${f.defectType} at ${f.location}`),
+      summary: `${name}: ${bucketFindings.length} defects (fallback scoring).`,
+      scoreJustification: "Emergency fallback.",
+    };
+  };
+
+  const PAINT_TYPES = ["FRONT_CENTER", "FRONT_34_DRIVER", "FRONT_34_PASSENGER", "DRIVER_SIDE", "PASSENGER_SIDE", "REAR_34_DRIVER", "REAR_34_PASSENGER", "REAR_CENTER", "ROOF"];
+  const GLASS_KEYWORDS = ["glass", "windshield", "window", "headlight", "taillight", "light", "lens", "mirror"];
+  const EXHAUST_KEYWORDS = ["exhaust", "muffler", "catalytic", "tailpipe", "emission"];
+
+  // 9 primary area scores
+  const paintBody = buildBucket("Paint & Body", (f) =>
+    f.affectsArea === "exterior" && PAINT_TYPES.includes(f.captureType) &&
+    !f.defectType.toLowerCase().match(/panel|gap|alignment/) &&
+    !GLASS_KEYWORDS.some((kw) => f.defectType.toLowerCase().includes(kw)),
+  );
+  const panelAlignment = buildBucket("Panel Alignment", (f) =>
+    f.affectsArea === "exterior" && !!f.defectType.toLowerCase().match(/panel|gap|alignment/),
+  );
+  const glassLighting = buildBucket("Glass & Lighting", (f) =>
+    f.affectsArea === "exterior" && GLASS_KEYWORDS.some((kw) => f.defectType.toLowerCase().includes(kw)),
+  );
+  const interiorSurfaces = buildBucket("Interior Surfaces", (f) =>
+    f.affectsArea === "interior" && !f.defectType.toLowerCase().match(/control|button|switch|screen|knob|dial|gauge/),
+  );
+  const interiorControls = buildBucket("Interior Controls", (f) =>
+    f.affectsArea === "interior" && !!f.defectType.toLowerCase().match(/control|button|switch|screen|knob|dial|gauge/),
+  );
+  const engineBay = buildBucket("Engine Bay", (f) =>
+    f.affectsArea === "mechanical" && (f.captureType === "ENGINE_BAY" || f.captureType.includes("ENGINE")) &&
+    !EXHAUST_KEYWORDS.some((kw) => f.defectType.toLowerCase().includes(kw)),
+  );
+  const tiresWheels = buildBucket("Tires & Wheels", (f) =>
+    f.affectsArea === "mechanical" && (f.captureType.includes("TIRE") || f.captureType.includes("WHEEL") ||
+    f.defectType.toLowerCase().includes("tire") || f.defectType.toLowerCase().includes("wheel")),
+  );
+  const underbodyFrame = buildArea("underbody", "Underbody / Frame");
+  const exhaust = buildBucket("Exhaust", (f) =>
+    f.affectsArea === "mechanical" && EXHAUST_KEYWORDS.some((kw) => f.defectType.toLowerCase().includes(kw)),
+  );
+
+  // Legacy 3 computed areas
+  const exteriorBody = averageAreaScores([paintBody, panelAlignment, glassLighting], "Exterior Body");
+  const interior = averageAreaScores([interiorSurfaces, interiorControls], "Interior");
+  const mechanicalVisual = averageAreaScores([engineBay, tiresWheels, exhaust], "Mechanical / Visual");
+
   return {
     areaScores: {
-      exteriorBody: buildArea("exterior", "Exterior Body"),
-      interior: buildArea("interior", "Interior"),
-      mechanicalVisual: buildArea("mechanical", "Mechanical / Visual"),
-      underbodyFrame: buildArea("underbody", "Underbody / Frame"),
+      paintBody,
+      panelAlignment,
+      glassLighting,
+      interiorSurfaces,
+      interiorControls,
+      engineBay,
+      tiresWheels,
+      underbodyFrame,
+      exhaust,
+      exteriorBody,
+      interior,
+      mechanicalVisual,
     },
     tireAssessment: tireAssessment || {
       frontDriver: { condition: "GOOD", observations: [] },

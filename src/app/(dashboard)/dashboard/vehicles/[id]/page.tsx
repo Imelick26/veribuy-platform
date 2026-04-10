@@ -507,30 +507,58 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                 <Overline>Condition Assessment</Overline>
                 <span className="text-sm font-bold text-text-primary">{conditionScore}/100 overall</span>
               </div>
-              <div className="space-y-4">
-                {[
-                  { label: "Exterior Body", key: "exteriorBody", score: inspection?.exteriorBodyScore, weight: "30%" },
-                  { label: "Interior", key: "interior", score: inspection?.interiorScore, weight: "15%" },
-                  { label: "Mechanical / Visual", key: "mechanicalVisual", score: inspection?.mechanicalVisualScore, weight: "35%" },
-                  { label: "Underbody / Frame", key: "underbodyFrame", score: inspection?.underbodyFrameScore, weight: "20%" },
-                ].map(({ label, key, score, weight }) => {
-                  const areaDetail = rawConditionData?.[key as keyof typeof rawConditionData] as {
-                    summary?: string; concerns?: string[];
-                  } | undefined;
-                  const subtitle = [
-                    areaDetail?.summary,
-                    ...(areaDetail?.concerns?.map((c) => `⚠ ${c}`) || []),
-                  ].filter(Boolean).join(" — ");
-                  return (
-                    <ConditionBar
-                      key={label}
-                      label={`${label} (${weight})`}
-                      score={score as number | null}
-                      subtitle={subtitle || undefined}
-                    />
-                  );
-                })}
-              </div>
+              {(() => {
+                const weights = inspection?.conditionWeights as Record<string, number> | null;
+                const scoreGroups = [
+                  { group: "Exterior", items: [
+                    { label: "Paint & Body", key: "paintBody", score: inspection?.paintBodyScore },
+                    { label: "Panel Alignment", key: "panelAlignment", score: inspection?.panelAlignmentScore },
+                    { label: "Glass & Lighting", key: "glassLighting", score: inspection?.glassLightingScore },
+                  ]},
+                  { group: "Interior", items: [
+                    { label: "Surfaces", key: "interiorSurfaces", score: inspection?.interiorSurfacesScore },
+                    { label: "Controls", key: "interiorControls", score: inspection?.interiorControlsScore },
+                  ]},
+                  { group: "Mechanical", items: [
+                    { label: "Engine Bay", key: "engineBay", score: inspection?.engineBayScore },
+                    { label: "Tires & Wheels", key: "tiresWheels", score: inspection?.tiresWheelsScore },
+                    { label: "Exhaust", key: "exhaust", score: inspection?.exhaustScore },
+                  ]},
+                  { group: "Structural", items: [
+                    { label: "Underbody & Frame", key: "underbodyFrame", score: inspection?.underbodyFrameScore },
+                  ]},
+                ];
+                return (
+                  <div className="space-y-5">
+                    {scoreGroups.map(({ group, items }) => (
+                      <div key={group}>
+                        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">{group}</p>
+                        <div className="space-y-3">
+                          {items.map(({ label, key, score }) => {
+                            const w = weights?.[key];
+                            const weightLabel = w ? `${w}%` : "";
+                            const areaDetail = rawConditionData?.[key as keyof typeof rawConditionData] as {
+                              summary?: string; concerns?: string[];
+                            } | undefined;
+                            const subtitle = [
+                              areaDetail?.summary,
+                              ...(areaDetail?.concerns?.map((c) => `⚠ ${c}`) || []),
+                            ].filter(Boolean).join(" — ");
+                            return (
+                              <ConditionBar
+                                key={label}
+                                label={weightLabel ? `${label} (${weightLabel})` : label}
+                                score={score as number | null}
+                                subtitle={subtitle || undefined}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           )}
 

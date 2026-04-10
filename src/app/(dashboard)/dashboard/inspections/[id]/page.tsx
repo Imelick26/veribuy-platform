@@ -20,6 +20,7 @@ import {
   BarChart3,
   ChevronRight,
   ShieldAlert,
+  Eye,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { StepPanel } from "@/components/inspection/StepPanel";
@@ -51,6 +52,7 @@ const STEP_META: Record<string, { label: string; icon: typeof CheckCircle }> = {
   MEDIA_CAPTURE: { label: "Capture", icon: Camera },
   VIN_CONFIRM: { label: "VIN", icon: Car },
   AI_CONDITION_SCAN: { label: "Condition", icon: ShieldAlert },
+  CONDITION_REVIEW: { label: "Verify", icon: Eye },
   RISK_INSPECTION: { label: "Risk Check", icon: AlertTriangle },
   VEHICLE_HISTORY: { label: "History", icon: Clock },
   MARKET_ANALYSIS: { label: "Market", icon: BarChart3 },
@@ -62,8 +64,8 @@ const STEP_META: Record<string, { label: string; icon: typeof CheckCircle }> = {
 };
 
 const NEW_STEP_ORDER = [
-  "MEDIA_CAPTURE", "VIN_CONFIRM", "AI_CONDITION_SCAN", "RISK_INSPECTION",
-  "VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION",
+  "MEDIA_CAPTURE", "VIN_CONFIRM", "AI_CONDITION_SCAN", "CONDITION_REVIEW",
+  "RISK_INSPECTION", "VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION",
 ];
 
 const LEGACY_STEP_ORDER = [
@@ -182,6 +184,23 @@ export default function InspectionDetailPage({
   const confirmOdometer = trpc.inspection.confirmOdometer.useMutation({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
+
+  // Condition Review — inspector verifies AI-detected findings
+  const conditionFindingsQuery = trpc.inspection.getConditionFindings.useQuery(
+    { inspectionId: id },
+    { enabled: !!inspection && inspection.steps.some((s) => s.step === "AI_CONDITION_SCAN" && s.status === "COMPLETED") },
+  );
+  const reviewConditionFinding = trpc.inspection.reviewConditionFinding.useMutation({
+    onSuccess: () => conditionFindingsQuery.refetch(),
+  });
+  const completeConditionReview = trpc.inspection.completeConditionReview.useMutation({
+    onSuccess: () => {
+      utils.inspection.get.invalidate({ id });
+      conditionFindingsQuery.refetch();
+    },
+  });
+  const conditionReviewStep = inspection?.steps.find((s) => s.step === "CONDITION_REVIEW");
+  const conditionReviewComplete = conditionReviewStep?.status === "COMPLETED";
 
   const { data: aiAnalysisData } = trpc.inspection.getAIAnalysisResults.useQuery(
     { inspectionId: id },
@@ -560,7 +579,7 @@ export default function InspectionDetailPage({
         </div>
         <Progress value={progressPct} color={progressPct === 100 ? "green" : "brand"} />
 
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-2 md:grid md:grid-cols-7 md:overflow-visible">
+        <div className="mt-5 flex gap-2 overflow-x-auto pb-2 md:grid md:grid-cols-8 md:overflow-visible">
           {STEP_ORDER.map((stepKey, idx) => {
             const step = inspection.steps.find((s) => s.step === stepKey);
             const meta = STEP_META[stepKey] || { label: stepKey, icon: Circle };
@@ -741,6 +760,14 @@ export default function InspectionDetailPage({
           isFetchingMarket={isCompleting || fetchMarket.isPending}
           completionPhase={completionPhase}
           onViewReport={() => setShowReportModal(true)}
+          conditionFindings={conditionFindingsQuery.data?.findings}
+          conditionReviews={conditionFindingsQuery.data?.reviews}
+          conditionReviewComplete={conditionReviewComplete}
+          onReviewConditionFinding={(findingIndex, verified) =>
+            reviewConditionFinding.mutate({ inspectionId: id, findingIndex, verified })
+          }
+          onCompleteConditionReview={() => completeConditionReview.mutate({ inspectionId: id })}
+          isCompletingConditionReview={completeConditionReview.isPending}
           inspectionConfidence={inspectionConfidence}
         />
       )}

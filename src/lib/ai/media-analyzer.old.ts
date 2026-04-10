@@ -799,6 +799,8 @@ export async function analyzeVehicleCondition(
     underbodyFrame.summary,
   ].join(" ");
 
+  // Legacy file: populate 9-bucket scores from the 4-area scores
+  const defaultDetail = { score: 7, confidence: 0.3, keyObservations: [], concerns: [], summary: "Legacy assessment." };
   return {
     overallScore,
     exteriorBodyScore: exteriorBody.score,
@@ -809,6 +811,24 @@ export async function analyzeVehicleCondition(
     interior,
     mechanicalVisual,
     underbodyFrame,
+    // 9-bucket scores (derived from legacy 4-area)
+    paintBodyScore: exteriorBody.score,
+    panelAlignmentScore: exteriorBody.score,
+    glassLightingScore: exteriorBody.score,
+    interiorSurfacesScore: interior.score,
+    interiorControlsScore: interior.score,
+    engineBayScore: mechanicalVisual.score,
+    tiresWheelsScore: mechanicalVisual.score,
+    exhaustScore: mechanicalVisual.score,
+    // 9-bucket detail objects
+    paintBody: exteriorBody,
+    panelAlignment: { ...defaultDetail, score: exteriorBody.score },
+    glassLighting: { ...defaultDetail, score: exteriorBody.score },
+    interiorSurfaces: interior,
+    interiorControls: { ...defaultDetail, score: interior.score },
+    engineBay: mechanicalVisual,
+    tiresWheels: { ...defaultDetail, score: mechanicalVisual.score },
+    exhaust: { ...defaultDetail, score: mechanicalVisual.score },
     summary,
     photoCoverage: {
       exteriorBody: photoCoverage.exteriorBody,

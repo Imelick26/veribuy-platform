@@ -29,10 +29,15 @@ export interface ConditionAdjusterInput {
   bodyCategory: "truck" | "suv" | "sports" | "sedan" | "other";
   conditionScore: number;
   areaScores?: {
-    exteriorBody?: number;
-    interior?: number;
-    mechanicalVisual?: number;
+    paintBody?: number;
+    panelAlignment?: number;
+    glassLighting?: number;
+    interiorSurfaces?: number;
+    interiorControls?: number;
+    engineBay?: number;
+    tiresWheels?: number;
     underbodyFrame?: number;
+    exhaust?: number;
   };
   keyObservations?: string[];
   conditionAttenuation: number;
@@ -66,10 +71,15 @@ export async function analyzeConditionValue(
   const vehicleDesc = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
 
   const areaContext = areaScores ? [
-    areaScores.exteriorBody !== undefined ? `Exterior Body: ${areaScores.exteriorBody}/10` : null,
-    areaScores.interior !== undefined ? `Interior: ${areaScores.interior}/10` : null,
-    areaScores.mechanicalVisual !== undefined ? `Mechanical/Visual: ${areaScores.mechanicalVisual}/10` : null,
+    areaScores.paintBody !== undefined ? `Paint & Body: ${areaScores.paintBody}/10` : null,
+    areaScores.panelAlignment !== undefined ? `Panel Alignment: ${areaScores.panelAlignment}/10` : null,
+    areaScores.glassLighting !== undefined ? `Glass & Lighting: ${areaScores.glassLighting}/10` : null,
+    areaScores.interiorSurfaces !== undefined ? `Interior Surfaces: ${areaScores.interiorSurfaces}/10` : null,
+    areaScores.interiorControls !== undefined ? `Interior Controls: ${areaScores.interiorControls}/10` : null,
+    areaScores.engineBay !== undefined ? `Engine Bay: ${areaScores.engineBay}/10` : null,
+    areaScores.tiresWheels !== undefined ? `Tires & Wheels: ${areaScores.tiresWheels}/10` : null,
     areaScores.underbodyFrame !== undefined ? `Underbody/Frame: ${areaScores.underbodyFrame}/10` : null,
+    areaScores.exhaust !== undefined ? `Exhaust: ${areaScores.exhaust}/10` : null,
   ].filter(Boolean).join(", ") : "No per-area breakdown available";
 
   const observationsContext = keyObservations?.length

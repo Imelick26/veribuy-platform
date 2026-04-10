@@ -123,41 +123,64 @@ export default function SharedReportPage({
               </div>
             )}
 
-            {inspection.overallScore != null && (
-              <div className="mt-4 space-y-0">
-                {[
-                  { label: "Exterior Body", key: "exteriorBody", score: inspection.exteriorBodyScore },
-                  { label: "Interior", key: "interior", score: inspection.interiorScore },
-                  { label: "Mechanical / Visual", key: "mechanicalVisual", score: inspection.mechanicalVisualScore },
-                  { label: "Underbody / Frame", key: "underbodyFrame", score: inspection.underbodyFrameScore },
-                ].map((item) => {
-                  const rawData = inspection.conditionRawData as Record<string, unknown> | null;
-                  const detail = rawData?.[item.key] as { summary?: string; concerns?: string[] } | undefined;
-                  const dotColor = (item.score || 0) >= 7 ? "bg-green-500" : (item.score || 0) >= 6 ? "bg-caution-400" : "bg-red-500";
-                  return (
-                    <div key={item.label} className="pb-4 border-b border-border-default last:border-0 last:pb-0 pt-4 first:pt-0">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotColor}`} />
-                          <span className="text-sm font-medium text-text-primary">{item.label}</span>
-                        </div>
-                        <span className="text-sm font-bold text-text-primary">{item.score ?? "—"}/10</span>
+            {inspection.overallScore != null && (() => {
+              const rawData = inspection.conditionRawData as Record<string, unknown> | null;
+              const scoreGroups = [
+                { group: "Exterior", items: [
+                  { label: "Paint & Body", key: "paintBody", score: inspection.paintBodyScore },
+                  { label: "Panel Alignment", key: "panelAlignment", score: inspection.panelAlignmentScore },
+                  { label: "Glass & Lighting", key: "glassLighting", score: inspection.glassLightingScore },
+                ]},
+                { group: "Interior", items: [
+                  { label: "Surfaces", key: "interiorSurfaces", score: inspection.interiorSurfacesScore },
+                  { label: "Controls", key: "interiorControls", score: inspection.interiorControlsScore },
+                ]},
+                { group: "Mechanical", items: [
+                  { label: "Engine Bay", key: "engineBay", score: inspection.engineBayScore },
+                  { label: "Tires & Wheels", key: "tiresWheels", score: inspection.tiresWheelsScore },
+                  { label: "Exhaust", key: "exhaust", score: inspection.exhaustScore },
+                ]},
+                { group: "Structural", items: [
+                  { label: "Underbody & Frame", key: "underbodyFrame", score: inspection.underbodyFrameScore },
+                ]},
+              ];
+              return (
+                <div className="mt-4 space-y-5">
+                  {scoreGroups.map(({ group, items }) => (
+                    <div key={group}>
+                      <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">{group}</p>
+                      <div className="space-y-0">
+                        {items.map((item) => {
+                          const detail = rawData?.[item.key] as { summary?: string; concerns?: string[] } | undefined;
+                          const dotColor = (item.score || 0) >= 7 ? "bg-green-500" : (item.score || 0) >= 6 ? "bg-caution-400" : "bg-red-500";
+                          return (
+                            <div key={item.label} className="pb-4 border-b border-border-default last:border-0 last:pb-0 pt-4 first:pt-0">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotColor}`} />
+                                  <span className="text-sm font-medium text-text-primary">{item.label}</span>
+                                </div>
+                                <span className="text-sm font-bold text-text-primary">{item.score ?? "—"}/10</span>
+                              </div>
+                              {detail?.summary && (
+                                <p className="text-sm text-text-secondary mt-1 leading-relaxed ml-[18px]">{detail.summary}</p>
+                              )}
+                              {detail?.concerns && detail.concerns.length > 0 && (
+                                <div className="mt-1 ml-[18px]">
+                                  {detail.concerns.map((c, i) => (
+                                    <p key={i} className="text-sm text-red-600 leading-relaxed">{"\u2022"} {c}</p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      {detail?.summary && (
-                        <p className="text-sm text-text-secondary mt-1 leading-relaxed ml-[18px]">{detail.summary}</p>
-                      )}
-                      {detail?.concerns && detail.concerns.length > 0 && (
-                        <div className="mt-1 ml-[18px]">
-                          {detail.concerns.map((c, i) => (
-                            <p key={i} className="text-sm text-red-600 leading-relaxed">{"\u2022"} {c}</p>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Findings */}

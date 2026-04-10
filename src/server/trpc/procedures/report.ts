@@ -11,8 +11,9 @@ export const reportRouter = router({
   generate: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const isSuperAdmin = (ctx.session.user as Record<string, unknown>).role === "SUPER_ADMIN";
       const inspection = await ctx.db.inspection.findUnique({
-        where: { id: input.inspectionId, orgId: ctx.orgId },
+        where: { id: input.inspectionId, ...(isSuperAdmin ? {} : { orgId: ctx.orgId }) },
         include: {
           vehicle: true,
           findings: { include: { media: true } },
@@ -85,7 +86,7 @@ export const reportRouter = router({
         ? { totalReconCost: reconOutput.totalReconCost || 0, itemizedCosts: reconOutput.itemizedCosts, laborRateContext: reconOutput.laborRateContext }
         : null;
 
-      // Extract condition details for 4-area breakdown
+      // Extract condition details for 9-area breakdown
       const conditionRaw = inspection.conditionRawData as Record<string, { summary?: string; concerns?: string[] }> | null;
 
       // Categorize media for the report
@@ -127,16 +128,34 @@ export const reportRouter = router({
         },
         scores: {
           overall: inspection.overallScore,
+          paintBody: inspection.paintBodyScore,
+          panelAlignment: inspection.panelAlignmentScore,
+          glassLighting: inspection.glassLightingScore,
+          interiorSurfaces: inspection.interiorSurfacesScore,
+          interiorControls: inspection.interiorControlsScore,
+          engineBay: inspection.engineBayScore,
+          tiresWheels: inspection.tiresWheelsScore,
+          underbodyFrame: inspection.underbodyFrameScore,
+          exhaust: inspection.exhaustScore,
+          // Legacy
           exteriorBody: inspection.exteriorBodyScore,
           interior: inspection.interiorScore,
           mechanicalVisual: inspection.mechanicalVisualScore,
-          underbodyFrame: inspection.underbodyFrameScore,
         },
         conditionDetails: conditionRaw ? {
+          paintBody: conditionRaw.paintBody,
+          panelAlignment: conditionRaw.panelAlignment,
+          glassLighting: conditionRaw.glassLighting,
+          interiorSurfaces: conditionRaw.interiorSurfaces,
+          interiorControls: conditionRaw.interiorControls,
+          engineBay: conditionRaw.engineBay,
+          tiresWheels: conditionRaw.tiresWheels,
+          underbodyFrame: conditionRaw.underbodyFrame,
+          exhaust: conditionRaw.exhaust,
+          // Legacy
           exteriorBody: conditionRaw.exteriorBody,
           interior: conditionRaw.interior,
           mechanicalVisual: conditionRaw.mechanicalVisual,
-          underbodyFrame: conditionRaw.underbodyFrame,
         } : null,
         findings: inspection.findings.map((f) => ({
           title: f.title,

@@ -10,13 +10,15 @@ import { reportSuccess, reportFailure } from "@/lib/api-health";
 import { calculateFairPrice, calculateDealEconomics, getConditionGrade, type HistoryData } from "@/lib/market-valuation";
 import { classifyBody, type VehicleConfig } from "@/lib/config-premiums";
 import type { AggregatedRiskProfile, AIAnalysisResult, OverallConditionResult, ConditionAssessment } from "@/types/risk";
-import { persistConditionScores } from "@/lib/scoring";
+import { persistConditionScores, recalculateScores } from "@/lib/scoring";
+import type { PreliminaryFinding, FindingReview } from "@/lib/scoring";
 import { analyzeHistoryImpact } from "@/lib/ai/history-adjuster";
 import { analyzeConditionValue } from "@/lib/ai/condition-adjuster";
 import { estimateReconCosts } from "@/lib/ai/recon-estimator";
 import { rateDeal } from "@/lib/ai/deal-rater";
 import { auditPrice } from "@/lib/ai/price-auditor";
 import { decomposeOfferGap } from "@/lib/ai/offer-cost-decomposition";
+import { determineConditionWeights } from "@/lib/ai/condition-weighter";
 
 // Generate sequential inspection number (uses max to avoid collisions after deletions)
 async function generateInspectionNumber(db: typeof import("@/server/db").db) {
@@ -98,6 +100,7 @@ export const inspectionRouter = router({
                 { step: "MEDIA_CAPTURE" },
                 { step: "VIN_CONFIRM" },
                 { step: "AI_CONDITION_SCAN" },
+                { step: "CONDITION_REVIEW" },
                 { step: "RISK_INSPECTION" },
                 { step: "VEHICLE_HISTORY" },
                 { step: "MARKET_ANALYSIS" },
@@ -249,6 +252,29 @@ export const inspectionRouter = router({
         },
       });
 
+      // Fire-and-forget: generate AI condition weights for the 9-bucket scoring system.
+      // Non-blocking — if it fails, the system falls back to default weights.
+      determineConditionWeights({
+        vehicle: {
+          year: vehicle.year,
+          make: vehicle.make,
+          model: vehicle.model,
+          trim: vehicle.trim,
+          engine: vehicle.engine,
+          drivetrain: vehicle.drivetrain,
+          bodyStyle: vehicle.bodyStyle,
+        },
+        mileage: inspection.odometer,
+      }).then(async (result) => {
+        await ctx.db.inspection.update({
+          where: { id: input.inspectionId },
+          data: { conditionWeights: result.result.weights as any },
+        });
+        console.log(`[Inspection] Condition weights set (tier ${result.fallbackTier}): ${JSON.stringify(result.result.weights)}`);
+      }).catch((err) => {
+        console.warn(`[Inspection] Condition weight generation failed (will use defaults): ${err instanceof Error ? err.message : err}`);
+      });
+
       return { vehicle };
     }),
 
@@ -343,10 +369,26 @@ export const inspectionRouter = router({
           : Promise.resolve(null),
       ]);
 
-      // Tire assessment is now embedded in the pipeline result
-      const tireResult = conditionAssessment.tireAssessment;
+      // Build preliminary findings from the pipeline for inspector verification.
+      // Scores and findings are NOT persisted yet — they go to CONDITION_REVIEW.
+      const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis);
+      const preliminaryFindings = pipelineFindings.unexpectedFindings
+        .filter((uf) => uf.confidence >= 0.6)
+        .map((uf, index) => ({
+          index,
+          title: uf.title,
+          description: uf.description,
+          severity: uf.severity,
+          category: uf.category || "OTHER",
+          confidence: uf.confidence,
+          photoIndex: uf.photoIndex,
+          photoId: uf.photoIndex >= 0 && uf.photoIndex < mediaForAnalysis.length
+            ? mediaForAnalysis[uf.photoIndex].id
+            : null,
+        }));
 
-      // Auto-create tire replacement finding if any tires need replacing
+      // Build tire finding if applicable (also preliminary — awaits verification)
+      const tireResult = conditionAssessment.tireAssessment;
       if (tireResult) {
         const tires = [
           { pos: "Front Left", ...tireResult.frontDriver },
@@ -365,59 +407,20 @@ export const inspectionRouter = router({
             .map((t) => `${t.pos} (${t.condition.toLowerCase()})`)
             .join(", ");
 
-          const existingTireFinding = await ctx.db.finding.findFirst({
-            where: { inspectionId: input.inspectionId, title: { startsWith: "Tire Replacement" } },
-          });
-
-          if (!existingTireFinding) {
-            await ctx.db.finding.create({
-              data: {
-                inspectionId: input.inspectionId,
-                title: `Tire Replacement (${needsAttention} tire${needsAttention > 1 ? "s" : ""})`,
-                description: `${positions}. ${tireResult.summary}`,
-                severity: replaceCount > 0 ? "MAJOR" : "MODERATE",
-                category: "TIRES_WHEELS",
-                repairCostLow: tireCost ? tireCost.costCents : needsAttention * 15000,
-                repairCostHigh: tireCost ? Math.round(tireCost.costCents * 1.2) : needsAttention * 25000,
-              },
-            });
-            console.log(`[Inspection] Auto-created tire finding: ${needsAttention} tires, est. $${tireCost ? (tireCost.costCents / 100).toFixed(0) : "N/A"}`);
-          }
-        }
-      }
-
-      // The pipeline also produces defect findings — create Finding records
-      // for all pipeline-detected defects (previously done in runAIAnalysis)
-      const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis);
-      for (const uf of pipelineFindings.unexpectedFindings) {
-        if (uf.confidence < 0.6) continue;
-
-        const existingFinding = await ctx.db.finding.findFirst({
-          where: { inspectionId: input.inspectionId, title: uf.title },
-        });
-        if (existingFinding) continue; // Prevent duplicates
-
-        const finding = await ctx.db.finding.create({
-          data: {
-            inspectionId: input.inspectionId,
-            title: uf.title,
-            description: uf.description,
-            severity: uf.severity as never,
-            category: (uf.category || "OTHER") as never,
-            evidence: `AI Detection Pipeline (${Math.round(uf.confidence * 100)}% confidence): ${uf.description}`,
-          },
-        });
-
-        if (uf.photoIndex >= 0 && uf.photoIndex < mediaForAnalysis.length) {
-          await ctx.db.mediaItem.update({
-            where: { id: mediaForAnalysis[uf.photoIndex].id },
-            data: { findingId: finding.id },
+          preliminaryFindings.push({
+            index: preliminaryFindings.length,
+            title: `Tire Replacement (${needsAttention} tire${needsAttention > 1 ? "s" : ""})`,
+            description: `${positions}. ${tireResult.summary}`,
+            severity: replaceCount > 0 ? "MAJOR" : "MODERATE",
+            category: "TIRES_WHEELS",
+            confidence: 0.9,
+            photoIndex: -1,
+            photoId: null,
           });
         }
       }
 
-      // Persist condition scores to Inspection record
-      await persistConditionScores(ctx.db, input.inspectionId, conditionAssessment);
+      console.log(`[Inspection] AI scan complete: ${preliminaryFindings.length} preliminary findings awaiting verification`);
 
       // Persist odometer reading if extracted and not already set
       if (odometerResult?.mileage && odometerResult.confidence >= 0.5 && !inspection.odometer) {
@@ -430,7 +433,8 @@ export const inspectionRouter = router({
         );
       }
 
-      // Store results in step data
+      // Store PRELIMINARY results in step data — scores and findings are NOT final yet.
+      // The inspector will verify each finding in the CONDITION_REVIEW step.
       await ctx.db.inspectionStep.update({
         where: {
           inspectionId_step: {
@@ -444,8 +448,7 @@ export const inspectionRouter = router({
           data: JSON.parse(JSON.stringify({
             conditionAssessment,
             inspectorNotes: input.inspectorNotes || null,
-            unexpectedFindings: pipelineFindings.unexpectedFindings,
-            unexpectedSummary: pipelineFindings.summary,
+            preliminaryFindings,
             odometerOCR: odometerResult ? {
               mileage: odometerResult.mileage,
               confidence: odometerResult.confidence,
@@ -454,9 +457,25 @@ export const inspectionRouter = router({
         },
       });
 
+      // Also enter the CONDITION_REVIEW step so it's ready for the inspector
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "CONDITION_REVIEW",
+          },
+        },
+        data: {
+          status: "IN_PROGRESS",
+          enteredAt: new Date(),
+        },
+      }).catch(() => {
+        // CONDITION_REVIEW step might not exist on older inspections
+      });
+
       return {
         conditionAssessment,
-        unexpectedFindings: pipelineFindings.unexpectedFindings,
+        preliminaryFindings,
         odometerOCR: odometerResult ? {
           mileage: odometerResult.mileage,
           confidence: odometerResult.confidence,
@@ -521,8 +540,8 @@ export const inspectionRouter = router({
         inspectionId: z.string(),
         step: z.enum([
           "MEDIA_CAPTURE", "VIN_CONFIRM", "AI_CONDITION_SCAN",
-          "RISK_INSPECTION", "VEHICLE_HISTORY", "MARKET_ANALYSIS",
-          "REPORT_GENERATION",
+          "CONDITION_REVIEW", "RISK_INSPECTION",
+          "VEHICLE_HISTORY", "MARKET_ANALYSIS", "REPORT_GENERATION",
           // Deprecated — kept for backward compat
           "VIN_DECODE", "RISK_REVIEW", "AI_ANALYSIS",
         ]),
@@ -551,6 +570,7 @@ export const inspectionRouter = router({
         MEDIA_CAPTURE: "MEDIA_CAPTURE",
         VIN_CONFIRM: "VIN_DECODED",
         AI_CONDITION_SCAN: "AI_ANALYZED",
+        CONDITION_REVIEW: "CONDITION_REVIEWED",
         RISK_INSPECTION: "RISK_REVIEWED",
         VEHICLE_HISTORY: "AI_ANALYZED",
         MARKET_ANALYSIS: "COMPLETED",
@@ -816,12 +836,17 @@ export const inspectionRouter = router({
       const vehicle = inspection.vehicle;
       if (!vehicle) throw new Error("No vehicle linked — confirm VIN first");
 
-      // Always fetch NHTSA recalls (free)
-      const nhtsaRecalls = await fetchRecalls(
-        vehicle.make,
-        vehicle.model,
-        vehicle.year,
-      );
+      // Fetch NHTSA recalls (free) — non-blocking if API is flaky
+      let nhtsaRecalls: Awaited<ReturnType<typeof fetchRecalls>> = [];
+      try {
+        nhtsaRecalls = await fetchRecalls(
+          vehicle.make,
+          vehicle.model,
+          vehicle.year,
+        );
+      } catch (err) {
+        console.warn(`[History] NHTSA recalls fetch failed, continuing without: ${err instanceof Error ? err.message : err}`);
+      }
 
       // Try VinAudit paid history if API key is configured
       let vinAuditHistory: Awaited<ReturnType<typeof fetchVinAuditHistory>> | null = null;
@@ -1015,10 +1040,15 @@ export const inspectionRouter = router({
           bodyCategory,
           conditionScore,
           areaScores: {
-            exteriorBody: inspection.exteriorBodyScore ?? undefined,
-            interior: inspection.interiorScore ?? undefined,
-            mechanicalVisual: inspection.mechanicalVisualScore ?? undefined,
+            paintBody: inspection.paintBodyScore ?? undefined,
+            panelAlignment: inspection.panelAlignmentScore ?? undefined,
+            glassLighting: inspection.glassLightingScore ?? undefined,
+            interiorSurfaces: inspection.interiorSurfacesScore ?? undefined,
+            interiorControls: inspection.interiorControlsScore ?? undefined,
+            engineBay: inspection.engineBayScore ?? undefined,
+            tiresWheels: inspection.tiresWheelsScore ?? undefined,
             underbodyFrame: inspection.underbodyFrameScore ?? undefined,
+            exhaust: inspection.exhaustScore ?? undefined,
           },
           keyObservations: inspection.conditionSummary ? [inspection.conditionSummary] : undefined,
           conditionAttenuation: marketData.conditionAttenuation,
@@ -1188,10 +1218,15 @@ export const inspectionRouter = router({
         bodyCategory,
         conditionSummary: inspection.conditionSummary || undefined,
         areaScores: {
-          exteriorBody: inspection.exteriorBodyScore ?? undefined,
-          interior: inspection.interiorScore ?? undefined,
-          mechanicalVisual: inspection.mechanicalVisualScore ?? undefined,
+          paintBody: inspection.paintBodyScore ?? undefined,
+          panelAlignment: inspection.panelAlignmentScore ?? undefined,
+          glassLighting: inspection.glassLightingScore ?? undefined,
+          interiorSurfaces: inspection.interiorSurfacesScore ?? undefined,
+          interiorControls: inspection.interiorControlsScore ?? undefined,
+          engineBay: inspection.engineBayScore ?? undefined,
+          tiresWheels: inspection.tiresWheelsScore ?? undefined,
           underbodyFrame: inspection.underbodyFrameScore ?? undefined,
+          exhaust: inspection.exhaustScore ?? undefined,
         },
         confirmedFindings: inspection.findings
           .filter((f) => f.repairCostLow || f.repairCostHigh)
@@ -1539,6 +1574,235 @@ export const inspectionRouter = router({
         },
       });
       return { count };
+    }),
+
+  // ── CONDITION_REVIEW procedures ──────────────────────────────────────
+
+  // Get preliminary findings from AI condition scan for inspector verification
+  getConditionFindings: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const scanStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_CONDITION_SCAN",
+          },
+        },
+      });
+      if (!scanStep?.data) return { findings: [], conditionAssessment: null };
+
+      const data = scanStep.data as {
+        preliminaryFindings?: PreliminaryFinding[];
+        conditionAssessment?: Record<string, unknown>;
+      };
+
+      // Also get any existing reviews from the CONDITION_REVIEW step
+      const reviewStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "CONDITION_REVIEW",
+          },
+        },
+      });
+      const reviewData = reviewStep?.data as { reviews?: Record<string, FindingReview> } | null;
+
+      return {
+        findings: data.preliminaryFindings || [],
+        conditionAssessment: data.conditionAssessment || null,
+        reviews: reviewData?.reviews || {},
+      };
+    }),
+
+  // Mark a single AI finding as confirmed or dismissed
+  reviewConditionFinding: protectedProcedure
+    .input(
+      z.object({
+        inspectionId: z.string(),
+        findingIndex: z.number(),
+        verified: z.boolean(),
+        notes: z.string().optional(),
+        mediaId: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const step = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "CONDITION_REVIEW",
+          },
+        },
+      });
+      if (!step) throw new TRPCError({ code: "NOT_FOUND", message: "CONDITION_REVIEW step not found" });
+
+      const existing = (step.data as { reviews?: Record<string, FindingReview> } | null)?.reviews || {};
+      const reviews = {
+        ...existing,
+        [String(input.findingIndex)]: {
+          verified: input.verified,
+          notes: input.notes,
+          mediaId: input.mediaId,
+          reviewedAt: new Date().toISOString(),
+        },
+      };
+
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "CONDITION_REVIEW",
+          },
+        },
+        data: {
+          data: JSON.parse(JSON.stringify({ reviews })),
+        },
+      });
+
+      return { success: true, reviews };
+    }),
+
+  // Complete condition review: create findings for verified issues, recalculate scores
+  completeConditionReview: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Get preliminary findings from AI scan step
+      const scanStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_CONDITION_SCAN",
+          },
+        },
+      });
+      if (!scanStep?.data) throw new TRPCError({ code: "BAD_REQUEST", message: "No condition scan data" });
+
+      const scanData = scanStep.data as unknown as {
+        preliminaryFindings: PreliminaryFinding[];
+        conditionAssessment: Record<string, unknown>;
+      };
+
+      // Get reviews from CONDITION_REVIEW step
+      const reviewStep = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "CONDITION_REVIEW",
+          },
+        },
+      });
+      const reviewData = (reviewStep?.data as { reviews?: Record<string, FindingReview> } | null)?.reviews || {};
+
+      const preliminaryFindings = scanData.preliminaryFindings || [];
+
+      // Get media for photo linking
+      const inspection = await ctx.db.inspection.findUnique({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        include: { media: true },
+      });
+      if (!inspection) throw new TRPCError({ code: "NOT_FOUND", message: "Inspection not found" });
+
+      const mediaForAnalysis = inspection.media
+        .filter((m) => m.url && m.captureType)
+        .map((m) => ({ id: m.id, url: m.url!, captureType: m.captureType! }));
+
+      // Create Finding records for verified issues only
+      let confirmedCount = 0;
+      let dismissedCount = 0;
+      for (const pf of preliminaryFindings) {
+        const review = reviewData[String(pf.index)];
+        if (!review) continue;
+
+        if (review.verified) {
+          confirmedCount++;
+          // Check for existing finding (idempotency)
+          const existing = await ctx.db.finding.findFirst({
+            where: { inspectionId: input.inspectionId, title: pf.title },
+          });
+          if (existing) continue;
+
+          const finding = await ctx.db.finding.create({
+            data: {
+              inspectionId: input.inspectionId,
+              title: pf.title,
+              description: pf.description,
+              severity: pf.severity as never,
+              category: (pf.category || "OTHER") as never,
+              evidence: `AI Detection (${Math.round(pf.confidence * 100)}% confidence) — verified by inspector`,
+            },
+          });
+
+          // Link source photo
+          if (pf.photoId && pf.photoIndex >= 0 && pf.photoIndex < mediaForAnalysis.length) {
+            await ctx.db.mediaItem.update({
+              where: { id: mediaForAnalysis[pf.photoIndex].id },
+              data: { findingId: finding.id },
+            }).catch(() => {});
+          }
+
+          // Link evidence photo from review if provided
+          if (review.mediaId) {
+            await ctx.db.mediaItem.update({
+              where: { id: review.mediaId },
+              data: { findingId: finding.id },
+            }).catch(() => {});
+          }
+        } else {
+          dismissedCount++;
+        }
+      }
+
+      // Recalculate condition scores based on verified findings
+      const originalAssessment = scanData.conditionAssessment as unknown as import("@/types/risk").ConditionAssessment;
+      const finalAssessment = recalculateScores(originalAssessment, preliminaryFindings, reviewData);
+
+      // Persist final scores to Inspection record
+      await persistConditionScores(ctx.db, input.inspectionId, finalAssessment);
+
+      // Mark CONDITION_REVIEW step as completed
+      await ctx.db.inspectionStep.update({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "CONDITION_REVIEW",
+          },
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+          data: JSON.parse(JSON.stringify({
+            reviews: reviewData,
+            confirmedCount,
+            dismissedCount,
+            finalScores: {
+              overall: finalAssessment.overallScore,
+              exteriorBody: finalAssessment.exteriorBodyScore,
+              interior: finalAssessment.interiorScore,
+              mechanicalVisual: finalAssessment.mechanicalVisualScore,
+              underbodyFrame: finalAssessment.underbodyFrameScore,
+            },
+          })),
+        },
+      });
+
+      // Update inspection status
+      await ctx.db.inspection.update({
+        where: { id: input.inspectionId },
+        data: { status: "CONDITION_REVIEWED" as never },
+      });
+
+      console.log(
+        `[Inspection] Condition review complete: ${confirmedCount} confirmed, ${dismissedCount} dismissed. ` +
+        `Score: ${originalAssessment.overallScore} → ${finalAssessment.overallScore}`,
+      );
+
+      return {
+        confirmedCount,
+        dismissedCount,
+        originalScore: originalAssessment.overallScore,
+        finalScore: finalAssessment.overallScore,
+      };
     }),
 
   // Record risk check status during physical inspection

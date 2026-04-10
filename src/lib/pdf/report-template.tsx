@@ -103,10 +103,20 @@ export interface ReportData {
   };
   scores: {
     overall: number | null;
-    exteriorBody: number | null;
-    interior: number | null;
-    mechanicalVisual: number | null;
-    underbodyFrame: number | null;
+    // 9-bucket scores
+    paintBody?: number | null;
+    panelAlignment?: number | null;
+    glassLighting?: number | null;
+    interiorSurfaces?: number | null;
+    interiorControls?: number | null;
+    engineBay?: number | null;
+    tiresWheels?: number | null;
+    underbodyFrame?: number | null;
+    exhaust?: number | null;
+    // Legacy 4-area (backward compat)
+    exteriorBody?: number | null;
+    interior?: number | null;
+    mechanicalVisual?: number | null;
   };
   conditionDetails?: Record<string, {
     summary?: string;
@@ -483,14 +493,19 @@ export function ReportDocument({ data }: { data: ReportData }) {
             </View>
           )}
 
-          {/* 4-area condition scores with dot + summary + concerns */}
+          {/* 9-area condition scores with dot + summary + concerns */}
           {data.scores.overall != null && (
             <View>
               {([
-                { label: "Exterior Body", key: "exteriorBody", score: data.scores.exteriorBody },
-                { label: "Interior", key: "interior", score: data.scores.interior },
-                { label: "Mechanical / Visual", key: "mechanicalVisual", score: data.scores.mechanicalVisual },
-                { label: "Underbody / Frame", key: "underbodyFrame", score: data.scores.underbodyFrame },
+                { label: "Paint & Body", key: "paintBody", score: data.scores.paintBody },
+                { label: "Panel Alignment", key: "panelAlignment", score: data.scores.panelAlignment },
+                { label: "Glass & Lighting", key: "glassLighting", score: data.scores.glassLighting },
+                { label: "Interior Surfaces", key: "interiorSurfaces", score: data.scores.interiorSurfaces },
+                { label: "Interior Controls", key: "interiorControls", score: data.scores.interiorControls },
+                { label: "Engine Bay", key: "engineBay", score: data.scores.engineBay },
+                { label: "Tires & Wheels", key: "tiresWheels", score: data.scores.tiresWheels },
+                { label: "Underbody & Frame", key: "underbodyFrame", score: data.scores.underbodyFrame },
+                { label: "Exhaust", key: "exhaust", score: data.scores.exhaust },
               ] as const).map((area) => {
                 const detail = data.conditionDetails?.[area.key];
                 const dotColor = (area.score || 0) >= 7 ? "#16a34a" : (area.score || 0) >= 6 ? "#eab308" : "#dc2626";

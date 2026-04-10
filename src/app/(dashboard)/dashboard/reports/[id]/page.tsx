@@ -304,31 +304,57 @@ export default function ReportDetailPage({
             );
           })()}
 
-          {/* 4-area ConditionBar breakdown */}
-          {inspection.overallScore != null && (
-            <div className="space-y-4 mt-4">
-              {[
-                { label: "Exterior Body (30%)", key: "exteriorBody", score: inspection.exteriorBodyScore },
-                { label: "Interior (15%)", key: "interior", score: inspection.interiorScore },
-                { label: "Mechanical / Visual (35%)", key: "mechanicalVisual", score: inspection.mechanicalVisualScore },
-                { label: "Underbody / Frame (20%)", key: "underbodyFrame", score: inspection.underbodyFrameScore },
-              ].map(({ label, key, score }) => {
-                const detail = rawConditionData?.[key] as { summary?: string; concerns?: string[] } | undefined;
-                const subtitle = [
-                  detail?.summary,
-                  ...(detail?.concerns?.map((c) => `⚠ ${c}`) || []),
-                ].filter(Boolean).join(" — ");
-                return (
-                  <ConditionBar
-                    key={label}
-                    label={label}
-                    score={score as number | null}
-                    subtitle={subtitle || undefined}
-                  />
-                );
-              })}
-            </div>
-          )}
+          {/* 9-area ConditionBar breakdown */}
+          {inspection.overallScore != null && (() => {
+            const weights = inspection.conditionWeights as Record<string, number> | null;
+            const scoreGroups = [
+              { group: "Exterior", items: [
+                { label: "Paint & Body", key: "paintBody", score: inspection.paintBodyScore },
+                { label: "Panel Alignment", key: "panelAlignment", score: inspection.panelAlignmentScore },
+                { label: "Glass & Lighting", key: "glassLighting", score: inspection.glassLightingScore },
+              ]},
+              { group: "Interior", items: [
+                { label: "Surfaces", key: "interiorSurfaces", score: inspection.interiorSurfacesScore },
+                { label: "Controls", key: "interiorControls", score: inspection.interiorControlsScore },
+              ]},
+              { group: "Mechanical", items: [
+                { label: "Engine Bay", key: "engineBay", score: inspection.engineBayScore },
+                { label: "Tires & Wheels", key: "tiresWheels", score: inspection.tiresWheelsScore },
+                { label: "Exhaust", key: "exhaust", score: inspection.exhaustScore },
+              ]},
+              { group: "Structural", items: [
+                { label: "Underbody & Frame", key: "underbodyFrame", score: inspection.underbodyFrameScore },
+              ]},
+            ];
+            return (
+              <div className="space-y-5 mt-4">
+                {scoreGroups.map(({ group, items }) => (
+                  <div key={group}>
+                    <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">{group}</p>
+                    <div className="space-y-3">
+                      {items.map(({ label, key, score }) => {
+                        const w = weights?.[key];
+                        const weightLabel = w ? ` (${w}%)` : "";
+                        const detail = rawConditionData?.[key] as { summary?: string; concerns?: string[] } | undefined;
+                        const subtitle = [
+                          detail?.summary,
+                          ...(detail?.concerns?.map((c) => `⚠ ${c}`) || []),
+                        ].filter(Boolean).join(" — ");
+                        return (
+                          <ConditionBar
+                            key={label}
+                            label={`${label}${weightLabel}`}
+                            score={score as number | null}
+                            subtitle={subtitle || undefined}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Tire Assessment */}
           {(() => {

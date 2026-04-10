@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { CaptureGrid } from "./CaptureGrid";
+import { ConditionReview } from "./ConditionReview";
 import { GUIDED_SHOTS } from "./GuidedCapture";
 import {
   ShieldAlert,
@@ -32,7 +33,7 @@ interface StepPanelProps {
   inspection: {
     id: string;
     odometer?: number | null;
-    media: Array<{ captureType: string | null; url: string | null; thumbnailUrl: string | null }>;
+    media: Array<{ id: string; captureType: string | null; url: string | null; thumbnailUrl: string | null }>;
     report?: { id: string; pdfUrl?: string | null; number: string } | null;
     vehicleHistory?: {
       provider: string;
@@ -101,6 +102,17 @@ interface StepPanelProps {
   completionPhase?: "history" | "market" | "finalizing" | null;
   // Report
   onViewReport?: () => void;
+  // Condition Review
+  conditionFindings?: Array<{
+    index: number; title: string; description: string;
+    severity: string; category: string; confidence: number;
+    photoIndex: number; photoId: string | null;
+  }>;
+  conditionReviews?: Record<string, { verified: boolean; notes?: string; mediaId?: string; reviewedAt: string }>;
+  conditionReviewComplete?: boolean;
+  onReviewConditionFinding?: (findingIndex: number, verified: boolean) => void;
+  onCompleteConditionReview?: () => void;
+  isCompletingConditionReview?: boolean;
   // Confidence
   inspectionConfidence?: InspectionConfidence | null;
 }
@@ -145,6 +157,12 @@ export function StepPanel({
   isFetchingMarket,
   completionPhase,
   onViewReport,
+  conditionFindings,
+  conditionReviews,
+  conditionReviewComplete,
+  onReviewConditionFinding,
+  onCompleteConditionReview,
+  isCompletingConditionReview,
   inspectionConfidence,
 }: StepPanelProps) {
   // Count captured photos for gating — only CONFIRMED uploads count
@@ -222,6 +240,7 @@ export function StepPanel({
       );
 
     // ─── AI_CONDITION_SCAN ──────────────────────────────────────────
+    case "CONDITION_REVIEW":
     case "AI_CONDITION_SCAN":
       return (
         <Card>
@@ -237,8 +256,13 @@ export function StepPanel({
               <div className="flex items-center gap-3 p-4 rounded-lg bg-[#dcfce7] border border-green-300">
                 <CheckCircle className="h-6 w-6 text-green-700" />
                 <div>
-                  <p className="font-semibold text-green-700">Condition Assessment Complete</p>
-                  <p className="text-sm text-green-600">4-area photo analysis finished. Scores saved.</p>
+                  <p className="font-semibold text-green-700">AI Scan Complete</p>
+                  <p className="text-sm text-green-600">
+                    {conditionReviewComplete
+                      ? "Condition verified by inspector."
+                      : `${conditionFindings?.length || 0} potential issue${(conditionFindings?.length || 0) !== 1 ? "s" : ""} flagged — verify below.`
+                    }
+                  </p>
                 </div>
               </div>
 
@@ -249,26 +273,30 @@ export function StepPanel({
                 isConfirming={isConfirmingOdometer}
               />
 
-              {/* Unexpected findings preview */}
-              {overallConditionResult && overallConditionResult.unexpectedFindings.length > 0 && (
-                <div className="p-3 rounded-lg bg-[#fde8e8] border border-red-300">
-                  <p className="text-xs font-bold text-red-700 mb-1">
-                    <AlertTriangle className="inline h-3 w-3 mr-1" />
-                    {overallConditionResult.unexpectedFindings.length} unexpected issue(s) found in photos
-                  </p>
-                  {overallConditionResult.unexpectedFindings.slice(0, 3).map((uf, i) => (
-                    <p key={i} className="text-xs text-red-600">• {uf.title}</p>
-                  ))}
-                </div>
-              )}
-
-              <Button
-                onClick={() => onAdvanceStep("AI_CONDITION_SCAN")}
-                loading={isAdvancingStep}
-                className="w-full bg-brand-gradient text-white"
-              >
-                Continue to Risk Inspection
-              </Button>
+              {/* Condition Review — inspector verifies each AI finding */}
+              {!conditionReviewComplete && conditionFindings && onReviewConditionFinding && onCompleteConditionReview ? (
+                <ConditionReview
+                  findings={conditionFindings}
+                  reviews={conditionReviews || {}}
+                  mediaUrls={Object.fromEntries(
+                    (inspection.media || [])
+                      .filter((m) => m.url)
+                      .map((m) => [m.id, m.url!])
+                  )}
+                  onReviewFinding={onReviewConditionFinding}
+                  onComplete={onCompleteConditionReview}
+                  isCompleting={isCompletingConditionReview || false}
+                  preliminaryScore={undefined}
+                />
+              ) : conditionReviewComplete ? (
+                <Button
+                  onClick={() => onAdvanceStep("CONDITION_REVIEW")}
+                  loading={isAdvancingStep}
+                  className="w-full bg-brand-gradient text-white"
+                >
+                  Continue to Risk Inspection
+                </Button>
+              ) : null}
             </div>
           ) : (
             <div className="space-y-4">

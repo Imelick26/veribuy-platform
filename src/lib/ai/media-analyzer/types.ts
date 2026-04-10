@@ -85,7 +85,7 @@ export interface ComparisonFinding {
 
 /** Tire assessment from the dedicated comparison call */
 export interface TireComparisonResult {
-  tireAssessment: TireAssessment;
+  tireAssessment: TireAssessment | null;
   findings: ComparisonFinding[];
 }
 
@@ -122,13 +122,23 @@ export interface RescanResult {
 // ---------------------------------------------------------------------------
 
 export interface SynthesisResult {
+  // 9-bucket area scores
   areaScores: {
+    paintBody: AreaConditionDetail;
+    panelAlignment: AreaConditionDetail;
+    glassLighting: AreaConditionDetail;
+    interiorSurfaces: AreaConditionDetail;
+    interiorControls: AreaConditionDetail;
+    engineBay: AreaConditionDetail;
+    tiresWheels: AreaConditionDetail;
+    underbodyFrame: AreaConditionDetail;
+    exhaust: AreaConditionDetail;
+    // Legacy 4-area scores (computed from 9-bucket)
     exteriorBody: AreaConditionDetail;
     interior: AreaConditionDetail;
     mechanicalVisual: AreaConditionDetail;
-    underbodyFrame: AreaConditionDetail;
   };
-  tireAssessment: TireAssessment;
+  tireAssessment: TireAssessment | null | undefined;
   crossFindings: ComparisonFinding[];
   redFlags: string[];
   overallSummary: string;

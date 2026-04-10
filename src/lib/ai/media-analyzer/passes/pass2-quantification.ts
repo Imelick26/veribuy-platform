@@ -133,15 +133,10 @@ async function runAlignmentScan(vehicle: VehicleInfo, media: MediaForAnalysis[])
 async function runTireComparison(vehicle: VehicleInfo, media: MediaForAnalysis[]): Promise<TireComparisonResult> {
   const photos = await validatePhotoUrls(selectPhotos(media, TIRE_TYPES), "phase2:tires");
 
+  // When no tire photos are available, return null assessment so downstream
+  // code knows tires were NOT assessed (rather than falsely reporting "GOOD")
   const emptyResult: TireComparisonResult = {
-    tireAssessment: {
-      frontDriver: { condition: "GOOD", observations: [] },
-      frontPassenger: { condition: "GOOD", observations: [] },
-      rearDriver: { condition: "GOOD", observations: [] },
-      rearPassenger: { condition: "GOOD", observations: [] },
-      overallTireScore: 5,
-      summary: "No tire photos available for comparison",
-    },
+    tireAssessment: null,
     findings: [],
   };
 

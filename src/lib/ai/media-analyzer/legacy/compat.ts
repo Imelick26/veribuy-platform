@@ -15,15 +15,23 @@ import type { VehicleInfo, MediaForAnalysis } from "../types";
 import { runPipeline } from "../pipeline";
 
 // ---------------------------------------------------------------------------
-//  Weighted area contribution to 0-100 overall score
+//  9-bucket default weights (sum = 100) for 0-100 overall score
+//  Dynamic weights from condition-weighter are applied later in the pipeline;
+//  this layer uses the static defaults.
 // ---------------------------------------------------------------------------
 
-const AREA_WEIGHTS = {
-  exteriorBody: 0.30,
-  interior: 0.15,
-  mechanicalVisual: 0.35,
-  underbodyFrame: 0.20,
+const DEFAULT_WEIGHTS = {
+  paintBody: 15,
+  panelAlignment: 10,
+  glassLighting: 8,
+  interiorSurfaces: 10,
+  interiorControls: 5,
+  engineBay: 20,
+  tiresWheels: 10,
+  underbodyFrame: 15,
+  exhaust: 7,
 };
+const WEIGHT_SUM = Object.values(DEFAULT_WEIGHTS).reduce((a, b) => a + b, 0);
 
 // ---------------------------------------------------------------------------
 //  Photo-to-area mapping (for photoCoverage count)
@@ -58,11 +66,28 @@ export async function analyzeVehicleCondition(
   const result = await runPipeline(vehicle, media, inspectorNotes);
   const scores = result.synthesis.areaScores;
 
+  // --- 9-bucket overall score using default weights ---
   const overallScore = Math.round(
-    (scores.exteriorBody.score / 10) * AREA_WEIGHTS.exteriorBody * 100 +
-    (scores.interior.score / 10) * AREA_WEIGHTS.interior * 100 +
-    (scores.mechanicalVisual.score / 10) * AREA_WEIGHTS.mechanicalVisual * 100 +
-    (scores.underbodyFrame.score / 10) * AREA_WEIGHTS.underbodyFrame * 100,
+    (scores.paintBody.score / 10) * (DEFAULT_WEIGHTS.paintBody / WEIGHT_SUM) * 100 +
+    (scores.panelAlignment.score / 10) * (DEFAULT_WEIGHTS.panelAlignment / WEIGHT_SUM) * 100 +
+    (scores.glassLighting.score / 10) * (DEFAULT_WEIGHTS.glassLighting / WEIGHT_SUM) * 100 +
+    (scores.interiorSurfaces.score / 10) * (DEFAULT_WEIGHTS.interiorSurfaces / WEIGHT_SUM) * 100 +
+    (scores.interiorControls.score / 10) * (DEFAULT_WEIGHTS.interiorControls / WEIGHT_SUM) * 100 +
+    (scores.engineBay.score / 10) * (DEFAULT_WEIGHTS.engineBay / WEIGHT_SUM) * 100 +
+    (scores.tiresWheels.score / 10) * (DEFAULT_WEIGHTS.tiresWheels / WEIGHT_SUM) * 100 +
+    (scores.underbodyFrame.score / 10) * (DEFAULT_WEIGHTS.underbodyFrame / WEIGHT_SUM) * 100 +
+    (scores.exhaust.score / 10) * (DEFAULT_WEIGHTS.exhaust / WEIGHT_SUM) * 100,
+  );
+
+  // --- Legacy 4-area scores (rounded averages of sub-buckets) ---
+  const exteriorBodyScore = Math.round(
+    (scores.paintBody.score + scores.panelAlignment.score + scores.glassLighting.score) / 3,
+  );
+  const interiorScore = Math.round(
+    (scores.interiorSurfaces.score + scores.interiorControls.score) / 2,
+  );
+  const mechanicalVisualScore = Math.round(
+    (scores.engineBay.score + scores.tiresWheels.score + scores.exhaust.score) / 3,
   );
 
   const summary = [
@@ -81,14 +106,39 @@ export async function analyzeVehicleCondition(
 
   return {
     overallScore,
-    exteriorBodyScore: scores.exteriorBody.score,
-    interiorScore: scores.interior.score,
-    mechanicalVisualScore: scores.mechanicalVisual.score,
+
+    // Legacy 4-area scores
+    exteriorBodyScore,
+    interiorScore,
+    mechanicalVisualScore,
     underbodyFrameScore: scores.underbodyFrame.score,
+
+    // Legacy 4-area detail objects
     exteriorBody: scores.exteriorBody,
     interior: scores.interior,
     mechanicalVisual: scores.mechanicalVisual,
     underbodyFrame: scores.underbodyFrame,
+
+    // 9-bucket scores (1-10)
+    paintBodyScore: scores.paintBody.score,
+    panelAlignmentScore: scores.panelAlignment.score,
+    glassLightingScore: scores.glassLighting.score,
+    interiorSurfacesScore: scores.interiorSurfaces.score,
+    interiorControlsScore: scores.interiorControls.score,
+    engineBayScore: scores.engineBay.score,
+    tiresWheelsScore: scores.tiresWheels.score,
+    exhaustScore: scores.exhaust.score,
+
+    // 9-bucket detail objects
+    paintBody: scores.paintBody,
+    panelAlignment: scores.panelAlignment,
+    glassLighting: scores.glassLighting,
+    interiorSurfaces: scores.interiorSurfaces,
+    interiorControls: scores.interiorControls,
+    engineBay: scores.engineBay,
+    tiresWheels: scores.tiresWheels,
+    exhaust: scores.exhaust,
+
     summary,
     photoCoverage: {
       exteriorBody: photoCoverage.exteriorBody,
@@ -96,7 +146,7 @@ export async function analyzeVehicleCondition(
       mechanicalVisual: photoCoverage.mechanicalVisual,
       underbodyFrame: photoCoverage.underbodyFrame,
     },
-    tireAssessment: result.synthesis.tireAssessment,
+    tireAssessment: result.synthesis.tireAssessment ?? undefined,
   };
 }
 

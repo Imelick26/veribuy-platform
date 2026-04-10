@@ -193,7 +193,24 @@ function buildUnexpectedFindings(
     underbody: "STRUCTURAL",
   };
 
-  const fromFindings: UnexpectedFinding[] = findings.map((f) => ({
+  // Category mapping for comparison findings (instead of blanket "OTHER")
+  const comparisonCategoryMap: Record<string, string> = {
+    paint_mismatch: "COSMETIC_EXTERIOR",
+    panel_alignment: "COSMETIC_EXTERIOR",
+    interior_consistency: "COSMETIC_INTERIOR",
+    // tire_inconsistency, wear_inconsistency, mileage_discrepancy, other → default "OTHER"
+  };
+
+  // Exclude tire photo findings — tires have their own dedicated assessment path
+  // (Phase 2 tire comparison + auto-created tire finding in runConditionScan)
+  const TIRE_CAPTURE_TYPES = new Set([
+    "TIRE_FRONT_DRIVER", "TIRE_REAR_DRIVER",
+    "TIRE_FRONT_PASSENGER", "TIRE_REAR_PASSENGER",
+  ]);
+
+  const nonTireFindings = findings.filter((f) => !TIRE_CAPTURE_TYPES.has(f.captureType));
+
+  const fromFindings: UnexpectedFinding[] = nonTireFindings.map((f) => ({
     title: `${f.defectType.replace(/_/g, " ")} — ${f.location}`,
     description: f.description,
     severity: severityMap[f.severity] || "MINOR",
@@ -202,14 +219,75 @@ function buildUnexpectedFindings(
     confidence: f.confidence,
   }));
 
-  const fromComparisons: UnexpectedFinding[] = comparisonFindings.map((f) => ({
+  // Filter comparison findings: minimum 0.5 confidence, exclude tire comparisons
+  const filteredComparisons = comparisonFindings.filter(
+    (f) => f.confidence >= 0.5 && f.type !== "tire_inconsistency",
+  );
+
+  const fromComparisons: UnexpectedFinding[] = filteredComparisons.map((f) => ({
     title: f.title,
     description: f.description,
     severity: severityMap[f.severity] || "MINOR",
-    category: "OTHER",
+    category: comparisonCategoryMap[f.type] || "OTHER",
     photoIndex: -1,
     confidence: f.confidence,
   }));
 
-  return [...fromFindings, ...fromComparisons];
+  // Deduplicate: Phase 1 and Phase 2/3 often detect the same issue with different titles.
+  // e.g. "gap misalignment — hood, fender" (Phase 1) vs "Hood-to-Fender Gap Asymmetry" (Phase 2)
+  return deduplicateFindings([...fromFindings, ...fromComparisons]);
+}
+
+/**
+ * Fuzzy dedup: normalize titles, group by similarity, keep highest-confidence per group.
+ */
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\s*—\s*.+$/, "")   // strip " — location" suffix from Phase 1 findings
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titlesOverlap(a: string, b: string): boolean {
+  const na = normalizeTitle(a);
+  const nb = normalizeTitle(b);
+  if (na === nb) return true;
+  // Check if one title's core is contained in the other
+  // "hood to fender gap asymmetry" contains "gap" which is too broad —
+  // require at least 2 shared significant words (3+ chars each)
+  const wordsA = na.split(" ").filter((w) => w.length >= 3);
+  const wordsB = nb.split(" ").filter((w) => w.length >= 3);
+  const shared = wordsA.filter((w) => wordsB.includes(w));
+  return shared.length >= 2;
+}
+
+function deduplicateFindings(findings: UnexpectedFinding[]): UnexpectedFinding[] {
+  const kept: UnexpectedFinding[] = [];
+  const used = new Set<number>();
+
+  for (let i = 0; i < findings.length; i++) {
+    if (used.has(i)) continue;
+
+    let best = findings[i];
+    // Check remaining findings for overlapping titles
+    for (let j = i + 1; j < findings.length; j++) {
+      if (used.has(j)) continue;
+      if (titlesOverlap(best.title, findings[j].title)) {
+        used.add(j);
+        // Keep the one with higher confidence
+        if (findings[j].confidence > best.confidence) {
+          best = findings[j];
+        }
+      }
+    }
+    kept.push(best);
+  }
+
+  if (kept.length < findings.length) {
+    console.log(`[pipeline] Dedup: ${findings.length} → ${kept.length} findings (removed ${findings.length - kept.length} duplicates)`);
+  }
+
+  return kept;
 }
