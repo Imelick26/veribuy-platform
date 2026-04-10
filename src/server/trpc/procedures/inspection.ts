@@ -1056,15 +1056,72 @@ export const inspectionRouter = router({
           vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim, engine: vehicle.engine },
           zip,
           mileage: inspection.odometer || undefined,
-          findings: inspection.findings
-            .filter((f) => f.repairCostLow || f.repairCostHigh)
-            .map((f) => ({
-              title: f.title,
-              costLow: f.repairCostLow || undefined,
-              costHigh: f.repairCostHigh || undefined,
-              category: f.category || undefined,
-              severity: f.severity || undefined,
-            })),
+          findings: (() => {
+            // Start with confirmed findings that have cost estimates
+            const confirmed = inspection.findings
+              .filter((f) => f.repairCostLow || f.repairCostHigh)
+              .map((f) => ({
+                title: f.title,
+                costLow: f.repairCostLow || undefined,
+                costHigh: f.repairCostHigh || undefined,
+                category: f.category || undefined,
+                severity: f.severity || undefined,
+              }));
+
+            // Always include tire replacement if tires need attention
+            // (tires are assessed separately from condition findings)
+            const rawData = inspection.conditionRawData as Record<string, unknown> | null;
+            const tireAssessment = rawData?.tireAssessment as {
+              frontDriver?: { condition: string };
+              frontPassenger?: { condition: string };
+              rearDriver?: { condition: string };
+              rearPassenger?: { condition: string };
+              summary?: string;
+            } | null;
+
+            if (tireAssessment) {
+              const tires = [
+                { pos: "Front Left", condition: tireAssessment.frontDriver?.condition },
+                { pos: "Front Right", condition: tireAssessment.frontPassenger?.condition },
+                { pos: "Rear Left", condition: tireAssessment.rearDriver?.condition },
+                { pos: "Rear Right", condition: tireAssessment.rearPassenger?.condition },
+              ];
+              const replaceCount = tires.filter((t) => t.condition === "REPLACE").length;
+              const wornCount = tires.filter((t) => t.condition === "WORN").length;
+
+              // REPLACE tires = definite recon cost
+              if (replaceCount > 0) {
+                const positions = tires
+                  .filter((t) => t.condition === "REPLACE")
+                  .map((t) => `${t.pos} (replace)`)
+                  .join(", ");
+                confirmed.push({
+                  title: `Tire Replacement (${replaceCount} tire${replaceCount > 1 ? "s" : ""})`,
+                  costLow: replaceCount * 15000,
+                  costHigh: replaceCount * 30000,
+                  category: "TIRES_WHEELS",
+                  severity: "MAJOR",
+                });
+              }
+
+              // WORN tires = likely recon cost (dealer will probably replace for retail)
+              if (wornCount > 0) {
+                const positions = tires
+                  .filter((t) => t.condition === "WORN")
+                  .map((t) => `${t.pos} (worn)`)
+                  .join(", ");
+                confirmed.push({
+                  title: `Tire Replacement — Worn (${wornCount} tire${wornCount > 1 ? "s" : ""}: ${positions})`,
+                  costLow: wornCount * 12000,   // $120 per tire (budget)
+                  costHigh: wornCount * 25000,  // $250 per tire
+                  category: "TIRES_WHEELS",
+                  severity: "MODERATE",
+                });
+              }
+            }
+
+            return confirmed;
+          })(),
           baseMarketValue: marketData.estimatedValue,
         }),
       ]);
