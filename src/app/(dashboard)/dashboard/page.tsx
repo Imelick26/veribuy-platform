@@ -81,7 +81,6 @@ export default function DashboardPage() {
                 estReconCost?: number;
                 adjustedPrice?: number;
               } | null;
-              const rating = getDealRatingBadge(ma?.recommendation);
               const estRetail = ma?.estRetailPrice || ma?.adjustedPrice || 0;
               const reconCost = ma?.estReconCost || 0;
               const vehicleName = insp.vehicle
@@ -98,7 +97,6 @@ export default function DashboardPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <Badge variant={rating.variant} className="text-[10px]">{rating.label}</Badge>
                           <span className="text-sm font-semibold text-text-primary truncate">{vehicleName}</span>
                           <span className="text-xs text-text-tertiary shrink-0">{insp.number}</span>
                         </div>
