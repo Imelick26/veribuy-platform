@@ -8,11 +8,11 @@ interface ConditionBarProps {
   className?: string;
 }
 
-export function ConditionBar({ label, score, maxScore = 10, subtitle, className }: ConditionBarProps) {
+export function ConditionBar({ label, score, maxScore = 100, subtitle, className }: ConditionBarProps) {
   const pct = score != null ? (score / maxScore) * 100 : 0;
   const fillColor =
-    (score ?? 0) >= 7 ? "bg-green-500" :
-    (score ?? 0) >= 6 ? "bg-caution-400" :
+    (score ?? 0) >= 70 ? "bg-green-500" :
+    (score ?? 0) >= 50 ? "bg-caution-400" :
     "bg-red-500";
 
   return (

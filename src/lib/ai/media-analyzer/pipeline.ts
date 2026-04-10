@@ -224,14 +224,33 @@ function buildUnexpectedFindings(
     (f) => f.confidence >= 0.5 && f.type !== "tire_inconsistency",
   );
 
-  const fromComparisons: UnexpectedFinding[] = filteredComparisons.map((f) => ({
-    title: f.title,
-    description: f.description,
-    severity: severityMap[f.severity] || "MINOR",
-    category: comparisonCategoryMap[f.type] || "OTHER",
-    photoIndex: -1,
-    confidence: f.confidence,
-  }));
+  // Map comparison finding types to the most relevant source photo
+  const comparisonPhotoMap: Record<string, string[]> = {
+    paint_mismatch: ["FRONT_CENTER", "FRONT_34_DRIVER", "DRIVER_SIDE"],
+    interior_consistency: ["FRONT_SEATS", "DASHBOARD_DRIVER", "REAR_SEATS"],
+    wear_inconsistency: ["DASHBOARD_DRIVER", "FRONT_SEATS", "ENGINE_BAY"],
+    mileage_discrepancy: ["ODOMETER", "DASHBOARD_DRIVER"],
+    other: ["FRONT_CENTER"],
+  };
+
+  const fromComparisons: UnexpectedFinding[] = filteredComparisons.map((f) => {
+    // Find the best matching photo for this comparison finding
+    const preferredTypes = comparisonPhotoMap[f.type] || ["FRONT_CENTER"];
+    let bestPhotoIndex = -1;
+    for (const captureType of preferredTypes) {
+      const idx = media.findIndex((m) => m.captureType === captureType);
+      if (idx >= 0) { bestPhotoIndex = idx; break; }
+    }
+
+    return {
+      title: f.title,
+      description: f.description,
+      severity: severityMap[f.severity] || "MINOR",
+      category: comparisonCategoryMap[f.type] || "OTHER",
+      photoIndex: bestPhotoIndex,
+      confidence: f.confidence,
+    };
+  });
 
   // Deduplicate: Phase 1 and Phase 2/3 often detect the same issue with different titles.
   // e.g. "gap misalignment — hood, fender" (Phase 1) vs "Hood-to-Fender Gap Asymmetry" (Phase 2)

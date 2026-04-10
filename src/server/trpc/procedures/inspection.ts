@@ -1041,7 +1041,6 @@ export const inspectionRouter = router({
           conditionScore,
           areaScores: {
             paintBody: inspection.paintBodyScore ?? undefined,
-            panelAlignment: inspection.panelAlignmentScore ?? undefined,
             glassLighting: inspection.glassLightingScore ?? undefined,
             interiorSurfaces: inspection.interiorSurfacesScore ?? undefined,
             interiorControls: inspection.interiorControlsScore ?? undefined,
@@ -1219,7 +1218,6 @@ export const inspectionRouter = router({
         conditionSummary: inspection.conditionSummary || undefined,
         areaScores: {
           paintBody: inspection.paintBodyScore ?? undefined,
-          panelAlignment: inspection.panelAlignmentScore ?? undefined,
           glassLighting: inspection.glassLightingScore ?? undefined,
           interiorSurfaces: inspection.interiorSurfacesScore ?? undefined,
           interiorControls: inspection.interiorControlsScore ?? undefined,

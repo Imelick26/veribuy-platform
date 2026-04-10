@@ -30,9 +30,9 @@ export async function persistConditionScores(
       interiorScore: assessment.interiorScore,
       mechanicalVisualScore: assessment.mechanicalVisualScore,
       underbodyFrameScore: assessment.underbodyFrameScore,
-      // 9-bucket scores
+      // 8-bucket scores (panelAlignment removed)
       paintBodyScore: assessment.paintBodyScore,
-      panelAlignmentScore: assessment.panelAlignmentScore,
+      panelAlignmentScore: null,
       glassLightingScore: assessment.glassLightingScore,
       interiorSurfacesScore: assessment.interiorSurfacesScore,
       interiorControlsScore: assessment.interiorControlsScore,
@@ -45,17 +45,16 @@ export async function persistConditionScores(
   });
 }
 
-// 9-bucket default weights (sum = 100) matching compat.ts
-// Weights for overall score — tires excluded (scored separately)
+// 7-bucket default weights (sum = 100) matching compat.ts
+// Weights for overall score — tires excluded (scored separately), panelAlignment removed
 const AREA_WEIGHTS = {
-  paintBody: 15,
-  panelAlignment: 10,
+  paintBody: 20,
   glassLighting: 8,
   interiorSurfaces: 10,
   interiorControls: 5,
-  engineBay: 20,
-  underbodyFrame: 15,
-  exhaust: 7,
+  engineBay: 25,
+  underbodyFrame: 20,
+  exhaust: 12,
 };
 const WEIGHT_SUM = Object.values(AREA_WEIGHTS).reduce((a, b) => a + b, 0);
 
@@ -121,10 +120,9 @@ export function recalculateScores(
   reviews: Record<string, FindingReview>,
   weights?: ConditionWeights,
 ): ConditionAssessment {
-  // Start with the original AI 8-bucket area scores (1-10) — tires excluded from overall
+  // Start with the original AI 7-bucket area scores (0-100) — tires excluded from overall
   const areaScores: Record<keyof typeof AREA_WEIGHTS, number> = {
     paintBody: originalAssessment.paintBodyScore,
-    panelAlignment: originalAssessment.panelAlignmentScore,
     glassLighting: originalAssessment.glassLightingScore,
     interiorSurfaces: originalAssessment.interiorSurfacesScore,
     interiorControls: originalAssessment.interiorControlsScore,
@@ -166,8 +164,8 @@ export function recalculateScores(
     }
   }
 
-  // Clean baseline: what an area would score with no issues (8/10, not 10 — photo quality limits certainty)
-  const CLEAN_BASELINE = 8;
+  // Clean baseline: what an area would score with no issues (80/100, not 100 — photo quality limits certainty)
+  const CLEAN_BASELINE = 80;
 
   for (const [area, stats] of Object.entries(areaStats)) {
     const key = area as keyof typeof areaScores;
@@ -183,7 +181,7 @@ export function recalculateScores(
 
     const dismissalRate = stats.dismissed / total;
     const blendedScore = original + (CLEAN_BASELINE - original) * dismissalRate;
-    areaScores[key] = Math.max(1, Math.min(10, blendedScore));
+    areaScores[key] = Math.max(0, Math.min(100, blendedScore));
   }
 
   // Round 9-bucket area scores to nearest integer
@@ -192,24 +190,27 @@ export function recalculateScores(
   ) as Record<keyof typeof AREA_WEIGHTS, number>;
 
   // Use provided weights or defaults for overall score
-  const w = weights ?? AREA_WEIGHTS;
+  // Strip panelAlignment from dynamic weights if present (legacy compat)
+  const rawW = weights ?? AREA_WEIGHTS;
+  const w = Object.fromEntries(
+    Object.entries(rawW).filter(([k]) => k in AREA_WEIGHTS),
+  ) as Record<keyof typeof AREA_WEIGHTS, number>;
   const wSum = (Object.values(w) as number[]).reduce((a, b) => a + b, 0);
 
-  // Recalculate overall (0-100) from weighted 9-bucket scores
+  // Recalculate overall (0-100) from weighted 7-bucket scores (area scores already 0-100)
   const overallScore = Math.round(
-    (finalScores.paintBody / 10) * (w.paintBody / wSum) * 100 +
-    (finalScores.panelAlignment / 10) * (w.panelAlignment / wSum) * 100 +
-    (finalScores.glassLighting / 10) * (w.glassLighting / wSum) * 100 +
-    (finalScores.interiorSurfaces / 10) * (w.interiorSurfaces / wSum) * 100 +
-    (finalScores.interiorControls / 10) * (w.interiorControls / wSum) * 100 +
-    (finalScores.engineBay / 10) * (w.engineBay / wSum) * 100 +
-    (finalScores.underbodyFrame / 10) * (w.underbodyFrame / wSum) * 100 +
-    (finalScores.exhaust / 10) * (w.exhaust / wSum) * 100,
+    finalScores.paintBody * ((w.paintBody || 0) / wSum) +
+    finalScores.glassLighting * ((w.glassLighting || 0) / wSum) +
+    finalScores.interiorSurfaces * ((w.interiorSurfaces || 0) / wSum) +
+    finalScores.interiorControls * ((w.interiorControls || 0) / wSum) +
+    finalScores.engineBay * ((w.engineBay || 0) / wSum) +
+    finalScores.underbodyFrame * ((w.underbodyFrame || 0) / wSum) +
+    finalScores.exhaust * ((w.exhaust || 0) / wSum),
   );
 
   // Legacy 4-area scores (rounded averages of sub-buckets)
   const legacyExteriorBody = Math.round(
-    (finalScores.paintBody + finalScores.panelAlignment + finalScores.glassLighting) / 3,
+    (finalScores.paintBody + finalScores.glassLighting) / 2,
   );
   const legacyInterior = Math.round(
     (finalScores.interiorSurfaces + finalScores.interiorControls) / 2,
@@ -245,9 +246,8 @@ export function recalculateScores(
     mechanicalVisual: { ...originalAssessment.mechanicalVisual, score: legacyMechanicalVisual },
     underbodyFrame: { ...originalAssessment.underbodyFrame, score: finalScores.underbodyFrame },
 
-    // 9-bucket scores
+    // 8-bucket scores (panelAlignment removed)
     paintBodyScore: finalScores.paintBody,
-    panelAlignmentScore: finalScores.panelAlignment,
     glassLightingScore: finalScores.glassLighting,
     interiorSurfacesScore: finalScores.interiorSurfaces,
     interiorControlsScore: finalScores.interiorControls,
@@ -255,9 +255,8 @@ export function recalculateScores(
     tiresWheelsScore,
     exhaustScore: finalScores.exhaust,
 
-    // 9-bucket detail objects (update score field)
+    // 8-bucket detail objects (update score field)
     paintBody: { ...originalAssessment.paintBody, score: finalScores.paintBody },
-    panelAlignment: { ...originalAssessment.panelAlignment, score: finalScores.panelAlignment },
     glassLighting: { ...originalAssessment.glassLighting, score: finalScores.glassLighting },
     interiorSurfaces: { ...originalAssessment.interiorSurfaces, score: finalScores.interiorSurfaces },
     interiorControls: { ...originalAssessment.interiorControls, score: finalScores.interiorControls },

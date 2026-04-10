@@ -122,10 +122,9 @@ export interface RescanResult {
 // ---------------------------------------------------------------------------
 
 export interface SynthesisResult {
-  // 9-bucket area scores
+  // 8-bucket area scores (0-100 each)
   areaScores: {
     paintBody: AreaConditionDetail;
-    panelAlignment: AreaConditionDetail;
     glassLighting: AreaConditionDetail;
     interiorSurfaces: AreaConditionDetail;
     interiorControls: AreaConditionDetail;
@@ -133,8 +132,8 @@ export interface SynthesisResult {
     tiresWheels: AreaConditionDetail;
     underbodyFrame: AreaConditionDetail;
     exhaust: AreaConditionDetail;
-    // Legacy 4-area scores (computed from 9-bucket)
-    exteriorBody: AreaConditionDetail;
+    // Legacy 4-area scores (computed from 8-bucket)
+    exteriorBody: AreaConditionDetail;  // avg of paintBody + glassLighting
     interior: AreaConditionDetail;
     mechanicalVisual: AreaConditionDetail;
   };

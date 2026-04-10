@@ -159,7 +159,7 @@ export interface OverallConditionResult {
 // ---------------------------------------------------------------------------
 
 export interface AreaConditionDetail {
-  score: number;              // 1-10
+  score: number;              // 0-100
   confidence: number;         // 0-1
   keyObservations: string[];
   concerns: string[];
@@ -171,11 +171,11 @@ export interface AreaConditionDetail {
 export interface ConditionAssessment {
   overallScore: number;           // 0-100 weighted composite
 
-  // Legacy 4-area scores (backward compat — computed from 9-bucket scores)
-  exteriorBodyScore: number;      // 1-10 avg of paintBody + panelAlignment + glassLighting
-  interiorScore: number;          // 1-10 avg of interiorSurfaces + interiorControls
-  mechanicalVisualScore: number;  // 1-10 avg of engineBay + exhaust (tires scored separately)
-  underbodyFrameScore: number;    // 1-10 (same as 9-bucket underbodyFrame)
+  // Legacy 4-area scores (backward compat — computed from 8-bucket scores)
+  exteriorBodyScore: number;      // 0-100 avg of paintBody + glassLighting
+  interiorScore: number;          // 0-100 avg of interiorSurfaces + interiorControls
+  mechanicalVisualScore: number;  // 0-100 avg of engineBay + exhaust (tires scored separately)
+  underbodyFrameScore: number;    // 0-100 (same as 8-bucket underbodyFrame)
 
   // Legacy 4-area detail objects (backward compat)
   exteriorBody: AreaConditionDetail;
@@ -183,9 +183,9 @@ export interface ConditionAssessment {
   mechanicalVisual: AreaConditionDetail;
   underbodyFrame: AreaConditionDetail;
 
-  // 9-bucket detailed scores (1-10 each)
+  // 8-bucket detailed scores (0-100 each)
   paintBodyScore: number;
-  panelAlignmentScore: number;
+  panelAlignmentScore?: number;   // DEPRECATED — removed, photo-based panel gap assessment unreliable
   glassLightingScore: number;
   interiorSurfacesScore: number;
   interiorControlsScore: number;
@@ -193,9 +193,9 @@ export interface ConditionAssessment {
   tiresWheelsScore: number;
   exhaustScore: number;
 
-  // 9-bucket detail objects
+  // 8-bucket detail objects
   paintBody: AreaConditionDetail;
-  panelAlignment: AreaConditionDetail;
+  panelAlignment?: AreaConditionDetail;  // DEPRECATED — removed
   glassLighting: AreaConditionDetail;
   interiorSurfaces: AreaConditionDetail;
   interiorControls: AreaConditionDetail;

@@ -215,7 +215,7 @@ export async function runPhase4(
   }
 
   const synthesis = normalizeSynthesis(response.result, vehicle, allFindings, tireAssessment);
-  console.log(`[phase4] Complete: 9-area scores paint=${synthesis.areaScores.paintBody.score} panels=${synthesis.areaScores.panelAlignment.score} glass=${synthesis.areaScores.glassLighting.score} intSurf=${synthesis.areaScores.interiorSurfaces.score} intCtrl=${synthesis.areaScores.interiorControls.score} engine=${synthesis.areaScores.engineBay.score} tires=${synthesis.areaScores.tiresWheels.score} under=${synthesis.areaScores.underbodyFrame.score} exhaust=${synthesis.areaScores.exhaust.score} | legacy ext=${synthesis.areaScores.exteriorBody.score} int=${synthesis.areaScores.interior.score} mech=${synthesis.areaScores.mechanicalVisual.score}`);
+  console.log(`[phase4] Complete: 8-area scores paint=${synthesis.areaScores.paintBody.score} glass=${synthesis.areaScores.glassLighting.score} intSurf=${synthesis.areaScores.interiorSurfaces.score} intCtrl=${synthesis.areaScores.interiorControls.score} engine=${synthesis.areaScores.engineBay.score} tires=${synthesis.areaScores.tiresWheels.score} under=${synthesis.areaScores.underbodyFrame.score} exhaust=${synthesis.areaScores.exhaust.score} | legacy ext=${synthesis.areaScores.exteriorBody.score} int=${synthesis.areaScores.interior.score} mech=${synthesis.areaScores.mechanicalVisual.score}`);
 
   return { synthesis, apiCalls: 1 };
 }
@@ -243,9 +243,8 @@ interface RescanFindingResponse {
 
 interface SynthesisResponse {
   areaScores?: {
-    // 9 primary areas (expected from GPT-4o)
+    // 8 primary areas (expected from GPT-4o, 0-100 scale)
     paintBody?: AreaScoreResponse;
-    panelAlignment?: AreaScoreResponse;
     glassLighting?: AreaScoreResponse;
     interiorSurfaces?: AreaScoreResponse;
     interiorControls?: AreaScoreResponse;
@@ -335,9 +334,8 @@ function normalizeSynthesis(
 ): SynthesisResult {
   const scores = response.areaScores || {};
 
-  // 9 primary area scores
+  // 8 primary area scores (0-100)
   const paintBody = normalizeAreaScore(scores.paintBody, "Paint & Body", allFindings, "exterior");
-  const panelAlignment = normalizeAreaScore(scores.panelAlignment, "Panel Alignment", allFindings, "exterior");
   const glassLighting = normalizeAreaScore(scores.glassLighting, "Glass & Lighting", allFindings, "exterior");
   const interiorSurfaces = normalizeAreaScore(scores.interiorSurfaces, "Interior Surfaces", allFindings, "interior");
   const interiorControls = normalizeAreaScore(scores.interiorControls, "Interior Controls", allFindings, "interior");
@@ -346,15 +344,14 @@ function normalizeSynthesis(
   const underbodyFrame = normalizeAreaScore(scores.underbodyFrame, "Underbody / Frame", allFindings, "underbody");
   const exhaust = normalizeAreaScore(scores.exhaust, "Exhaust", allFindings, "mechanical");
 
-  // Legacy 3 computed areas (averages of the 9-bucket scores)
-  const exteriorBody = averageAreaScores([paintBody, panelAlignment, glassLighting], "Exterior Body");
+  // Legacy 3 computed areas (averages of the 8-bucket scores)
+  const exteriorBody = averageAreaScores([paintBody, glassLighting], "Exterior Body");
   const interior = averageAreaScores([interiorSurfaces, interiorControls], "Interior");
   const mechanicalVisual = averageAreaScores([engineBay, exhaust], "Mechanical / Visual");
 
   return {
     areaScores: {
       paintBody,
-      panelAlignment,
       glassLighting,
       interiorSurfaces,
       interiorControls,
@@ -386,10 +383,10 @@ function normalizeAreaScore(
   findings: DetectedFinding[],
   area: string,
 ): AreaConditionDetail {
-  if (!raw || typeof raw.score !== "number" || raw.score < 1 || raw.score > 10) {
-    // Fallback from finding count
+  if (!raw || typeof raw.score !== "number" || raw.score < 0 || raw.score > 100) {
+    // Fallback from finding count (0-100 scale)
     const areaFindings = findings.filter((f) => f.affectsArea === area);
-    const score = Math.max(1, Math.min(10, 10 - areaFindings.length));
+    const score = Math.max(0, Math.min(100, 100 - areaFindings.length * 15));
     return {
       score,
       confidence: 0.3,
@@ -401,7 +398,7 @@ function normalizeAreaScore(
   }
 
   return {
-    score: Math.max(1, Math.min(10, Math.round(raw.score))),
+    score: Math.max(0, Math.min(100, Math.round(raw.score))),
     confidence: Math.max(0, Math.min(1, Number(raw.confidence) || 0.5)),
     keyObservations: Array.isArray(raw.keyObservations) ? raw.keyObservations.map(String) : [],
     concerns: Array.isArray(raw.concerns) ? raw.concerns.map(String) : [],
@@ -410,12 +407,12 @@ function normalizeAreaScore(
   };
 }
 
-/** Compute a legacy area score as the average of multiple 9-bucket scores */
+/** Compute a legacy area score as the average of multiple bucket scores (0-100) */
 function averageAreaScores(areas: AreaConditionDetail[], legacyName: string): AreaConditionDetail {
   if (areas.length === 0) {
-    return { score: 5, confidence: 0.3, keyObservations: [], concerns: [], summary: `${legacyName} (no data).` };
+    return { score: 50, confidence: 0.3, keyObservations: [], concerns: [], summary: `${legacyName} (no data).` };
   }
-  const avgScore = Math.max(1, Math.min(10, Math.round(areas.reduce((s, a) => s + a.score, 0) / areas.length)));
+  const avgScore = Math.max(0, Math.min(100, Math.round(areas.reduce((s, a) => s + a.score, 0) / areas.length)));
   const avgConfidence = Math.max(0, Math.min(1, areas.reduce((s, a) => s + a.confidence, 0) / areas.length));
   const allObservations = areas.flatMap((a) => a.keyObservations);
   const allConcerns = areas.flatMap((a) => a.concerns);
@@ -424,7 +421,7 @@ function averageAreaScores(areas: AreaConditionDetail[], legacyName: string): Ar
     confidence: avgConfidence,
     keyObservations: allObservations.slice(0, 6),
     concerns: allConcerns.slice(0, 6),
-    summary: `${legacyName}: averaged from ${areas.length} sub-areas (score ${avgScore}/10).`,
+    summary: `${legacyName}: averaged from ${areas.length} sub-areas (score ${avgScore}/100).`,
     scoreJustification: `Computed as average of ${areas.map((a) => a.score).join(", ")}.`,
   };
 }
@@ -437,7 +434,7 @@ function buildFallbackSynthesis(
 ): SynthesisResult {
   const buildArea = (area: string, name: string): AreaConditionDetail => {
     const areaFindings = findings.filter((f) => f.affectsArea === area);
-    const score = Math.max(1, Math.min(10, 10 - areaFindings.length));
+    const score = Math.max(0, Math.min(100, 100 - areaFindings.length * 15));
     return {
       score,
       confidence: 0.3,
@@ -448,10 +445,10 @@ function buildFallbackSynthesis(
     };
   };
 
-  // Map findings to 9 buckets using captureType and affectsArea
+  // Map findings to 8 buckets using captureType and affectsArea (0-100 scale)
   const buildBucket = (name: string, filterFn: (f: DetectedFinding) => boolean): AreaConditionDetail => {
     const bucketFindings = findings.filter(filterFn);
-    const score = Math.max(1, Math.min(10, 10 - bucketFindings.length));
+    const score = Math.max(0, Math.min(100, 100 - bucketFindings.length * 15));
     return {
       score,
       confidence: 0.3,
@@ -466,14 +463,10 @@ function buildFallbackSynthesis(
   const GLASS_KEYWORDS = ["glass", "windshield", "window", "headlight", "taillight", "light", "lens", "mirror"];
   const EXHAUST_KEYWORDS = ["exhaust", "muffler", "catalytic", "tailpipe", "emission"];
 
-  // 9 primary area scores
+  // 8 primary area scores (0-100)
   const paintBody = buildBucket("Paint & Body", (f) =>
     f.affectsArea === "exterior" && PAINT_TYPES.includes(f.captureType) &&
-    !f.defectType.toLowerCase().match(/panel|gap|alignment/) &&
     !GLASS_KEYWORDS.some((kw) => f.defectType.toLowerCase().includes(kw)),
-  );
-  const panelAlignment = buildBucket("Panel Alignment", (f) =>
-    f.affectsArea === "exterior" && !!f.defectType.toLowerCase().match(/panel|gap|alignment/),
   );
   const glassLighting = buildBucket("Glass & Lighting", (f) =>
     f.affectsArea === "exterior" && GLASS_KEYWORDS.some((kw) => f.defectType.toLowerCase().includes(kw)),
@@ -498,14 +491,13 @@ function buildFallbackSynthesis(
   );
 
   // Legacy 3 computed areas
-  const exteriorBody = averageAreaScores([paintBody, panelAlignment, glassLighting], "Exterior Body");
+  const exteriorBody = averageAreaScores([paintBody, glassLighting], "Exterior Body");
   const interior = averageAreaScores([interiorSurfaces, interiorControls], "Interior");
   const mechanicalVisual = averageAreaScores([engineBay, exhaust], "Mechanical / Visual");
 
   return {
     areaScores: {
       paintBody,
-      panelAlignment,
       glassLighting,
       interiorSurfaces,
       interiorControls,

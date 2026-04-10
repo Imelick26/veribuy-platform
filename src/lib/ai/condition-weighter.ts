@@ -33,16 +33,16 @@ export interface ConditionWeighterInput {
   mileage?: number | null;
 }
 
-/** 8-area condition weights — must sum to 100. Tires are scored separately. */
+/** 7-area condition weights — must sum to 100. Tires are scored separately. panelAlignment removed. */
 export interface ConditionWeights {
   paintBody: number;
-  panelAlignment: number;
   glassLighting: number;
   interiorSurfaces: number;
   interiorControls: number;
   engineBay: number;
   underbodyFrame: number;
   exhaust: number;
+  [key: string]: number; // Allow extra keys for backward compat with stored data
 }
 
 export interface ConditionWeighterResult {
@@ -56,34 +56,34 @@ export interface ConditionWeighterResult {
 
 const DEFAULT_WEIGHTS: Record<string, ConditionWeights> = {
   truck: {
-    paintBody: 11, panelAlignment: 9, glassLighting: 6,
-    interiorSurfaces: 9, interiorControls: 5, engineBay: 27,
-    underbodyFrame: 24, exhaust: 9,
+    paintBody: 16, glassLighting: 6,
+    interiorSurfaces: 9, interiorControls: 5, engineBay: 30,
+    underbodyFrame: 24, exhaust: 10,
   },
   suv: {
-    paintBody: 14, panelAlignment: 9, glassLighting: 9,
-    interiorSurfaces: 11, interiorControls: 6, engineBay: 22,
-    underbodyFrame: 20, exhaust: 9,
+    paintBody: 20, glassLighting: 9,
+    interiorSurfaces: 11, interiorControls: 6, engineBay: 24,
+    underbodyFrame: 20, exhaust: 10,
   },
   sedan: {
-    paintBody: 20, panelAlignment: 11, glassLighting: 9,
-    interiorSurfaces: 13, interiorControls: 8, engineBay: 20,
-    underbodyFrame: 13, exhaust: 6,
+    paintBody: 26, glassLighting: 9,
+    interiorSurfaces: 13, interiorControls: 8, engineBay: 23,
+    underbodyFrame: 14, exhaust: 7,
   },
   luxury: {
-    paintBody: 22, panelAlignment: 13, glassLighting: 9,
-    interiorSurfaces: 16, interiorControls: 9, engineBay: 16,
-    underbodyFrame: 11, exhaust: 4,
+    paintBody: 30, glassLighting: 9,
+    interiorSurfaces: 16, interiorControls: 9, engineBay: 19,
+    underbodyFrame: 12, exhaust: 5,
   },
   default: {
-    paintBody: 17, panelAlignment: 11, glassLighting: 9,
-    interiorSurfaces: 11, interiorControls: 6, engineBay: 22,
-    underbodyFrame: 16, exhaust: 8,
+    paintBody: 23, glassLighting: 9,
+    interiorSurfaces: 11, interiorControls: 6, engineBay: 25,
+    underbodyFrame: 17, exhaust: 9,
   },
 };
 
 const WEIGHT_KEYS: (keyof ConditionWeights)[] = [
-  "paintBody", "panelAlignment", "glassLighting",
+  "paintBody", "glassLighting",
   "interiorSurfaces", "interiorControls", "engineBay",
   "underbodyFrame", "exhaust",
 ];
@@ -113,23 +113,21 @@ function detectBodyCategory(vehicle: ConditionWeighterInput["vehicle"]): string 
 function buildSystemPrompt(): string {
   return `You are a vehicle acquisition specialist who understands what condition areas matter most for different vehicle types when determining market value.
 
-Given a vehicle's specs, determine the ideal inspection weight for each of 8 condition areas. Weights must sum to exactly 100. (Tires are scored separately and not included here.)
+Given a vehicle's specs, determine the ideal inspection weight for each of 7 condition areas. Weights must sum to exactly 100. (Tires are scored separately and not included here.)
 
-THE 8 CONDITION AREAS:
+THE 7 CONDITION AREAS:
 1. paintBody — Dents, scratches, rust, paint chips, fade, respray evidence
-2. panelAlignment — Gap asymmetry, bumper fitment, door gaps, collision repair evidence
-3. glassLighting — Windshield, headlights, taillights, fog lights, mirrors
-4. interiorSurfaces — Seats, carpet, headliner, door panels, steering wheel, dashboard
-5. interiorControls — Infotainment, HVAC, gauges, switches, electronics
-6. engineBay — Fluid leaks, belts, hoses, battery, aftermarket mods
-7. underbodyFrame — Frame rails, structural rust, suspension, splash shields
-8. exhaust — Pipes, muffler, catalytic converter, hangers, tips
+2. glassLighting — Windshield, headlights, taillights, fog lights, mirrors
+3. interiorSurfaces — Seats, carpet, headliner, door panels, steering wheel, dashboard
+4. interiorControls — Infotainment, HVAC, gauges, switches, electronics
+5. engineBay — Fluid leaks, belts, hoses, battery, aftermarket mods
+6. underbodyFrame — Frame rails, structural rust, suspension, splash shields
+7. exhaust — Pipes, muffler, catalytic converter, hangers, tips
 
 RESPOND WITH EXACTLY THIS JSON (no markdown):
 {
   "weights": {
     "paintBody": <number>,
-    "panelAlignment": <number>,
     "glassLighting": <number>,
     "interiorSurfaces": <number>,
     "interiorControls": <number>,
@@ -232,12 +230,12 @@ export async function determineConditionWeights(
 
     buildFollowUp: (partial, errors) =>
       `Your previous response had issues: ${errors.join("; ")}. ` +
-      `Please provide all 9 weights as positive integers summing to exactly 100.`,
+      `Please provide all 7 weights as positive integers summing to exactly 100.`,
 
     simplified: {
       model: "gpt-4o",
       buildPrompt: () =>
-        `${buildSystemPrompt()}\n\n${buildUserPrompt(input)}\n\nIMPORTANT: All 9 weights must be positive integers summing to exactly 100.`,
+        `${buildSystemPrompt()}\n\n${buildUserPrompt(input)}\n\nIMPORTANT: All 7 weights must be positive integers summing to exactly 100.`,
     },
 
     emergencyFallback: () => ({

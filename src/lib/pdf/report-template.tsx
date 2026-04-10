@@ -105,7 +105,6 @@ export interface ReportData {
     overall: number | null;
     // 9-bucket scores
     paintBody?: number | null;
-    panelAlignment?: number | null;
     glassLighting?: number | null;
     interiorSurfaces?: number | null;
     interiorControls?: number | null;
@@ -498,7 +497,6 @@ export function ReportDocument({ data }: { data: ReportData }) {
             <View>
               {([
                 { label: "Paint & Body", key: "paintBody", score: data.scores.paintBody },
-                { label: "Panel Alignment", key: "panelAlignment", score: data.scores.panelAlignment },
                 { label: "Glass & Lighting", key: "glassLighting", score: data.scores.glassLighting },
                 { label: "Interior Surfaces", key: "interiorSurfaces", score: data.scores.interiorSurfaces },
                 { label: "Interior Controls", key: "interiorControls", score: data.scores.interiorControls },
@@ -508,7 +506,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
                 { label: "Exhaust", key: "exhaust", score: data.scores.exhaust },
               ] as const).map((area) => {
                 const detail = data.conditionDetails?.[area.key];
-                const dotColor = (area.score || 0) >= 7 ? "#16a34a" : (area.score || 0) >= 6 ? "#eab308" : "#dc2626";
+                const dotColor = (area.score || 0) >= 70 ? "#16a34a" : (area.score || 0) >= 50 ? "#eab308" : "#dc2626";
                 return (
                   <View key={area.key} style={{ paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: "#e5e7eb" }} wrap={false}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -516,7 +514,7 @@ export function ReportDocument({ data }: { data: ReportData }) {
                         <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: dotColor }} />
                         <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>{area.label}</Text>
                       </View>
-                      <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>{area.score ?? "—"}/10</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1f2937" }}>{area.score ?? "—"}/100</Text>
                     </View>
                     {detail?.summary && (
                       <Text style={{ fontSize: 8, color: "#4b5563", marginTop: 3, marginLeft: 13 }}>{detail.summary}</Text>

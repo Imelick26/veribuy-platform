@@ -310,7 +310,6 @@ export default function ReportDetailPage({
             const scoreGroups = [
               { group: "Exterior", items: [
                 { label: "Paint & Body", key: "paintBody", score: inspection.paintBodyScore },
-                { label: "Panel Alignment", key: "panelAlignment", score: inspection.panelAlignmentScore },
                 { label: "Glass & Lighting", key: "glassLighting", score: inspection.glassLightingScore },
               ]},
               { group: "Interior", items: [

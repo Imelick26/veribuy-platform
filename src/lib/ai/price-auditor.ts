@@ -78,7 +78,7 @@ export interface PriceAuditInput {
   drivetrain?: string | null;
   bodyCategory?: string;
   conditionSummary?: string | null;
-  areaScores?: { paintBody?: number; panelAlignment?: number; glassLighting?: number; interiorSurfaces?: number; interiorControls?: number; engineBay?: number; tiresWheels?: number; underbodyFrame?: number; exhaust?: number };
+  areaScores?: { paintBody?: number; glassLighting?: number; interiorSurfaces?: number; interiorControls?: number; engineBay?: number; tiresWheels?: number; underbodyFrame?: number; exhaust?: number };
   confirmedFindings?: { title: string; severity: string }[];
   comparableListings?: { title: string; price: number; mileage: number; source: string }[];
   nearbyListingCount?: number;
@@ -115,7 +115,7 @@ export async function auditPrice(
     ? `\nCONDITION SUMMARY: ${input.conditionSummary}`
     : "";
   const areaScoreContext = input.areaScores
-    ? `\nAREA SCORES: Paint & Body ${input.areaScores.paintBody ?? "?"}/10, Panel Alignment ${input.areaScores.panelAlignment ?? "?"}/10, Glass & Lighting ${input.areaScores.glassLighting ?? "?"}/10, Interior Surfaces ${input.areaScores.interiorSurfaces ?? "?"}/10, Interior Controls ${input.areaScores.interiorControls ?? "?"}/10, Engine Bay ${input.areaScores.engineBay ?? "?"}/10, Tires & Wheels ${input.areaScores.tiresWheels ?? "?"}/10, Underbody ${input.areaScores.underbodyFrame ?? "?"}/10, Exhaust ${input.areaScores.exhaust ?? "?"}/10`
+    ? `\nAREA SCORES: Paint & Body ${input.areaScores.paintBody ?? "?"}/100, Glass & Lighting ${input.areaScores.glassLighting ?? "?"}/100, Interior Surfaces ${input.areaScores.interiorSurfaces ?? "?"}/100, Interior Controls ${input.areaScores.interiorControls ?? "?"}/100, Engine Bay ${input.areaScores.engineBay ?? "?"}/100, Tires & Wheels ${input.areaScores.tiresWheels ?? "?"}/100, Underbody ${input.areaScores.underbodyFrame ?? "?"}/100, Exhaust ${input.areaScores.exhaust ?? "?"}/100`
     : "";
   const findingsContext = input.confirmedFindings?.length
     ? `\nCONFIRMED FINDINGS:\n${input.confirmedFindings.map((f) => `  - ${f.title} (${f.severity})`).join("\n")}`

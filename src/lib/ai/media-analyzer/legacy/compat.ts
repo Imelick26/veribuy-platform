@@ -22,14 +22,13 @@ import { runPipeline } from "../pipeline";
 
 // Weights for overall score calculation — tires excluded (scored separately)
 const DEFAULT_WEIGHTS = {
-  paintBody: 15,
-  panelAlignment: 10,
+  paintBody: 20,
   glassLighting: 8,
   interiorSurfaces: 10,
   interiorControls: 5,
-  engineBay: 20,
-  underbodyFrame: 15,
-  exhaust: 7,
+  engineBay: 25,
+  underbodyFrame: 20,
+  exhaust: 12,
 };
 const WEIGHT_SUM = Object.values(DEFAULT_WEIGHTS).reduce((a, b) => a + b, 0);
 
@@ -66,22 +65,21 @@ export async function analyzeVehicleCondition(
   const result = await runPipeline(vehicle, media, inspectorNotes);
   const scores = result.synthesis.areaScores;
 
-  // --- 9-bucket overall score using default weights ---
+  // --- 8-bucket overall score using default weights (area scores are 0-100) ---
   const overallScore = Math.round(
     // Tires excluded from overall — scored separately
-    (scores.paintBody.score / 10) * (DEFAULT_WEIGHTS.paintBody / WEIGHT_SUM) * 100 +
-    (scores.panelAlignment.score / 10) * (DEFAULT_WEIGHTS.panelAlignment / WEIGHT_SUM) * 100 +
-    (scores.glassLighting.score / 10) * (DEFAULT_WEIGHTS.glassLighting / WEIGHT_SUM) * 100 +
-    (scores.interiorSurfaces.score / 10) * (DEFAULT_WEIGHTS.interiorSurfaces / WEIGHT_SUM) * 100 +
-    (scores.interiorControls.score / 10) * (DEFAULT_WEIGHTS.interiorControls / WEIGHT_SUM) * 100 +
-    (scores.engineBay.score / 10) * (DEFAULT_WEIGHTS.engineBay / WEIGHT_SUM) * 100 +
-    (scores.underbodyFrame.score / 10) * (DEFAULT_WEIGHTS.underbodyFrame / WEIGHT_SUM) * 100 +
-    (scores.exhaust.score / 10) * (DEFAULT_WEIGHTS.exhaust / WEIGHT_SUM) * 100,
+    scores.paintBody.score * (DEFAULT_WEIGHTS.paintBody / WEIGHT_SUM) +
+    scores.glassLighting.score * (DEFAULT_WEIGHTS.glassLighting / WEIGHT_SUM) +
+    scores.interiorSurfaces.score * (DEFAULT_WEIGHTS.interiorSurfaces / WEIGHT_SUM) +
+    scores.interiorControls.score * (DEFAULT_WEIGHTS.interiorControls / WEIGHT_SUM) +
+    scores.engineBay.score * (DEFAULT_WEIGHTS.engineBay / WEIGHT_SUM) +
+    scores.underbodyFrame.score * (DEFAULT_WEIGHTS.underbodyFrame / WEIGHT_SUM) +
+    scores.exhaust.score * (DEFAULT_WEIGHTS.exhaust / WEIGHT_SUM),
   );
 
-  // --- Legacy 4-area scores (rounded averages of sub-buckets) ---
+  // --- Legacy 4-area scores (rounded averages of sub-buckets, 0-100) ---
   const exteriorBodyScore = Math.round(
-    (scores.paintBody.score + scores.panelAlignment.score + scores.glassLighting.score) / 3,
+    (scores.paintBody.score + scores.glassLighting.score) / 2,
   );
   const interiorScore = Math.round(
     (scores.interiorSurfaces.score + scores.interiorControls.score) / 2,
@@ -119,9 +117,8 @@ export async function analyzeVehicleCondition(
     mechanicalVisual: scores.mechanicalVisual,
     underbodyFrame: scores.underbodyFrame,
 
-    // 9-bucket scores (1-10)
+    // 8-bucket scores (0-100)
     paintBodyScore: scores.paintBody.score,
-    panelAlignmentScore: scores.panelAlignment.score,
     glassLightingScore: scores.glassLighting.score,
     interiorSurfacesScore: scores.interiorSurfaces.score,
     interiorControlsScore: scores.interiorControls.score,
@@ -129,9 +126,8 @@ export async function analyzeVehicleCondition(
     tiresWheelsScore: scores.tiresWheels.score,
     exhaustScore: scores.exhaust.score,
 
-    // 9-bucket detail objects
+    // 8-bucket detail objects
     paintBody: scores.paintBody,
-    panelAlignment: scores.panelAlignment,
     glassLighting: scores.glassLighting,
     interiorSurfaces: scores.interiorSurfaces,
     interiorControls: scores.interiorControls,

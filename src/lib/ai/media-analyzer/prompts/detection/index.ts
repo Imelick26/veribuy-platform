@@ -202,6 +202,8 @@ ${ageCalibration}
 CALIBRATION RULES:
 - Score wear relative to ${mileageStr} and vehicle age (${vehicleAge} years). Age-appropriate wear is NOT a defect.
 - Dirty or dusty surfaces are NOT defects. Only flag actual damage, wear, corrosion, or component issues.
+- Debris, leaves, road grime, or dust are NOT defects — skip these entirely.
+- Bed floor scratches on trucks/pickups are expected normal use — do NOT flag as defects.
 - Dents show as light/shadow distortions on reflective body panels. Examine panel highlights and reflections carefully.
 - Be specific about location: "driver door lower panel, 6 inches above rocker" not just "door".
 - Only flag defects you can clearly see with confidence >= 0.4. Do not guess at hidden damage.

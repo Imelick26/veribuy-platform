@@ -128,7 +128,6 @@ export default function SharedReportPage({
               const scoreGroups = [
                 { group: "Exterior", items: [
                   { label: "Paint & Body", key: "paintBody", score: inspection.paintBodyScore },
-                  { label: "Panel Alignment", key: "panelAlignment", score: inspection.panelAlignmentScore },
                   { label: "Glass & Lighting", key: "glassLighting", score: inspection.glassLightingScore },
                 ]},
                 { group: "Interior", items: [
@@ -152,7 +151,7 @@ export default function SharedReportPage({
                       <div className="space-y-0">
                         {items.map((item) => {
                           const detail = rawData?.[item.key] as { summary?: string; concerns?: string[] } | undefined;
-                          const dotColor = (item.score || 0) >= 7 ? "bg-green-500" : (item.score || 0) >= 6 ? "bg-caution-400" : "bg-red-500";
+                          const dotColor = (item.score || 0) >= 70 ? "bg-green-500" : (item.score || 0) >= 50 ? "bg-caution-400" : "bg-red-500";
                           return (
                             <div key={item.label} className="pb-4 border-b border-border-default last:border-0 last:pb-0 pt-4 first:pt-0">
                               <div className="flex items-center justify-between">
@@ -160,7 +159,7 @@ export default function SharedReportPage({
                                   <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotColor}`} />
                                   <span className="text-sm font-medium text-text-primary">{item.label}</span>
                                 </div>
-                                <span className="text-sm font-bold text-text-primary">{item.score ?? "—"}/10</span>
+                                <span className="text-sm font-bold text-text-primary">{item.score ?? "—"}/100</span>
                               </div>
                               {detail?.summary && (
                                 <p className="text-sm text-text-secondary mt-1 leading-relaxed ml-[18px]">{detail.summary}</p>

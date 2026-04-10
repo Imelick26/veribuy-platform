@@ -30,7 +30,6 @@ export interface ConditionAdjusterInput {
   conditionScore: number;
   areaScores?: {
     paintBody?: number;
-    panelAlignment?: number;
     glassLighting?: number;
     interiorSurfaces?: number;
     interiorControls?: number;
@@ -71,15 +70,14 @@ export async function analyzeConditionValue(
   const vehicleDesc = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
 
   const areaContext = areaScores ? [
-    areaScores.paintBody !== undefined ? `Paint & Body: ${areaScores.paintBody}/10` : null,
-    areaScores.panelAlignment !== undefined ? `Panel Alignment: ${areaScores.panelAlignment}/10` : null,
-    areaScores.glassLighting !== undefined ? `Glass & Lighting: ${areaScores.glassLighting}/10` : null,
-    areaScores.interiorSurfaces !== undefined ? `Interior Surfaces: ${areaScores.interiorSurfaces}/10` : null,
-    areaScores.interiorControls !== undefined ? `Interior Controls: ${areaScores.interiorControls}/10` : null,
-    areaScores.engineBay !== undefined ? `Engine Bay: ${areaScores.engineBay}/10` : null,
-    areaScores.tiresWheels !== undefined ? `Tires & Wheels: ${areaScores.tiresWheels}/10` : null,
-    areaScores.underbodyFrame !== undefined ? `Underbody/Frame: ${areaScores.underbodyFrame}/10` : null,
-    areaScores.exhaust !== undefined ? `Exhaust: ${areaScores.exhaust}/10` : null,
+    areaScores.paintBody !== undefined ? `Paint & Body: ${areaScores.paintBody}/100` : null,
+    areaScores.glassLighting !== undefined ? `Glass & Lighting: ${areaScores.glassLighting}/100` : null,
+    areaScores.interiorSurfaces !== undefined ? `Interior Surfaces: ${areaScores.interiorSurfaces}/100` : null,
+    areaScores.interiorControls !== undefined ? `Interior Controls: ${areaScores.interiorControls}/100` : null,
+    areaScores.engineBay !== undefined ? `Engine Bay: ${areaScores.engineBay}/100` : null,
+    areaScores.tiresWheels !== undefined ? `Tires & Wheels: ${areaScores.tiresWheels}/100` : null,
+    areaScores.underbodyFrame !== undefined ? `Underbody/Frame: ${areaScores.underbodyFrame}/100` : null,
+    areaScores.exhaust !== undefined ? `Exhaust: ${areaScores.exhaust}/100` : null,
   ].filter(Boolean).join(", ") : "No per-area breakdown available";
 
   const observationsContext = keyObservations?.length
@@ -97,7 +95,7 @@ Key insights:
 - A condition score of 65 on a $50K truck means different things than 65 on a $5K sedan. The value impact is not a simple linear curve.
 - For trucks: mechanical and underbody condition matter most. Minor cosmetic issues have less value impact because truck buyers expect wear.
 - For luxury/sports cars: cosmetic condition matters much more. Buyers expect pristine interiors and paint.
-- Context matters: a mechanical score of 7/10 at 120K miles is actually GOOD. The same score at 20K miles is concerning.
+- Context matters: a mechanical score of 70/100 at 120K miles is actually GOOD. The same score at 20K miles is concerning.
 - Underbody rust on a 10-year-old truck in the salt belt is expected — less penalty than the same on a 3-year-old in Arizona.
 
 The multiplier should reflect how this condition affects fair market value:

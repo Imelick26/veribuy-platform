@@ -813,7 +813,6 @@ export async function analyzeVehicleCondition(
     underbodyFrame,
     // 9-bucket scores (derived from legacy 4-area)
     paintBodyScore: exteriorBody.score,
-    panelAlignmentScore: exteriorBody.score,
     glassLightingScore: exteriorBody.score,
     interiorSurfacesScore: interior.score,
     interiorControlsScore: interior.score,
@@ -822,7 +821,6 @@ export async function analyzeVehicleCondition(
     exhaustScore: mechanicalVisual.score,
     // 9-bucket detail objects
     paintBody: exteriorBody,
-    panelAlignment: { ...defaultDetail, score: exteriorBody.score },
     glassLighting: { ...defaultDetail, score: exteriorBody.score },
     interiorSurfaces: interior,
     interiorControls: { ...defaultDetail, score: interior.score },

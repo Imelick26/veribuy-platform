@@ -129,7 +129,6 @@ export const reportRouter = router({
         scores: {
           overall: inspection.overallScore,
           paintBody: inspection.paintBodyScore,
-          panelAlignment: inspection.panelAlignmentScore,
           glassLighting: inspection.glassLightingScore,
           interiorSurfaces: inspection.interiorSurfacesScore,
           interiorControls: inspection.interiorControlsScore,
@@ -144,7 +143,6 @@ export const reportRouter = router({
         },
         conditionDetails: conditionRaw ? {
           paintBody: conditionRaw.paintBody,
-          panelAlignment: conditionRaw.panelAlignment,
           glassLighting: conditionRaw.glassLighting,
           interiorSurfaces: conditionRaw.interiorSurfaces,
           interiorControls: conditionRaw.interiorControls,
