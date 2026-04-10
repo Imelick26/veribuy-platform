@@ -373,7 +373,7 @@ export const inspectionRouter = router({
       // Scores and findings are NOT persisted yet — they go to CONDITION_REVIEW.
       const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis);
       const preliminaryFindings = pipelineFindings.unexpectedFindings
-        .filter((uf) => uf.confidence >= 0.6)
+        .filter((uf) => uf.confidence >= 0.4) // Low threshold — flag anything uncertain for inspector review
         .map((uf, index) => ({
           index,
           title: uf.title,

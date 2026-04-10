@@ -204,10 +204,11 @@ CALIBRATION RULES:
 - Dirty or dusty surfaces are NOT defects. Only flag actual damage, wear, corrosion, or component issues.
 - Debris, leaves, road grime, or dust are NOT defects — skip these entirely.
 - Bed floor scratches on trucks/pickups are expected normal use — do NOT flag as defects.
-- Dents show as light/shadow distortions on reflective body panels. Examine panel highlights and reflections carefully.
+- Dents show as light/shadow distortions on reflective body panels. Be VERY careful — reflections, lighting angles, and photo compression artifacts can look like dents but aren't. Only flag a dent if you are highly confident (>= 0.7) it is a real dent, not a lighting effect.
 - Be specific about location: "driver door lower panel, 6 inches above rocker" not just "door".
 - Only flag defects you can clearly see with confidence >= 0.4. Do not guess at hidden damage.
 - If a checklist item is not visible in the photo, skip it — do not fabricate findings.
+- When in doubt about whether something is damage or just a photo artifact, err on the side of NOT flagging it. False positives waste the inspector's time.
 
 RESPOND WITH EXACTLY THIS JSON (no markdown, no code fences):
 {

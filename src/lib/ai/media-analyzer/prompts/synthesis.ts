@@ -36,26 +36,28 @@ Your job:
 - Provide an overall dealer-focused vehicle summary
 
 SCORING RUBRIC (0-100 per area):
-100: No issues found in this area. Nothing to report. THIS IS THE DEFAULT — start here and only deduct for specific, identified issues.
-90-99: Cosmetic-only items that require no action — light age-appropriate wear, minor marks that a buyer wouldn't notice.
-80-89: Minor items a dealer would notice but probably not fix — small chips, light scratches, minor cosmetic wear.
+100: Excellent — no wear or damage visible. Looks new or professionally maintained. Reserve this for areas that genuinely look outstanding.
+95-99: Very good — minimal age-appropriate wear only. A buyer would not notice any issues. This is the expected score for a well-maintained area with no damage.
+90-94: Good — minor cosmetic wear visible but nothing that needs repair. Normal use wear for the vehicle's age and mileage.
+80-89: Above average — minor items a dealer would notice. Small chips, light scratches, visible wear patterns.
 70-79: Issues worth noting — a dent, moderate wear, something that might need attention before retail.
 60-69: Multiple noticeable issues or one significant issue — will affect buyer perception.
-50-59: Clearly below average — heavy wear, damage, or neglect visible. Reconditioning needed.
-40-49: Significant damage or heavy neglect — major reconditioning required.
-Below 40: Major damage or extreme neglect.
+50-59: Below average — heavy wear, damage, or neglect visible. Reconditioning needed.
+Below 50: Significant damage or heavy neglect.
 
-KEY PRINCIPLE: 100 is the default score for every area. You MUST start at 100 and only deduct for SPECIFIC, IDENTIFIED issues you can see. "The area looks good" = 100. Do not deduct for vague impressions, theoretical concerns, or "it could be better."
+KEY SCORING PRINCIPLES:
+1. Start at 95 as your baseline for a well-maintained used vehicle with no damage or issues.
+2. Only give 100 when the area genuinely looks excellent — not just "no issues found." A 5-year-old truck with 50K miles doesn't get 100 on interior just because nothing is broken. Normal use wear is real even when minor.
+3. Deduct for SPECIFIC issues you can identify. Vague "it could be better" is not a deduction — but visible wear IS, even if minor.
+4. Areas with limited photo coverage (only 1-2 photos, like engine bay, underbody, exhaust): cap at 95 unless the photos clearly show excellent condition. You cannot confirm perfection from limited angles.
 
 THESE ARE NOT DEFECTS — DO NOT REDUCE ANY SCORE FOR:
 - Dirt, dust, debris, or grime (dirty ≠ damaged — a detail solves this)
 - Bed floor scratches on trucks/pickups (normal truck use, not body damage)
 - Leaves, mud, or road dust on undercarriage or in wheel wells
-- Age-appropriate wear with no functional or aesthetic impact at arm's length
 - Items that are dirty but not damaged (e.g., dusty engine bay, grimy undercarriage)
-- Minor imperfections only visible at extreme close-up angles
 - "Could use a wash" or "could use a polish" observations
-Do not deduct points for preventative maintenance items or "it could be better."
+- Preventative maintenance items or "it could be better" observations
 
 AREA-SPECIFIC SCORING GUIDANCE:
 
