@@ -156,10 +156,54 @@ async function executePipeline(
     `${metadata.totalApiCalls} API calls, ${(durationMs / 1000).toFixed(1)}s`,
   );
 
-  // Use tire assessment from Phase 4 synthesis (which incorporates Phase 2 tire comparison)
+  // Use tire assessment from Phase 2, or build from Phase 1 per-tire data as fallback
+  let tireAssessment = phase2.tireResult.tireAssessment;
+  if (!tireAssessment) {
+    // Phase 2 tire comparison failed (rate limit, URL issue, etc.)
+    // Build assessment from Phase 1 per-tire callResults using areaCondition
+    const tireMap: Record<string, { condition: "GOOD" | "WORN" | "REPLACE"; observations: string[] }> = {};
+    for (const result of phase1.callResults) {
+      if (result.captureType.startsWith("TIRE_")) {
+        // Map areaCondition to tire condition level
+        const ac = result.areaCondition;
+        const condition: "GOOD" | "WORN" | "REPLACE" = ac === "damaged" ? "REPLACE" : ac === "worn" ? "WORN" : "GOOD";
+        // Check findings for more specific info (e.g., second opinion upgrades)
+        const hasReplaceFinding = result.findings.some((f) =>
+          f.defectType.toLowerCase().includes("replace") || f.severity === "major" || f.severity === "critical"
+        );
+        const finalCondition: "GOOD" | "WORN" | "REPLACE" = hasReplaceFinding ? "REPLACE" : condition;
+        tireMap[result.captureType] = {
+          condition: finalCondition,
+          observations: result.notes ? [result.notes] : [],
+        };
+      }
+    }
+    if (Object.keys(tireMap).length > 0) {
+      const get = (key: string): { condition: "GOOD" | "WORN" | "REPLACE"; observations: string[] } => tireMap[key] || { condition: "GOOD" as const, observations: [] };
+      const conditions = Object.values(tireMap).map((t) => t.condition);
+      const replaceCount = conditions.filter((c) => c === "REPLACE").length;
+      const wornCount = conditions.filter((c) => c === "WORN").length;
+      const score = replaceCount > 0 ? Math.max(1, 10 - replaceCount * 2) : wornCount > 0 ? Math.max(4, 10 - wornCount) : 9;
+
+      tireAssessment = {
+        frontDriver: get("TIRE_FRONT_DRIVER"),
+        frontPassenger: get("TIRE_FRONT_PASSENGER"),
+        rearDriver: get("TIRE_REAR_DRIVER"),
+        rearPassenger: get("TIRE_REAR_PASSENGER"),
+        overallTireScore: score,
+        summary: replaceCount > 0
+          ? `${replaceCount} tire(s) need replacement.`
+          : wornCount > 0
+            ? `${wornCount} tire(s) showing moderate wear.`
+            : "All tires in good condition.",
+      };
+      console.log(`[pipeline] Built tire assessment from Phase 1: ${conditions.join(", ")}`);
+    }
+  }
+
   const finalSynthesis = {
     ...phase4.synthesis,
-    tireAssessment: phase2.tireResult.tireAssessment,
+    tireAssessment: tireAssessment ?? undefined,
     crossFindings: allComparisons,
   };
 
