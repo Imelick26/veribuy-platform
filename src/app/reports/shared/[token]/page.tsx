@@ -136,7 +136,6 @@ export default function SharedReportPage({
                 ]},
                 { group: "Mechanical", items: [
                   { label: "Engine Bay", key: "engineBay", score: inspection.engineBayScore },
-                  { label: "Tires & Wheels", key: "tiresWheels", score: inspection.tiresWheelsScore },
                   { label: "Exhaust", key: "exhaust", score: inspection.exhaustScore },
                 ]},
                 { group: "Structural", items: [

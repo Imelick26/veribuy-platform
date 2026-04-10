@@ -501,7 +501,6 @@ export function ReportDocument({ data }: { data: ReportData }) {
                 { label: "Interior Surfaces", key: "interiorSurfaces", score: data.scores.interiorSurfaces },
                 { label: "Interior Controls", key: "interiorControls", score: data.scores.interiorControls },
                 { label: "Engine Bay", key: "engineBay", score: data.scores.engineBay },
-                { label: "Tires & Wheels", key: "tiresWheels", score: data.scores.tiresWheels },
                 { label: "Underbody & Frame", key: "underbodyFrame", score: data.scores.underbodyFrame },
                 { label: "Exhaust", key: "exhaust", score: data.scores.exhaust },
               ] as const).map((area) => {

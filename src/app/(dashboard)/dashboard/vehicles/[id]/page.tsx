@@ -520,7 +520,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                   ]},
                   { group: "Mechanical", items: [
                     { label: "Engine Bay", key: "engineBay", score: inspection?.engineBayScore },
-                    { label: "Tires & Wheels", key: "tiresWheels", score: inspection?.tiresWheelsScore },
                     { label: "Exhaust", key: "exhaust", score: inspection?.exhaustScore },
                   ]},
                   { group: "Structural", items: [
@@ -572,9 +571,45 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             const dotColor = (c: string): "green" | "yellow" | "red" => c === "GOOD" ? "green" : c === "WORN" ? "yellow" : "red";
             const condLabel = (c: string) => c === "GOOD" ? "Good" : c === "WORN" ? "Worn" : "Replace";
 
+            const goodCount = tireEntries.filter((t) => t.data.condition === "GOOD").length;
+            const wornCount = tireEntries.filter((t) => t.data.condition === "WORN").length;
+            const replaceCount = tireEntries.filter((t) => t.data.condition === "REPLACE").length;
+
+            // Value impact summary
+            let valueImpact: { text: string; color: string } | null = null;
+            if (replaceCount > 0) {
+              const low = replaceCount * 150;
+              const high = replaceCount * 300;
+              valueImpact = {
+                text: `${replaceCount} tire${replaceCount > 1 ? "s" : ""} need replacement — est. $${low.toLocaleString()}-$${high.toLocaleString()} recon cost`,
+                color: "text-red-600",
+              };
+            } else if (wornCount > 0) {
+              const low = wornCount * 120;
+              const high = wornCount * 250;
+              valueImpact = {
+                text: `${wornCount} worn tire${wornCount > 1 ? "s" : ""} — est. $${low.toLocaleString()}-$${high.toLocaleString()} value reduction`,
+                color: "text-caution-700",
+              };
+            } else if (goodCount === 4) {
+              valueImpact = {
+                text: "All 4 tires in good condition — no tire cost impact",
+                color: "text-green-700",
+              };
+            }
+
             return (
               <div>
                 <Overline className="block mb-4">Tire Condition</Overline>
+                {valueImpact && (
+                  <div className={`mb-3 px-3 py-2 rounded-lg border ${
+                    replaceCount > 0 ? "bg-red-50 border-red-200" :
+                    wornCount > 0 ? "bg-amber-50 border-amber-200" :
+                    "bg-green-50 border-green-200"
+                  }`}>
+                    <p className={`text-xs font-medium ${valueImpact.color}`}>{valueImpact.text}</p>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   {tireEntries.map(({ label, key, data }) => {
                     const tirePhoto = media.find((m) => m.captureType === key);
