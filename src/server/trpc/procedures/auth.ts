@@ -17,9 +17,11 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const normalizedEmail = input.email.toLowerCase();
+
       // Check if email already exists
       const existing = await ctx.db.user.findUnique({
-        where: { email: input.email },
+        where: { email: normalizedEmail },
       });
       if (existing) {
         throw new Error("Email already registered");
@@ -45,7 +47,7 @@ export const authRouter = router({
 
         const user = await tx.user.create({
           data: {
-            email: input.email,
+            email: normalizedEmail,
             name: input.name,
             passwordHash,
             role: "OWNER",
@@ -134,9 +136,11 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const normalizedEmail = input.email.toLowerCase();
+
       // Check for duplicate email
       const existingEmail = await ctx.db.user.findUnique({
-        where: { email: input.email },
+        where: { email: normalizedEmail },
       });
       if (existingEmail) {
         throw new Error("A user with this email already exists");
@@ -152,7 +156,7 @@ export const authRouter = router({
 
       const user = await ctx.db.user.create({
         data: {
-          email: input.email,
+          email: normalizedEmail,
           name: input.name,
           passwordHash,
           role: input.role,
@@ -162,7 +166,7 @@ export const authRouter = router({
 
       // Send welcome email with credentials (fire-and-forget)
       sendWelcomeEmail({
-        to: input.email,
+        to: normalizedEmail,
         name: input.name,
         orgName: org?.name || "your organization",
         tempPassword,
