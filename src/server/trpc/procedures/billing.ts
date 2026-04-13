@@ -24,7 +24,7 @@ export const billingRouter = router({
       const purchase = await ctx.db.inspectionPackPurchase.create({
         data: {
           orgId: ctx.orgId,
-          stripeSessionId: "pending",
+          stripeSessionId: `pending_${crypto.randomUUID()}`,
           packSize: 1,
           amountCents: overage.priceCents,
           status: "pending",
