@@ -11,56 +11,81 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-export const INSPECTION_PACKS = [
-  {
-    size: 1,
-    label: "1 Inspection",
-    priceCents: 3999,
-    priceDisplay: "$39.99",
-    priceId: process.env.STRIPE_PRICE_1_INSPECTION ?? "",
-  },
-  {
-    size: 3,
-    label: "3 Inspections",
-    priceCents: 9999,
-    priceDisplay: "$99.99",
-    priceId: process.env.STRIPE_PRICE_3_INSPECTIONS ?? "",
-  },
-  {
-    size: 10,
-    label: "10 Inspections",
-    priceCents: 24999,
-    priceDisplay: "$249.99",
-    priceId: process.env.STRIPE_PRICE_10_INSPECTIONS ?? "",
-  },
-] as const;
-
 /* ------------------------------------------------------------------ */
-/*  Recurring Subscription Plans                                       */
+/*  Subscription Plans — Annual billing                                */
 /* ------------------------------------------------------------------ */
 
 export const SUBSCRIPTION_PLANS = [
   {
+    tier: "CORE" as const,
+    label: "Core",
+    monthlyEquiv: 299_00,
+    annualPriceCents: 3_588_00,
+    inspectionsPerMonth: 10,
+    priceId: process.env.STRIPE_PRICE_CORE_ANNUAL ?? "",
+  },
+  {
     tier: "BASE" as const,
     label: "Base",
-    inspectionsPerMonth: 25,
-    priceId: process.env.STRIPE_PRICE_BASE_MONTHLY ?? "",
+    monthlyEquiv: 599_00,
+    annualPriceCents: 7_188_00,
+    inspectionsPerMonth: 50,
+    priceId: process.env.STRIPE_PRICE_BASE_ANNUAL ?? "",
   },
   {
     tier: "PRO" as const,
     label: "Pro",
-    inspectionsPerMonth: 100,
-    priceId: process.env.STRIPE_PRICE_PRO_MONTHLY ?? "",
+    monthlyEquiv: 1_299_00,
+    annualPriceCents: 15_588_00,
+    inspectionsPerMonth: 125,
+    priceId: process.env.STRIPE_PRICE_PRO_ANNUAL ?? "",
   },
   {
     tier: "ENTERPRISE" as const,
     label: "Enterprise",
-    inspectionsPerMonth: 9999,
-    priceId: null, // Contact only — no self-serve checkout
+    monthlyEquiv: 3_999_00,
+    annualPriceCents: 47_988_00,
+    inspectionsPerMonth: 400,
+    priceId: process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL ?? "",
   },
 ] as const;
 
 export type SubscriptionTier = (typeof SUBSCRIPTION_PLANS)[number]["tier"];
+
+/* ------------------------------------------------------------------ */
+/*  Overage — per-report pricing by tier                               */
+/* ------------------------------------------------------------------ */
+
+export const OVERAGE_PRICES: Record<SubscriptionTier, {
+  priceCents: number;
+  priceDisplay: string;
+  priceId: string;
+}> = {
+  CORE: {
+    priceCents: 19_99,
+    priceDisplay: "$19.99",
+    priceId: process.env.STRIPE_PRICE_OVERAGE_CORE ?? "",
+  },
+  BASE: {
+    priceCents: 14_99,
+    priceDisplay: "$14.99",
+    priceId: process.env.STRIPE_PRICE_OVERAGE_BASE ?? "",
+  },
+  PRO: {
+    priceCents: 11_99,
+    priceDisplay: "$11.99",
+    priceId: process.env.STRIPE_PRICE_OVERAGE_PRO ?? "",
+  },
+  ENTERPRISE: {
+    priceCents: 9_99,
+    priceDisplay: "$9.99",
+    priceId: process.env.STRIPE_PRICE_OVERAGE_ENTERPRISE ?? "",
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/*  Lookup helpers                                                     */
+/* ------------------------------------------------------------------ */
 
 export function getPlanByTier(tier: string) {
   return SUBSCRIPTION_PLANS.find((p) => p.tier === tier);
@@ -68,4 +93,8 @@ export function getPlanByTier(tier: string) {
 
 export function getPlanByPriceId(priceId: string) {
   return SUBSCRIPTION_PLANS.find((p) => p.priceId === priceId);
+}
+
+export function getOveragePriceForTier(tier: string) {
+  return OVERAGE_PRICES[tier as SubscriptionTier] ?? OVERAGE_PRICES.CORE;
 }

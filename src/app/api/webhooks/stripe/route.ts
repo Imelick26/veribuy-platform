@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   try {
     switch (event.type) {
       /* ──────────────────────────────────────────────────────────── */
-      /*  Checkout completed (one-time packs OR new subscriptions)   */
+      /*  Checkout completed (overage reports OR new subscriptions)  */
       /* ──────────────────────────────────────────────────────────── */
       case "checkout.session.completed": {
         const session = event.data.object;
@@ -67,35 +67,34 @@ export async function POST(request: Request) {
             data: {
               stripeSubscriptionId: subscriptionId ?? undefined,
               stripePriceId: plan?.priceId ?? undefined,
-              subscription: tier as "BASE" | "PRO" | "ENTERPRISE",
+              subscription: tier as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
               subscriptionStatus: "active",
-              maxInspectionsPerMonth: plan?.inspectionsPerMonth ?? 25,
+              maxInspectionsPerMonth: plan?.inspectionsPerMonth ?? 0,
               currentPeriodEnd: periodEnd,
             },
           });
           console.log(`Subscription created: ${tier} for org ${orgId}`);
         } else {
-          // ── One-time pack purchase (existing logic) ──
+          // ── Overage report purchase ──
           const orgId = session.metadata?.orgId;
-          const packSize = parseInt(session.metadata?.packSize ?? "0", 10);
           const purchaseId = session.metadata?.purchaseId;
 
-          if (!orgId || !packSize || !purchaseId) {
-            console.error("Missing pack metadata:", session.id);
+          if (!orgId || !purchaseId) {
+            console.error("Missing overage metadata:", session.id);
             break;
           }
 
           await db.$transaction([
             db.organization.update({
               where: { id: orgId },
-              data: { bonusInspections: { increment: packSize } },
+              data: { bonusInspections: { increment: 1 } },
             }),
             db.inspectionPackPurchase.update({
               where: { id: purchaseId },
               data: { status: "completed", completedAt: new Date() },
             }),
           ]);
-          console.log(`Pack purchase completed: ${packSize} inspections for org ${orgId}`);
+          console.log(`Overage report purchased for org ${orgId}`);
         }
         break;
       }
@@ -156,7 +155,7 @@ export async function POST(request: Request) {
             where: { id: org.id },
             data: {
               stripePriceId: priceId ?? undefined,
-              subscription: plan ? (plan.tier as "BASE" | "PRO" | "ENTERPRISE") : undefined,
+              subscription: plan ? (plan.tier as "CORE" | "BASE" | "PRO" | "ENTERPRISE") : undefined,
               subscriptionStatus: subscription.status,
               maxInspectionsPerMonth: plan?.inspectionsPerMonth ?? undefined,
               currentPeriodEnd: itemEnd ? new Date(itemEnd * 1000) : undefined,
@@ -181,15 +180,15 @@ export async function POST(request: Request) {
           await db.organization.update({
             where: { id: org.id },
             data: {
-              subscription: "BASE",
+              subscription: "CORE",
               subscriptionStatus: "cancelled",
-              maxInspectionsPerMonth: 25,
+              maxInspectionsPerMonth: 0,
               stripeSubscriptionId: null,
               stripePriceId: null,
               currentPeriodEnd: null,
             },
           });
-          console.log(`Subscription cancelled for org ${org.id} — downgraded to BASE`);
+          console.log(`Subscription cancelled for org ${org.id} — downgraded to CORE`);
         }
         break;
       }

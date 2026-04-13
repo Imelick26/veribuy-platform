@@ -17,8 +17,8 @@ export default function NewDealerPage() {
     ownerName: "",
     ownerEmail: "",
     ownerPassword: "",
-    subscription: "BASE" as "BASE" | "PRO" | "ENTERPRISE",
-    maxInspectionsPerMonth: 50,
+    subscription: "CORE" as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
+    maxInspectionsPerMonth: 10,
   });
 
   const create = trpc.admin.createOrg.useMutation({
@@ -117,6 +117,7 @@ export default function NewDealerPage() {
                 onChange={(e) => setForm({ ...form, subscription: e.target.value as typeof form.subscription })}
                 className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay transition-colors"
               >
+                <option value="CORE">Core</option>
                 <option value="BASE">Base</option>
                 <option value="PRO">Pro</option>
                 <option value="ENTERPRISE">Enterprise</option>

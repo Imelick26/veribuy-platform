@@ -30,7 +30,7 @@ export const adminRouter = router({
       ctx.db.organization.groupBy({ by: ["subscription"], _count: true }),
     ]);
 
-    const tierCounts: Record<string, number> = { BASE: 0, PRO: 0, ENTERPRISE: 0 };
+    const tierCounts: Record<string, number> = { CORE: 0, BASE: 0, PRO: 0, ENTERPRISE: 0 };
     for (const g of orgsByTier) {
       tierCounts[g.subscription] = g._count;
     }
@@ -91,8 +91,8 @@ export const adminRouter = router({
         ownerName: z.string().min(1),
         ownerEmail: z.email(),
         ownerPassword: z.string().min(8),
-        subscription: z.enum(["BASE", "PRO", "ENTERPRISE"]),
-        maxInspectionsPerMonth: z.number().int().min(1),
+        subscription: z.enum(["CORE", "BASE", "PRO", "ENTERPRISE"]),
+        maxInspectionsPerMonth: z.number().int().min(0),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -138,8 +138,8 @@ export const adminRouter = router({
     .input(
       z.object({
         orgId: z.string(),
-        subscription: z.enum(["BASE", "PRO", "ENTERPRISE"]).optional(),
-        maxInspectionsPerMonth: z.number().int().min(1).optional(),
+        subscription: z.enum(["CORE", "BASE", "PRO", "ENTERPRISE"]).optional(),
+        maxInspectionsPerMonth: z.number().int().min(0).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -181,7 +181,19 @@ export const adminRouter = router({
         where: { orgId: input.orgId },
       });
 
-      return { ...org, inspectionsThisMonth, totalInspections };
+      const recentInspections = await ctx.db.inspection.findMany({
+        where: { orgId: input.orgId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          vehicle: { select: { id: true, year: true, make: true, model: true, vin: true } },
+          inspector: { select: { name: true } },
+          marketAnalysis: { select: { recommendation: true, adjustedPrice: true } },
+          _count: { select: { findings: true } },
+        },
+      });
+
+      return { ...org, inspectionsThisMonth, totalInspections, recentInspections };
     }),
 
   // ─── Users (cross-org) ─────────────────────────────────────

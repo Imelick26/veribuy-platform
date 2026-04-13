@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Building2, Users, Shield, Mail } from "lucide-react";
+import { ArrowLeft, Building2, Users, Shield, Mail, ChevronRight, ClipboardCheck } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
   OWNER: "Owner",
@@ -107,7 +107,7 @@ export default function DealerDetailPage() {
               e.preventDefault();
               update.mutate({
                 orgId: id,
-                subscription: editForm.subscription as "BASE" | "PRO" | "ENTERPRISE",
+                subscription: editForm.subscription as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
                 maxInspectionsPerMonth: editForm.maxInspectionsPerMonth,
               });
             }}
@@ -121,6 +121,7 @@ export default function DealerDetailPage() {
                   onChange={(e) => setEditForm({ ...editForm, subscription: e.target.value })}
                   className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay transition-colors"
                 >
+                  <option value="CORE">Core</option>
                   <option value="BASE">Base</option>
                   <option value="PRO">Pro</option>
                   <option value="ENTERPRISE">Enterprise</option>
@@ -187,6 +188,77 @@ export default function DealerDetailPage() {
             </div>
           ))}
         </div>
+      </Card>
+
+      {/* Inspected Vehicles */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4 text-text-tertiary" />
+            <CardTitle>Inspected Vehicles ({org.recentInspections.length})</CardTitle>
+          </div>
+        </CardHeader>
+        {org.recentInspections.length === 0 ? (
+          <div className="text-center py-6">
+            <p className="text-sm text-text-secondary">No inspections yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border-default -mx-5">
+            {org.recentInspections.map((insp) => {
+              const ma = insp.marketAnalysis as { recommendation?: string; adjustedPrice?: number } | null;
+              const vehicleName = insp.vehicle
+                ? `${insp.vehicle.year} ${insp.vehicle.make} ${insp.vehicle.model}`
+                : "Vehicle pending";
+              const vehicleLink = insp.vehicle?.id
+                ? `/dashboard/vehicles/${insp.vehicle.id}`
+                : `/dashboard/inspections/${insp.id}`;
+
+              return (
+                <Link
+                  key={insp.id}
+                  href={vehicleLink}
+                  className="flex items-center justify-between px-5 py-3 hover:bg-surface-hover transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-text-primary truncate">{vehicleName}</span>
+                      <span className="text-xs text-text-tertiary shrink-0">{insp.number}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-text-tertiary">
+                      {insp.vehicle?.vin && (
+                        <span className="font-mono">{insp.vehicle.vin}</span>
+                      )}
+                      <span>{insp.inspector.name}</span>
+                      <span>{new Date(insp.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                    {insp.overallScore != null && (
+                      <span className={`text-xs font-semibold ${
+                        insp.overallScore >= 70 ? "text-green-600" :
+                        insp.overallScore >= 40 ? "text-caution-600" : "text-red-600"
+                      }`}>
+                        {insp.overallScore}/100
+                      </span>
+                    )}
+                    {insp._count.findings > 0 && (
+                      <span className="text-xs text-text-tertiary">{insp._count.findings} findings</span>
+                    )}
+                    <Badge
+                      variant={
+                        insp.status === "COMPLETED" ? "success" :
+                        insp.status === "CANCELLED" ? "danger" : "info"
+                      }
+                    >
+                      {insp.status.replace(/_/g, " ")}
+                    </Badge>
+                    <ChevronRight className="h-4 w-4 text-text-tertiary" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </Card>
     </div>
   );

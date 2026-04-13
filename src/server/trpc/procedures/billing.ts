@@ -1,40 +1,66 @@
 import { z } from "zod/v4";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../init";
-import { getStripe, INSPECTION_PACKS, SUBSCRIPTION_PLANS, getPlanByTier } from "@/lib/stripe";
+import { getStripe, SUBSCRIPTION_PLANS, getPlanByTier, getOveragePriceForTier } from "@/lib/stripe";
 import { sendUpgradeRequestEmail } from "@/lib/email";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const billingRouter = router({
-  createCheckoutSession: protectedProcedure
-    .input(z.object({ packSize: z.union([z.literal(1), z.literal(3), z.literal(10)]) }))
-    .mutation(async ({ ctx, input }) => {
-      const pack = INSPECTION_PACKS.find((p) => p.size === input.packSize);
-      if (!pack) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid pack size" });
-      if (!pack.priceId) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe price not configured for this pack" });
+  // ── Purchase a single additional report at tier-based pricing ─────
+  purchaseAdditionalReport: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const org = await ctx.db.organization.findUnique({
+        where: { id: ctx.orgId },
+        select: { subscription: true, stripeCustomerId: true, name: true },
+      });
+      if (!org) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const overage = getOveragePriceForTier(org.subscription);
+      if (!overage.priceId) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe overage price not configured" });
       }
 
       const purchase = await ctx.db.inspectionPackPurchase.create({
         data: {
           orgId: ctx.orgId,
           stripeSessionId: "pending",
-          packSize: pack.size,
-          amountCents: pack.priceCents,
+          packSize: 1,
+          amountCents: overage.priceCents,
           status: "pending",
           purchasedById: ctx.userId,
         },
       });
 
       const stripe = getStripe();
+
+      // Ensure Stripe customer exists
+      let customerId = org.stripeCustomerId;
+      if (!customerId) {
+        const user = await ctx.db.user.findUnique({
+          where: { id: ctx.userId },
+          select: { email: true },
+        });
+        const customer = await stripe.customers.create({
+          email: user?.email ?? undefined,
+          name: org.name,
+          metadata: { orgId: ctx.orgId },
+        });
+        customerId = customer.id;
+        await ctx.db.organization.update({
+          where: { id: ctx.orgId },
+          data: { stripeCustomerId: customerId },
+        });
+      }
+
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
-        line_items: [{ price: pack.priceId, quantity: 1 }],
+        customer: customerId,
+        line_items: [{ price: overage.priceId, quantity: 1 }],
         metadata: {
           orgId: ctx.orgId,
-          packSize: String(pack.size),
           purchaseId: purchase.id,
+          type: "overage",
         },
         success_url: `${APP_URL}/dashboard/settings?checkout=success`,
         cancel_url: `${APP_URL}/dashboard/settings?checkout=cancelled`,
@@ -93,7 +119,7 @@ export const billingRouter = router({
   // ── Recurring Subscriptions ───────────────────────────────────────
 
   createSubscription: protectedProcedure
-    .input(z.object({ tier: z.enum(["BASE", "PRO"]) }))
+    .input(z.object({ tier: z.enum(["CORE", "BASE", "PRO", "ENTERPRISE"]) }))
     .mutation(async ({ ctx, input }) => {
       const plan = getPlanByTier(input.tier);
       if (!plan || !plan.priceId) {
@@ -102,7 +128,6 @@ export const billingRouter = router({
 
       const stripe = getStripe();
 
-      // Find or create Stripe customer for this org
       const org = await ctx.db.organization.findUnique({
         where: { id: ctx.orgId },
         select: { stripeCustomerId: true, name: true },

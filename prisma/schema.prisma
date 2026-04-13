@@ -25,8 +25,8 @@ model Organization {
   zip          String?
   phone        String?
   website      String?
-  subscription           SubscriptionTier @default(BASE)
-  maxInspectionsPerMonth Int              @default(25)
+  subscription           SubscriptionTier @default(CORE)
+  maxInspectionsPerMonth Int              @default(0)
   bonusInspections       Int              @default(0)
 
   // Pricing preferences
@@ -58,6 +58,7 @@ enum OrgType {
 }
 
 enum SubscriptionTier {
+  CORE
   BASE
   PRO
   ENTERPRISE

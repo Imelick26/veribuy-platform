@@ -10,15 +10,19 @@ import { trpc } from "@/lib/trpc";
 import { Building2, Users, CreditCard, Lock, Check, Mail, ExternalLink, Zap } from "lucide-react";
 import { getConditionMarginPct } from "@/components/report/MarketAnalysisSection";
 
-const PACKS = [
-  { size: 1 as const, label: "1 Inspection", price: "$39.99", perUnit: "$39.99/ea" },
-  { size: 3 as const, label: "3 Inspections", price: "$99.99", perUnit: "$33.33/ea" },
-  { size: 10 as const, label: "10 Inspections", price: "$249.99", perUnit: "$25.00/ea" },
-];
+const PLANS = [
+  { tier: "CORE" as const, label: "Core", price: "$299/mo", inspections: "10/mo" },
+  { tier: "BASE" as const, label: "Base", price: "$599/mo", inspections: "50/mo" },
+  { tier: "PRO" as const, label: "Pro", price: "$1,299/mo", inspections: "125/mo", popular: true },
+  { tier: "ENTERPRISE" as const, label: "Enterprise", price: "$3,999/mo", inspections: "400/mo" },
+] as const;
 
-const UPGRADE_PLANS = [
-  { tier: "PRO" as const, label: "Pro", inspections: "100/mo", description: "For growing operations" },
-];
+const OVERAGE_DISPLAY: Record<string, string> = {
+  CORE: "$19.99",
+  BASE: "$14.99",
+  PRO: "$11.99",
+  ENTERPRISE: "$9.99",
+};
 
 export default function SettingsPage() {
   const { data: user } = trpc.auth.me.useQuery();
@@ -28,7 +32,7 @@ export default function SettingsPage() {
   const checkoutStatus = searchParams.get("checkout");
   const [contactSent, setContactSent] = useState(false);
 
-  const checkout = trpc.billing.createCheckoutSession.useMutation({
+  const purchaseReport = trpc.billing.purchaseAdditionalReport.useMutation({
     onSuccess: (data) => {
       if (data.url) window.location.href = data.url;
     },
@@ -73,7 +77,11 @@ export default function SettingsPage() {
   const currentMinProfitDollars = currentMinProfit / 100;
 
   const hasSubscription = subStatus?.hasSubscription;
-  const canUpgrade = !hasSubscription || subStatus?.tier === "BASE";
+  const currentTier = subStatus?.tier ?? "CORE";
+  const tierOrder = ["CORE", "BASE", "PRO", "ENTERPRISE"];
+  const currentTierIndex = tierOrder.indexOf(currentTier);
+  const upgradePlans = PLANS.filter((_, i) => i > currentTierIndex);
+  const overagePrice = OVERAGE_DISPLAY[currentTier] ?? "$19.99";
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -267,7 +275,7 @@ export default function SettingsPage() {
           {/* Current plan info */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-text-secondary">Current Plan</span>
-            <Badge variant="gradient">{subStatus?.tier ?? "BASE"}</Badge>
+            <Badge variant="gradient">{subStatus?.tier ?? "CORE"}</Badge>
           </div>
           {hasSubscription && (
             <>
@@ -291,7 +299,7 @@ export default function SettingsPage() {
           )}
           <div className="flex items-center justify-between text-sm">
             <span className="text-text-secondary">Monthly Inspections</span>
-            <span className="font-medium text-text-primary">{subStatus?.maxInspectionsPerMonth ?? 25}/mo</span>
+            <span className="font-medium text-text-primary">{subStatus?.maxInspectionsPerMonth ?? 0}/mo</span>
           </div>
 
           {/* Manage subscription via Stripe Portal (Pro/Enterprise with active sub) */}
@@ -317,22 +325,30 @@ export default function SettingsPage() {
             </>
           )}
 
-          {/* Upgrade options — show for Base tier users */}
-          {canUpgrade && (
+          {/* Upgrade options — show higher tiers */}
+          {upgradePlans.length > 0 && (
             <>
               <div className="border-t border-border-default pt-3">
                 <p className="text-sm font-medium text-text-primary mb-3">Upgrade Your Plan</p>
+                <p className="text-xs text-text-tertiary mb-3">All plans billed annually</p>
                 <div className="grid grid-cols-1 gap-3">
-                  {UPGRADE_PLANS.map((plan) => (
+                  {upgradePlans.map((plan) => (
                     <button
                       key={plan.tier}
                       onClick={() => subscribe.mutate({ tier: plan.tier })}
                       disabled={subscribe.isPending}
-                      className="flex flex-col items-center gap-1.5 rounded-lg border border-border-default p-5 hover:border-brand-500 hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50"
+                      className="flex items-center justify-between rounded-lg border border-border-default p-4 hover:border-brand-500 hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50"
                     >
-                      <span className="text-base font-bold text-text-primary">{plan.label}</span>
-                      <span className="text-sm font-semibold text-text-primary">{plan.inspections}</span>
-                      <span className="text-xs text-text-tertiary">{plan.description}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-bold text-text-primary">{plan.label}</span>
+                        {"popular" in plan && plan.popular && (
+                          <span className="text-[10px] font-semibold bg-brand-500 text-white px-1.5 py-0.5 rounded">POPULAR</span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-semibold text-text-primary">{plan.price}</span>
+                        <span className="text-xs text-text-tertiary ml-1">({plan.inspections})</span>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -359,21 +375,21 @@ export default function SettingsPage() {
                 className="flex items-center justify-center gap-2 w-full text-sm text-text-secondary hover:text-text-primary transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Mail className="h-3.5 w-3.5" />
-                {requestUpgrade.isPending ? "Sending..." : "Contact us for an enterprise plan"}
+                {requestUpgrade.isPending ? "Sending..." : "Contact us about custom plans"}
               </button>
             )}
           </div>
         </div>
       </Card>
 
-      {/* Usage & Bonus Packs */}
+      {/* Usage & Additional Reports */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-text-tertiary" />
-            <CardTitle>Usage &amp; Bonus Packs</CardTitle>
+            <CardTitle>Usage &amp; Additional Reports</CardTitle>
           </div>
-          <CardDescription>Your inspection usage and one-time purchase options</CardDescription>
+          <CardDescription>Your inspection usage and per-report purchase option</CardDescription>
         </CardHeader>
 
         {usage && (
@@ -389,37 +405,34 @@ export default function SettingsPage() {
                   )}
                 </span>
               </div>
-              <div className="h-2 rounded-full bg-surface-overlay overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-brand-gradient transition-all"
-                  style={{ width: `${Math.min(100, (usage.used / (usage.limit + usage.bonusInspections)) * 100)}%` }}
-                />
-              </div>
+              {(usage.limit + usage.bonusInspections) > 0 && (
+                <div className="h-2 rounded-full bg-surface-overlay overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-brand-gradient transition-all"
+                    style={{ width: `${Math.min(100, (usage.used / (usage.limit + usage.bonusInspections)) * 100)}%` }}
+                  />
+                </div>
+              )}
               <p className="text-xs text-text-tertiary">
                 Resets on {(() => { const d = new Date(); d.setMonth(d.getMonth() + 1); d.setDate(1); return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }); })()}
               </p>
             </div>
 
-            {/* Purchase Packs */}
+            {/* Purchase Additional Report */}
             <div className="space-y-2">
-              <p className="text-sm font-medium text-text-primary">Purchase Additional Inspections</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {PACKS.map((pack) => (
-                  <button
-                    key={pack.size}
-                    onClick={() => checkout.mutate({ packSize: pack.size })}
-                    disabled={checkout.isPending}
-                    className="flex flex-col items-center gap-1 rounded-lg border border-border-default p-4 hover:border-brand-500 hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <span className="text-sm font-semibold text-text-primary">{pack.label}</span>
-                    <span className="text-lg font-bold text-text-primary">{pack.price}</span>
-                    <span className="text-xs text-text-tertiary">{pack.perUnit}</span>
-                  </button>
-                ))}
-              </div>
-              {checkout.error && (
+              <p className="text-sm font-medium text-text-primary">Purchase Additional Report</p>
+              <button
+                onClick={() => purchaseReport.mutate()}
+                disabled={purchaseReport.isPending}
+                className="flex flex-col items-center gap-1 w-full rounded-lg border border-border-default p-4 hover:border-brand-500 hover:bg-surface-hover transition-all cursor-pointer disabled:opacity-50"
+              >
+                <span className="text-sm font-semibold text-text-primary">1 Additional Report</span>
+                <span className="text-lg font-bold text-text-primary">{overagePrice}</span>
+                <span className="text-xs text-text-tertiary">Based on your {currentTier} plan</span>
+              </button>
+              {purchaseReport.error && (
                 <div className="rounded-lg border border-border-default px-3 py-2 text-sm text-red-600">
-                  {checkout.error.message}
+                  {purchaseReport.error.message}
                 </div>
               )}
             </div>

@@ -1,14 +1,12 @@
 /**
- * One-time Stripe setup script.
- * Creates products, prices, and webhook endpoint for VeriBuy.
+ * Stripe setup script — creates all VeriBuy products, prices, and webhook.
  *
  * Usage:
  *   STRIPE_SECRET_KEY=sk_test_... WEBHOOK_URL=https://app.getveribuy.com npx tsx scripts/setup-stripe.ts
  *
- * After running, copy the printed env vars into Vercel:
- *   vercel env add STRIPE_SECRET_KEY production
- *   vercel env add STRIPE_WEBHOOK_SECRET production
- *   ... etc
+ * After running, copy the printed env vars into your .env / Vercel.
+ *
+ * Idempotent: checks for existing products by metadata before creating.
  */
 
 import Stripe from "stripe";
@@ -24,66 +22,98 @@ if (!STRIPE_SECRET_KEY) {
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, { typescript: true });
 
-async function main() {
-  console.log("Setting up Stripe for VeriBuy...\n");
+/* ── Pricing config ────────────────────────────────────────────────── */
 
-  // ── 1. Subscription Products ──────────────────────────────────────
+const SUBSCRIPTION_TIERS = [
+  { tier: "CORE", label: "Core", annualCents: 358800, inspections: 10 },
+  { tier: "BASE", label: "Base", annualCents: 718800, inspections: 50 },
+  { tier: "PRO", label: "Pro", annualCents: 1558800, inspections: 125 },
+  { tier: "ENTERPRISE", label: "Enterprise", annualCents: 4798800, inspections: 400 },
+];
+
+const OVERAGE_TIERS = [
+  { tier: "CORE", label: "Core", priceCents: 1999 },
+  { tier: "BASE", label: "Base", priceCents: 1499 },
+  { tier: "PRO", label: "Pro", priceCents: 1199 },
+  { tier: "ENTERPRISE", label: "Enterprise", priceCents: 999 },
+];
+
+/* ── Helpers ────────────────────────────────────────────────────────── */
+
+async function findExistingProduct(metaKey: string, metaValue: string): Promise<Stripe.Product | null> {
+  const products = await stripe.products.list({ limit: 100 });
+  return products.data.find((p) => p.metadata[metaKey] === metaValue && p.active) ?? null;
+}
+
+async function findExistingPrice(productId: string): Promise<Stripe.Price | null> {
+  const prices = await stripe.prices.list({ product: productId, active: true, limit: 10 });
+  return prices.data[0] ?? null;
+}
+
+/* ── Main ───────────────────────────────────────────────────────────── */
+
+async function main() {
+  console.log("Setting up Stripe for VeriBuy (4-tier annual + overage)...\n");
+
+  const envVars: Record<string, string> = {};
+
+  // ── 1. Subscription Products (annual billing) ─────────────────────
 
   console.log("Creating subscription products...");
 
-  const baseProd = await stripe.products.create({
-    name: "VeriBuy Base",
-    description: "Base plan — 25 inspections per month",
-    metadata: { tier: "BASE" },
-  });
-  const basePrice = await stripe.prices.create({
-    product: baseProd.id,
-    unit_amount: 9900, // $99.00/mo — adjust as needed
-    currency: "usd",
-    recurring: { interval: "month" },
-    metadata: { tier: "BASE" },
-  });
-  console.log(`  ✓ Base: ${baseProd.id} → price ${basePrice.id} ($${(basePrice.unit_amount! / 100).toFixed(2)}/mo)`);
+  for (const plan of SUBSCRIPTION_TIERS) {
+    let product = await findExistingProduct("veribuy_tier", plan.tier);
+    if (!product) {
+      product = await stripe.products.create({
+        name: `VeriBuy ${plan.label}`,
+        description: `${plan.label} plan — ${plan.inspections} inspections per month, billed annually`,
+        metadata: { veribuy_tier: plan.tier },
+      });
+    }
 
-  const proProd = await stripe.products.create({
-    name: "VeriBuy Pro",
-    description: "Pro plan — 100 inspections per month",
-    metadata: { tier: "PRO" },
-  });
-  const proPrice = await stripe.prices.create({
-    product: proProd.id,
-    unit_amount: 29900, // $299.00/mo — adjust as needed
-    currency: "usd",
-    recurring: { interval: "month" },
-    metadata: { tier: "PRO" },
-  });
-  console.log(`  ✓ Pro:  ${proProd.id} → price ${proPrice.id} ($${(proPrice.unit_amount! / 100).toFixed(2)}/mo)`);
+    let price = await findExistingPrice(product.id);
+    if (!price) {
+      price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: plan.annualCents,
+        currency: "usd",
+        recurring: { interval: "year" },
+        metadata: { veribuy_tier: plan.tier },
+      });
+    }
 
-  // ── 2. One-Time Inspection Pack Products ──────────────────────────
+    const envKey = `STRIPE_PRICE_${plan.tier}_ANNUAL`;
+    envVars[envKey] = price.id;
+    console.log(`  + ${plan.label}: ${product.id} -> price ${price.id} ($${(plan.annualCents / 100).toFixed(2)}/yr)`);
+  }
 
-  console.log("\nCreating inspection pack products...");
+  // ── 2. Overage Products (per-report, one-time) ────────────────────
 
-  const packs = [
-    { name: "1 Inspection Pack", size: 1, amount: 3999 },
-    { name: "3 Inspection Pack", size: 3, amount: 9999 },
-    { name: "10 Inspection Pack", size: 10, amount: 24999 },
-  ];
+  console.log("\nCreating overage products...");
 
-  const packPrices: Record<number, string> = {};
-  for (const pack of packs) {
-    const prod = await stripe.products.create({
-      name: `VeriBuy ${pack.name}`,
-      description: `${pack.size} additional inspection${pack.size > 1 ? "s" : ""}`,
-      metadata: { packSize: String(pack.size) },
-    });
-    const price = await stripe.prices.create({
-      product: prod.id,
-      unit_amount: pack.amount,
-      currency: "usd",
-      metadata: { packSize: String(pack.size) },
-    });
-    packPrices[pack.size] = price.id;
-    console.log(`  ✓ ${pack.name}: ${prod.id} → price ${price.id} ($${(pack.amount / 100).toFixed(2)})`);
+  for (const overage of OVERAGE_TIERS) {
+    let product = await findExistingProduct("veribuy_overage", overage.tier);
+    if (!product) {
+      product = await stripe.products.create({
+        name: `VeriBuy Additional Report (${overage.label})`,
+        description: `1 additional inspection report for ${overage.label} tier`,
+        metadata: { veribuy_overage: overage.tier },
+      });
+    }
+
+    let price = await findExistingPrice(product.id);
+    if (!price) {
+      price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: overage.priceCents,
+        currency: "usd",
+        metadata: { veribuy_overage: overage.tier },
+      });
+    }
+
+    const envKey = `STRIPE_PRICE_OVERAGE_${overage.tier}`;
+    envVars[envKey] = price.id;
+    console.log(`  + ${overage.label} overage: ${product.id} -> price ${price.id} ($${(overage.priceCents / 100).toFixed(2)})`);
   }
 
   // ── 3. Webhook Endpoint ───────────────────────────────────────────
@@ -101,13 +131,24 @@ async function main() {
     ],
     description: "VeriBuy production webhook",
   });
-  console.log(`  ✓ Webhook: ${webhook.id} → ${webhook.url}`);
+  envVars["STRIPE_WEBHOOK_SECRET"] = webhook.secret!;
+  console.log(`  + Webhook: ${webhook.id} -> ${webhook.url}`);
 
   // ── 4. Customer Portal Configuration ──────────────────────────────
 
   console.log("\nConfiguring Customer Portal...");
 
   try {
+    // Collect all subscription products/prices for portal plan switching
+    const portalProducts: Stripe.BillingPortal.ConfigurationCreateParams.Features.SubscriptionUpdate.Product[] = [];
+    for (const plan of SUBSCRIPTION_TIERS) {
+      const product = await findExistingProduct("veribuy_tier", plan.tier);
+      const price = product ? await findExistingPrice(product.id) : null;
+      if (product && price) {
+        portalProducts.push({ product: product.id, prices: [price.id] });
+      }
+    }
+
     await stripe.billingPortal.configurations.create({
       business_profile: {
         headline: "VeriBuy — Manage Your Subscription",
@@ -122,33 +163,25 @@ async function main() {
         subscription_update: {
           enabled: true,
           default_allowed_updates: ["price"],
-          products: [
-            { product: baseProd.id, prices: [basePrice.id] },
-            { product: proProd.id, prices: [proPrice.id] },
-          ],
+          products: portalProducts,
         },
       },
     });
-    console.log("  ✓ Customer Portal configured (plan switching, cancellation, invoices)");
-  } catch (err: any) {
-    console.log(`  ⚠ Portal config skipped: ${err.message}`);
+    console.log("  + Customer Portal configured (plan switching, cancellation, invoices)");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.log(`  ! Portal config skipped: ${message}`);
     console.log("    You may need to configure this manually in the Stripe Dashboard.");
   }
 
   // ── 5. Print env vars ─────────────────────────────────────────────
 
   console.log("\n" + "=".repeat(60));
-  console.log("SETUP COMPLETE! Add these env vars to Vercel:\n");
-  console.log(`STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}`);
-  console.log(`STRIPE_WEBHOOK_SECRET=${webhook.secret}`);
-  console.log(`STRIPE_PRICE_BASE_MONTHLY=${basePrice.id}`);
-  console.log(`STRIPE_PRICE_PRO_MONTHLY=${proPrice.id}`);
-  console.log(`STRIPE_PRICE_1_INSPECTION=${packPrices[1]}`);
-  console.log(`STRIPE_PRICE_3_INSPECTIONS=${packPrices[3]}`);
-  console.log(`STRIPE_PRICE_10_INSPECTIONS=${packPrices[10]}`);
+  console.log("SETUP COMPLETE! Add these env vars:\n");
+  for (const [key, value] of Object.entries(envVars)) {
+    console.log(`${key}=${value}`);
+  }
   console.log("\n" + "=".repeat(60));
-  console.log("\nTo add each one to Vercel, run:");
-  console.log('  echo "VALUE" | npx vercel env add VAR_NAME production\n');
 }
 
 main().catch((err) => {
