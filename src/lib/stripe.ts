@@ -23,6 +23,7 @@ export const SUBSCRIPTION_PLANS = [
     annualPriceCents: 3_588_00,
     inspectionsPerMonth: 10,
     priceId: process.env.STRIPE_PRICE_CORE_ANNUAL ?? "",
+    productId: process.env.STRIPE_PRODUCT_CORE ?? "",
   },
   {
     tier: "BASE" as const,
@@ -31,6 +32,7 @@ export const SUBSCRIPTION_PLANS = [
     annualPriceCents: 7_188_00,
     inspectionsPerMonth: 50,
     priceId: process.env.STRIPE_PRICE_BASE_ANNUAL ?? "",
+    productId: process.env.STRIPE_PRODUCT_BASE ?? "",
   },
   {
     tier: "PRO" as const,
@@ -39,6 +41,7 @@ export const SUBSCRIPTION_PLANS = [
     annualPriceCents: 15_588_00,
     inspectionsPerMonth: 125,
     priceId: process.env.STRIPE_PRICE_PRO_ANNUAL ?? "",
+    productId: process.env.STRIPE_PRODUCT_PRO ?? "",
   },
   {
     tier: "ENTERPRISE" as const,
@@ -47,10 +50,20 @@ export const SUBSCRIPTION_PLANS = [
     annualPriceCents: 47_988_00,
     inspectionsPerMonth: 400,
     priceId: process.env.STRIPE_PRICE_ENTERPRISE_ANNUAL ?? "",
+    productId: process.env.STRIPE_PRODUCT_ENTERPRISE ?? "",
   },
 ] as const;
 
 export type SubscriptionTier = (typeof SUBSCRIPTION_PLANS)[number]["tier"];
+
+/** Client-safe pricing info (no secrets) */
+export const PLAN_PRICING = SUBSCRIPTION_PLANS.map((p) => ({
+  tier: p.tier,
+  label: p.label,
+  annualPriceCents: p.annualPriceCents,
+  monthlyEquiv: p.monthlyEquiv,
+  inspectionsPerMonth: p.inspectionsPerMonth,
+}));
 
 /* ------------------------------------------------------------------ */
 /*  Overage — per-report pricing by tier                               */
@@ -97,4 +110,30 @@ export function getPlanByPriceId(priceId: string) {
 
 export function getOveragePriceForTier(tier: string) {
   return OVERAGE_PRICES[tier as SubscriptionTier] ?? OVERAGE_PRICES.CORE;
+}
+
+/**
+ * Create a custom one-off Stripe price for a negotiated deal.
+ * Attaches it to the existing product for the given tier.
+ */
+export async function createCustomPrice(
+  tier: SubscriptionTier,
+  amountCents: number,
+  orgId: string,
+): Promise<string> {
+  const plan = getPlanByTier(tier);
+  if (!plan?.productId) {
+    throw new Error(`No Stripe product configured for tier ${tier}`);
+  }
+
+  const stripe = getStripe();
+  const price = await stripe.prices.create({
+    product: plan.productId,
+    unit_amount: amountCents,
+    currency: "usd",
+    recurring: { interval: "year" },
+    metadata: { orgId, tier, custom: "true" },
+  });
+
+  return price.id;
 }

@@ -3,6 +3,7 @@ import { router, superAdminProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@/generated/prisma/client";
+import { getStripe, getPlanByTier, createCustomPrice } from "@/lib/stripe";
 
 export const adminRouter = router({
   // ─── Platform Stats ─────────────────────────────────────────
@@ -173,6 +174,16 @@ export const adminRouter = router({
       });
       if (!org) throw new Error("Organization not found");
 
+      // Fetch current Stripe price amount for display
+      let stripePriceAmountCents: number | null = null;
+      if (org.stripePriceId) {
+        try {
+          const stripe = getStripe();
+          const price = await stripe.prices.retrieve(org.stripePriceId);
+          stripePriceAmountCents = price.unit_amount;
+        } catch { /* price may have been deleted */ }
+      }
+
       const inspectionsThisMonth = await ctx.db.inspection.count({
         where: { orgId: input.orgId, createdAt: { gte: startOfMonth } },
       });
@@ -193,7 +204,7 @@ export const adminRouter = router({
         },
       });
 
-      return { ...org, inspectionsThisMonth, totalInspections, recentInspections };
+      return { ...org, inspectionsThisMonth, totalInspections, recentInspections, stripePriceAmountCents };
     }),
 
   // ─── Users (cross-org) ─────────────────────────────────────
@@ -375,5 +386,253 @@ export const adminRouter = router({
         nextCursor = next.id;
       }
       return { logs, nextCursor };
+    }),
+
+  // ─── Stripe Subscription Management ────────────────────────
+
+  createSubscription: superAdminProcedure
+    .input(
+      z.object({
+        orgId: z.string(),
+        tier: z.enum(["CORE", "BASE", "PRO", "ENTERPRISE"]),
+        customAnnualAmountCents: z.number().int().min(100).optional(),
+        collectionMethod: z.enum(["charge_automatically", "send_invoice"]).default("charge_automatically"),
+        daysUntilDue: z.number().int().min(1).max(90).default(30),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const org = await ctx.db.organization.findUnique({
+        where: { id: input.orgId },
+        select: {
+          stripeCustomerId: true,
+          stripeSubscriptionId: true,
+          name: true,
+          users: {
+            where: { role: "OWNER" },
+            select: { email: true },
+            take: 1,
+          },
+        },
+      });
+      if (!org) throw new TRPCError({ code: "NOT_FOUND" });
+      if (org.stripeSubscriptionId) {
+        throw new TRPCError({ code: "CONFLICT", message: "Organization already has an active subscription. Use update instead." });
+      }
+
+      const plan = getPlanByTier(input.tier);
+      if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid tier" });
+
+      const stripe = getStripe();
+
+      // Ensure Stripe customer exists
+      let customerId = org.stripeCustomerId;
+      if (!customerId) {
+        const ownerEmail = org.users[0]?.email;
+        const customer = await stripe.customers.create({
+          email: ownerEmail ?? undefined,
+          name: org.name,
+          metadata: { orgId: input.orgId },
+        });
+        customerId = customer.id;
+        await ctx.db.organization.update({
+          where: { id: input.orgId },
+          data: { stripeCustomerId: customerId },
+        });
+      }
+
+      // Determine price — custom or standard
+      const isCustomPrice = input.customAnnualAmountCents && input.customAnnualAmountCents !== plan.annualPriceCents;
+      const priceId = isCustomPrice
+        ? await createCustomPrice(input.tier, input.customAnnualAmountCents!, input.orgId)
+        : plan.priceId;
+
+      if (!priceId) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe price not configured for this tier" });
+      }
+
+      // Create subscription directly (no checkout)
+      const sub = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: priceId }],
+        collection_method: input.collectionMethod,
+        ...(input.collectionMethod === "send_invoice" ? { days_until_due: input.daysUntilDue } : {}),
+        metadata: { orgId: input.orgId, tier: input.tier, createdByAdmin: "true" },
+      });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemEnd = (sub as any).items?.data?.[0]?.current_period_end as number | undefined;
+
+      // Update org with subscription details
+      await ctx.db.organization.update({
+        where: { id: input.orgId },
+        data: {
+          stripeSubscriptionId: sub.id,
+          stripePriceId: priceId,
+          subscription: input.tier,
+          subscriptionStatus: sub.status,
+          maxInspectionsPerMonth: plan.inspectionsPerMonth,
+          currentPeriodEnd: itemEnd ? new Date(itemEnd * 1000) : undefined,
+        },
+      });
+
+      // Audit log
+      await ctx.db.auditLog.create({
+        data: {
+          action: "ADMIN_SUBSCRIPTION_CREATED",
+          entityType: "Organization",
+          entityId: input.orgId,
+          metadata: {
+            tier: input.tier,
+            amountCents: isCustomPrice ? input.customAnnualAmountCents : plan.annualPriceCents,
+            custom: !!isCustomPrice,
+            collectionMethod: input.collectionMethod,
+          } as unknown as Prisma.InputJsonValue,
+          userId: ctx.userId,
+        },
+      });
+
+      return { subscriptionId: sub.id, status: sub.status };
+    }),
+
+  updateSubscription: superAdminProcedure
+    .input(
+      z.object({
+        orgId: z.string(),
+        tier: z.enum(["CORE", "BASE", "PRO", "ENTERPRISE"]),
+        customAnnualAmountCents: z.number().int().min(100).optional(),
+        maxInspectionsPerMonth: z.number().int().min(0).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const org = await ctx.db.organization.findUnique({
+        where: { id: input.orgId },
+        select: {
+          stripeSubscriptionId: true,
+          stripeCustomerId: true,
+          subscription: true,
+        },
+      });
+      if (!org) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!org.stripeSubscriptionId) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No active subscription. Create one first." });
+      }
+
+      const plan = getPlanByTier(input.tier);
+      if (!plan) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid tier" });
+
+      const stripe = getStripe();
+
+      // Cancel the existing subscription immediately
+      await stripe.subscriptions.cancel(org.stripeSubscriptionId, {
+        cancellation_details: { comment: "Admin plan change — replaced with new subscription" },
+      });
+
+      // Determine new price
+      const isCustomPrice = input.customAnnualAmountCents && input.customAnnualAmountCents !== plan.annualPriceCents;
+      const priceId = isCustomPrice
+        ? await createCustomPrice(input.tier, input.customAnnualAmountCents!, input.orgId)
+        : plan.priceId;
+
+      if (!priceId) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe price not configured" });
+      }
+
+      // Create new subscription
+      const sub = await stripe.subscriptions.create({
+        customer: org.stripeCustomerId!,
+        items: [{ price: priceId }],
+        metadata: { orgId: input.orgId, tier: input.tier, createdByAdmin: "true" },
+      });
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const itemEnd = (sub as any).items?.data?.[0]?.current_period_end as number | undefined;
+
+      // Update org — do this immediately to beat the cancellation webhook
+      await ctx.db.organization.update({
+        where: { id: input.orgId },
+        data: {
+          stripeSubscriptionId: sub.id,
+          stripePriceId: priceId,
+          subscription: input.tier,
+          subscriptionStatus: sub.status,
+          maxInspectionsPerMonth: input.maxInspectionsPerMonth ?? plan.inspectionsPerMonth,
+          currentPeriodEnd: itemEnd ? new Date(itemEnd * 1000) : undefined,
+        },
+      });
+
+      // Audit log
+      await ctx.db.auditLog.create({
+        data: {
+          action: "ADMIN_SUBSCRIPTION_UPDATED",
+          entityType: "Organization",
+          entityId: input.orgId,
+          metadata: {
+            previousTier: org.subscription,
+            newTier: input.tier,
+            amountCents: isCustomPrice ? input.customAnnualAmountCents : plan.annualPriceCents,
+            custom: !!isCustomPrice,
+          } as unknown as Prisma.InputJsonValue,
+          userId: ctx.userId,
+        },
+      });
+
+      return { subscriptionId: sub.id, status: sub.status };
+    }),
+
+  cancelSubscription: superAdminProcedure
+    .input(
+      z.object({
+        orgId: z.string(),
+        cancelAtPeriodEnd: z.boolean().default(true),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const org = await ctx.db.organization.findUnique({
+        where: { id: input.orgId },
+        select: { stripeSubscriptionId: true },
+      });
+      if (!org?.stripeSubscriptionId) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No active subscription to cancel." });
+      }
+
+      const stripe = getStripe();
+
+      if (input.cancelAtPeriodEnd) {
+        await stripe.subscriptions.update(org.stripeSubscriptionId, {
+          cancel_at_period_end: true,
+        });
+        await ctx.db.organization.update({
+          where: { id: input.orgId },
+          data: { subscriptionStatus: "cancelling" },
+        });
+      } else {
+        await stripe.subscriptions.cancel(org.stripeSubscriptionId);
+        await ctx.db.organization.update({
+          where: { id: input.orgId },
+          data: {
+            subscription: "CORE",
+            subscriptionStatus: "cancelled",
+            maxInspectionsPerMonth: 0,
+            stripeSubscriptionId: null,
+            stripePriceId: null,
+            currentPeriodEnd: null,
+          },
+        });
+      }
+
+      // Audit log
+      await ctx.db.auditLog.create({
+        data: {
+          action: "ADMIN_SUBSCRIPTION_CANCELLED",
+          entityType: "Organization",
+          entityId: input.orgId,
+          metadata: {
+            cancelAtPeriodEnd: input.cancelAtPeriodEnd,
+          } as unknown as Prisma.InputJsonValue,
+          userId: ctx.userId,
+        },
+      });
+
+      return { success: true };
     }),
 });

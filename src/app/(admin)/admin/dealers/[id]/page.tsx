@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Building2, Users, Shield, Mail, ChevronRight, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, Building2, Users, Shield, Mail, ChevronRight, ClipboardCheck, CreditCard, AlertTriangle } from "lucide-react";
 
 const roleLabels: Record<string, string> = {
   OWNER: "Owner",
@@ -16,6 +16,17 @@ const roleLabels: Record<string, string> = {
   INSPECTOR: "Inspector",
   VIEWER: "Viewer",
 };
+
+const PLAN_PRICING = [
+  { tier: "CORE", label: "Core", annualPriceCents: 358800, inspectionsPerMonth: 10 },
+  { tier: "BASE", label: "Base", annualPriceCents: 718800, inspectionsPerMonth: 50 },
+  { tier: "PRO", label: "Pro", annualPriceCents: 1558800, inspectionsPerMonth: 125 },
+  { tier: "ENTERPRISE", label: "Enterprise", annualPriceCents: 4798800, inspectionsPerMonth: 400 },
+] as const;
+
+function getPlanDefaults(tier: string) {
+  return PLAN_PRICING.find((p) => p.tier === tier) ?? PLAN_PRICING[0];
+}
 
 export default function DealerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,22 +36,84 @@ export default function DealerDetailPage() {
   const [editForm, setEditForm] = useState({
     subscription: "" as string,
     maxInspectionsPerMonth: 0,
+    customAnnualPriceDollars: "",
   });
 
+  // Billing mutations
+  const [showCreateSub, setShowCreateSub] = useState(false);
+  const [createSubForm, setCreateSubForm] = useState({
+    tier: "BASE" as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
+    customAnnualPriceDollars: "7188",
+    collectionMethod: "send_invoice" as "charge_automatically" | "send_invoice",
+    daysUntilDue: 30,
+  });
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
   const update = trpc.admin.updateOrg.useMutation({
-    onSuccess: () => {
-      refetch();
-      setEditMode(false);
-    },
+    onSuccess: () => { refetch(); setEditMode(false); },
+  });
+  const updateSub = trpc.admin.updateSubscription.useMutation({
+    onSuccess: () => { refetch(); setEditMode(false); },
+  });
+  const createSub = trpc.admin.createSubscription.useMutation({
+    onSuccess: () => { refetch(); setShowCreateSub(false); },
+  });
+  const cancelSub = trpc.admin.cancelSubscription.useMutation({
+    onSuccess: () => { refetch(); setShowCancelConfirm(false); },
   });
 
   function startEdit() {
     if (!org) return;
+    const currentPrice = org.stripePriceAmountCents
+      ? (org.stripePriceAmountCents / 100).toString()
+      : (getPlanDefaults(org.subscription).annualPriceCents / 100).toString();
     setEditForm({
       subscription: org.subscription,
       maxInspectionsPerMonth: org.maxInspectionsPerMonth,
+      customAnnualPriceDollars: currentPrice,
     });
     setEditMode(true);
+  }
+
+  function handleEditTierChange(tier: string) {
+    const defaults = getPlanDefaults(tier);
+    setEditForm({
+      ...editForm,
+      subscription: tier,
+      maxInspectionsPerMonth: defaults.inspectionsPerMonth,
+      customAnnualPriceDollars: (defaults.annualPriceCents / 100).toString(),
+    });
+  }
+
+  function handleCreateSubTierChange(tier: typeof createSubForm.tier) {
+    const defaults = getPlanDefaults(tier);
+    setCreateSubForm({
+      ...createSubForm,
+      tier,
+      customAnnualPriceDollars: (defaults.annualPriceCents / 100).toString(),
+    });
+  }
+
+  function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const customCents = Math.round(parseFloat(editForm.customAnnualPriceDollars) * 100);
+
+    if (org?.stripeSubscriptionId) {
+      // Update subscription (cancel + recreate)
+      updateSub.mutate({
+        orgId: id,
+        tier: editForm.subscription as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
+        customAnnualAmountCents: customCents,
+        maxInspectionsPerMonth: editForm.maxInspectionsPerMonth,
+      });
+    } else {
+      // DB-only update
+      update.mutate({
+        orgId: id,
+        subscription: editForm.subscription as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
+        maxInspectionsPerMonth: editForm.maxInspectionsPerMonth,
+      });
+    }
   }
 
   if (isLoading) {
@@ -54,6 +127,10 @@ export default function DealerDetailPage() {
   if (!org) {
     return <p className="text-text-secondary text-center py-16">Organization not found</p>;
   }
+
+  const hasSubscription = !!org.stripeSubscriptionId;
+  const editMonthlyEquiv = parseFloat(editForm.customAnnualPriceDollars) / 12;
+  const createSubMonthlyEquiv = parseFloat(createSubForm.customAnnualPriceDollars) / 12;
 
   return (
     <div className="space-y-6">
@@ -75,7 +152,7 @@ export default function DealerDetailPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card>
           <p className="text-sm text-text-secondary">Plan</p>
           <p className="text-xl font-bold text-text-primary mt-1">{org.subscription}</p>
@@ -94,31 +171,234 @@ export default function DealerDetailPage() {
           <p className="text-sm text-text-secondary">Members</p>
           <p className="text-xl font-bold text-text-primary mt-1">{org.users.length}</p>
         </Card>
+        <Card>
+          <p className="text-sm text-text-secondary">Billing</p>
+          <p className="text-xl font-bold text-text-primary mt-1">
+            {hasSubscription ? (
+              <Badge variant={org.subscriptionStatus === "active" ? "success" : org.subscriptionStatus === "past_due" ? "warning" : "danger"}>
+                {org.subscriptionStatus?.replace(/_/g, " ") ?? "—"}
+              </Badge>
+            ) : (
+              <Badge variant="default">No sub</Badge>
+            )}
+          </p>
+        </Card>
       </div>
+
+      {/* Billing Details */}
+      {hasSubscription && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-text-tertiary" />
+              <CardTitle>Billing</CardTitle>
+            </div>
+          </CardHeader>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Annual Price</span>
+              <span className="font-medium text-text-primary">
+                {org.stripePriceAmountCents
+                  ? `$${(org.stripePriceAmountCents / 100).toLocaleString("en-US")}/yr`
+                  : "Standard pricing"}
+              </span>
+            </div>
+            {org.currentPeriodEnd && (
+              <div className="flex justify-between text-sm">
+                <span className="text-text-secondary">Renews</span>
+                <span className="text-text-primary">
+                  {new Date(org.currentPeriodEnd).toLocaleDateString("en-US", {
+                    month: "long", day: "numeric", year: "numeric",
+                  })}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-text-secondary">Stripe Customer</span>
+              <span className="text-xs text-text-tertiary font-mono">{org.stripeCustomerId}</span>
+            </div>
+            <div className="pt-2">
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => setShowCancelConfirm(true)}
+                disabled={cancelSub.isPending}
+              >
+                Cancel Subscription
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Create Subscription — for orgs without one */}
+      {!hasSubscription && !editMode && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-text-tertiary" />
+              <CardTitle>Billing</CardTitle>
+            </div>
+            <CardDescription>No Stripe subscription attached</CardDescription>
+          </CardHeader>
+          {!showCreateSub ? (
+            <Button size="sm" onClick={() => {
+              const defaults = getPlanDefaults(org.subscription);
+              setCreateSubForm({
+                tier: org.subscription as typeof createSubForm.tier,
+                customAnnualPriceDollars: (defaults.annualPriceCents / 100).toString(),
+                collectionMethod: "send_invoice",
+                daysUntilDue: 30,
+              });
+              setShowCreateSub(true);
+            }}>
+              Create Subscription
+            </Button>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const customCents = Math.round(parseFloat(createSubForm.customAnnualPriceDollars) * 100);
+                createSub.mutate({
+                  orgId: id,
+                  tier: createSubForm.tier,
+                  customAnnualAmountCents: customCents,
+                  collectionMethod: createSubForm.collectionMethod,
+                  daysUntilDue: createSubForm.daysUntilDue,
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-text-secondary">Plan</label>
+                  <select
+                    value={createSubForm.tier}
+                    onChange={(e) => handleCreateSubTierChange(e.target.value as typeof createSubForm.tier)}
+                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay transition-colors"
+                  >
+                    <option value="CORE">Core (10/mo)</option>
+                    <option value="BASE">Base (50/mo)</option>
+                    <option value="PRO">Pro (125/mo)</option>
+                    <option value="ENTERPRISE">Enterprise (400/mo)</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-text-secondary">Annual Price</label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-text-secondary">$</span>
+                    <input
+                      type="number"
+                      value={createSubForm.customAnnualPriceDollars}
+                      onChange={(e) => setCreateSubForm({ ...createSubForm, customAnnualPriceDollars: e.target.value })}
+                      className="w-full text-sm bg-white border border-border-default rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                      min={1}
+                    />
+                  </div>
+                  <p className="text-xs text-text-tertiary">
+                    ${createSubMonthlyEquiv.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo equivalent
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-sm font-medium text-text-secondary">Collection Method</label>
+                  <select
+                    value={createSubForm.collectionMethod}
+                    onChange={(e) => setCreateSubForm({ ...createSubForm, collectionMethod: e.target.value as typeof createSubForm.collectionMethod })}
+                    className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay transition-colors"
+                  >
+                    <option value="send_invoice">Send Invoice</option>
+                    <option value="charge_automatically">Charge Automatically</option>
+                  </select>
+                </div>
+                {createSubForm.collectionMethod === "send_invoice" && (
+                  <Input
+                    id="days-due"
+                    label="Days Until Due"
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={createSubForm.daysUntilDue}
+                    onChange={(e) => setCreateSubForm({ ...createSubForm, daysUntilDue: parseInt(e.target.value) || 30 })}
+                  />
+                )}
+              </div>
+              {createSub.error && (
+                <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
+                  {createSub.error.message}
+                </div>
+              )}
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setShowCreateSub(false)}>Cancel</Button>
+                <Button type="submit" size="sm" loading={createSub.isPending}>Create Subscription</Button>
+              </div>
+            </form>
+          )}
+        </Card>
+      )}
+
+      {/* Cancel Confirmation Dialog */}
+      {showCancelConfirm && (
+        <Card className="border-red-300">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <CardTitle>Cancel Subscription</CardTitle>
+            </div>
+          </CardHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-text-secondary">
+              This will cancel {org.name}&apos;s subscription. Choose when it takes effect:
+            </p>
+            {cancelSub.error && (
+              <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
+                {cancelSub.error.message}
+              </div>
+            )}
+            <div className="flex gap-3">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => cancelSub.mutate({ orgId: id, cancelAtPeriodEnd: true })}
+                loading={cancelSub.isPending}
+              >
+                Cancel at Period End
+              </Button>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => cancelSub.mutate({ orgId: id, cancelAtPeriodEnd: false })}
+                loading={cancelSub.isPending}
+              >
+                Cancel Immediately
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowCancelConfirm(false)}>
+                Nevermind
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Edit Plan */}
       {editMode && (
         <Card>
           <CardHeader>
             <CardTitle>Edit Plan</CardTitle>
+            {hasSubscription && (
+              <CardDescription>
+                Changing the plan will cancel the current Stripe subscription and create a new one
+              </CardDescription>
+            )}
           </CardHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              update.mutate({
-                orgId: id,
-                subscription: editForm.subscription as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
-                maxInspectionsPerMonth: editForm.maxInspectionsPerMonth,
-              });
-            }}
-            className="space-y-4"
-          >
+          <form onSubmit={handleEditSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium text-text-secondary">Plan</label>
                 <select
                   value={editForm.subscription}
-                  onChange={(e) => setEditForm({ ...editForm, subscription: e.target.value })}
+                  onChange={(e) => handleEditTierChange(e.target.value)}
                   className="block w-full rounded-lg border border-border-default bg-surface-sunken px-3.5 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 focus:ring-offset-surface-overlay transition-colors"
                 >
                   <option value="CORE">Core</option>
@@ -131,21 +411,41 @@ export default function DealerDetailPage() {
                 id="edit-max"
                 label="Inspections / Month"
                 type="number"
-                min={1}
+                min={0}
                 value={editForm.maxInspectionsPerMonth}
-                onChange={(e) => setEditForm({ ...editForm, maxInspectionsPerMonth: parseInt(e.target.value) || 1 })}
+                onChange={(e) => setEditForm({ ...editForm, maxInspectionsPerMonth: parseInt(e.target.value) || 0 })}
               />
             </div>
-            {update.error && (
+
+            {hasSubscription && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-text-secondary">Annual Price</label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-text-secondary">$</span>
+                  <input
+                    type="number"
+                    value={editForm.customAnnualPriceDollars}
+                    onChange={(e) => setEditForm({ ...editForm, customAnnualPriceDollars: e.target.value })}
+                    className="w-40 text-sm bg-white border border-border-default rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                    min={1}
+                  />
+                  <span className="text-xs text-text-tertiary ml-2">
+                    ${editMonthlyEquiv.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {(update.error || updateSub.error) && (
               <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
-                {update.error.message}
+                {update.error?.message || updateSub.error?.message}
               </div>
             )}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="secondary" size="sm" onClick={() => setEditMode(false)}>
                 Cancel
               </Button>
-              <Button type="submit" size="sm" loading={update.isPending}>
+              <Button type="submit" size="sm" loading={update.isPending || updateSub.isPending}>
                 Save Changes
               </Button>
             </div>
@@ -205,7 +505,6 @@ export default function DealerDetailPage() {
         ) : (
           <div className="divide-y divide-border-default -mx-5">
             {org.recentInspections.map((insp) => {
-              const ma = insp.marketAnalysis as { recommendation?: string; adjustedPrice?: number } | null;
               const vehicleName = insp.vehicle
                 ? `${insp.vehicle.year} ${insp.vehicle.make} ${insp.vehicle.model}`
                 : "Vehicle pending";

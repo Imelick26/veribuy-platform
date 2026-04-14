@@ -143,7 +143,7 @@ export async function POST(request: Request) {
         const subscription = event.data.object;
         const org = await db.organization.findUnique({
           where: { stripeSubscriptionId: subscription.id },
-          select: { id: true },
+          select: { id: true, subscription: true, maxInspectionsPerMonth: true },
         });
 
         if (org) {
@@ -151,17 +151,21 @@ export async function POST(request: Request) {
           const plan = priceId ? getPlanByPriceId(priceId) : null;
           const itemEnd = subscription.items?.data?.[0]?.current_period_end;
 
+          // For custom prices, getPlanByPriceId returns null — fall back to metadata tier
+          const tier = plan?.tier ?? subscription.metadata?.tier;
+
           await db.organization.update({
             where: { id: org.id },
             data: {
               stripePriceId: priceId ?? undefined,
-              subscription: plan ? (plan.tier as "CORE" | "BASE" | "PRO" | "ENTERPRISE") : undefined,
+              // Preserve current tier/limits if we can't determine from price (custom pricing)
+              subscription: tier ? (tier as "CORE" | "BASE" | "PRO" | "ENTERPRISE") : undefined,
               subscriptionStatus: subscription.status,
               maxInspectionsPerMonth: plan?.inspectionsPerMonth ?? undefined,
               currentPeriodEnd: itemEnd ? new Date(itemEnd * 1000) : undefined,
             },
           });
-          console.log(`Subscription updated for org ${org.id}: ${plan?.tier ?? "unknown"} (${subscription.status})`);
+          console.log(`Subscription updated for org ${org.id}: ${tier ?? "custom"} (${subscription.status})`);
         }
         break;
       }
@@ -171,7 +175,10 @@ export async function POST(request: Request) {
       /* ──────────────────────────────────────────────────────────── */
       case "customer.subscription.deleted": {
         const subscription = event.data.object;
-        const org = await db.organization.findUnique({
+        // Use findFirst instead of findUnique — if admin already replaced the subscription,
+        // the org's stripeSubscriptionId will have been updated to the new sub ID,
+        // so this lookup correctly returns null and we skip the downgrade.
+        const org = await db.organization.findFirst({
           where: { stripeSubscriptionId: subscription.id },
           select: { id: true },
         });
