@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@/generated/prisma/client";
 import { getStripe, getPlanByTier, createCustomPrice } from "@/lib/stripe";
+import { supabaseAdmin, MEDIA_BUCKET } from "@/lib/supabase";
 
 export const adminRouter = router({
   // ─── Platform Stats ─────────────────────────────────────────
@@ -63,6 +64,7 @@ export const adminRouter = router({
         type: true,
         subscription: true,
         maxInspectionsPerMonth: true,
+        bonusInspections: true,
         createdAt: true,
         _count: { select: { users: true } },
       },
@@ -169,6 +171,18 @@ export const adminRouter = router({
               _count: { select: { inspections: true } },
             },
             orderBy: { createdAt: "asc" },
+          },
+          packPurchases: {
+            orderBy: { createdAt: "desc" },
+            take: 20,
+            select: {
+              id: true,
+              packSize: true,
+              amountCents: true,
+              status: true,
+              createdAt: true,
+              completedAt: true,
+            },
           },
         },
       });
@@ -312,6 +326,107 @@ export const adminRouter = router({
       return { tempPassword };
     }),
 
+  // ─── Logo Upload ────────────────────────────────────────────
+
+  getLogoUploadUrl: superAdminProcedure
+    .input(
+      z.object({
+        orgId: z.string(),
+        fileName: z.string(),
+        mimeType: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const org = await ctx.db.organization.findUnique({
+        where: { id: input.orgId },
+        select: { id: true },
+      });
+      if (!org) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const timestamp = Date.now();
+      const sanitized = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `logos/${input.orgId}/${timestamp}-${sanitized}`;
+
+      const { data: uploadData, error: uploadError } =
+        await supabaseAdmin.storage
+          .from(MEDIA_BUCKET)
+          .createSignedUploadUrl(storagePath);
+
+      if (uploadError || !uploadData) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to create upload URL: ${uploadError?.message || "unknown"}`,
+        });
+      }
+
+      const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
+
+      return {
+        uploadUrl: uploadData.signedUrl,
+        token: uploadData.token,
+        publicUrl,
+        storagePath,
+      };
+    }),
+
+  confirmLogoUpload: superAdminProcedure
+    .input(
+      z.object({
+        orgId: z.string(),
+        publicUrl: z.string(),
+        storagePath: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify the file actually exists in storage
+      const { data: fileData } = await supabaseAdmin.storage
+        .from(MEDIA_BUCKET)
+        .list(input.storagePath.substring(0, input.storagePath.lastIndexOf("/")), {
+          search: input.storagePath.substring(input.storagePath.lastIndexOf("/") + 1),
+        });
+
+      if (!fileData || fileData.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Logo file not found in storage. Upload may have failed.",
+        });
+      }
+
+      // Delete old logo if it exists
+      const org = await ctx.db.organization.findUnique({
+        where: { id: input.orgId },
+        select: { logo: true },
+      });
+      if (org?.logo) {
+        // Extract old storage path from URL
+        const bucketPrefix = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
+        const idx = org.logo.indexOf(bucketPrefix);
+        if (idx !== -1) {
+          const oldPath = org.logo.substring(idx + bucketPrefix.length);
+          await supabaseAdmin.storage.from(MEDIA_BUCKET).remove([oldPath]);
+        }
+      }
+
+      // Save new logo URL
+      await ctx.db.organization.update({
+        where: { id: input.orgId },
+        data: { logo: input.publicUrl },
+      });
+
+      await ctx.db.auditLog.create({
+        data: {
+          action: "ORG_LOGO_UPDATED",
+          entityType: "Organization",
+          entityId: input.orgId,
+          metadata: { storagePath: input.storagePath } as unknown as Prisma.InputJsonValue,
+          userId: ctx.userId,
+        },
+      });
+
+      return { logoUrl: input.publicUrl };
+    }),
+
   // ─── Inspections (cross-org) ────────────────────────────────
   listInspections: superAdminProcedure
     .input(
@@ -386,6 +501,116 @@ export const adminRouter = router({
         nextCursor = next.id;
       }
       return { logs, nextCursor };
+    }),
+
+  // ─── Inspection Pack Invoicing ──────────────────────────────
+
+  createPackInvoice: superAdminProcedure
+    .input(
+      z.object({
+        orgId: z.string(),
+        packSize: z.number().int().min(1).max(500),
+        amountCents: z.number().int().min(100),
+        note: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const org = await ctx.db.organization.findUnique({
+        where: { id: input.orgId },
+        select: {
+          stripeCustomerId: true,
+          name: true,
+          users: {
+            where: { role: "OWNER" },
+            select: { email: true },
+            take: 1,
+          },
+        },
+      });
+      if (!org) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const stripe = getStripe();
+
+      // Ensure Stripe customer exists
+      let customerId = org.stripeCustomerId;
+      if (!customerId) {
+        const ownerEmail = org.users[0]?.email;
+        const customer = await stripe.customers.create({
+          email: ownerEmail ?? undefined,
+          name: org.name,
+          metadata: { orgId: input.orgId },
+        });
+        customerId = customer.id;
+        await ctx.db.organization.update({
+          where: { id: input.orgId },
+          data: { stripeCustomerId: customerId },
+        });
+      }
+
+      // Create pending purchase record
+      const purchase = await ctx.db.inspectionPackPurchase.create({
+        data: {
+          orgId: input.orgId,
+          stripeSessionId: `invoice_pending_${crypto.randomUUID()}`,
+          packSize: input.packSize,
+          amountCents: input.amountCents,
+          status: "pending",
+          purchasedById: ctx.userId,
+        },
+      });
+
+      // Create invoice item then invoice
+      const invoiceItem = await stripe.invoiceItems.create({
+        customer: customerId,
+        amount: input.amountCents,
+        currency: "usd",
+        description: `VeriBuy Inspection Pack (${input.packSize} inspections)${input.note ? ` — ${input.note}` : ""}`,
+      });
+
+      const invoice = await stripe.invoices.create({
+        customer: customerId,
+        collection_method: "send_invoice",
+        days_until_due: 7,
+        metadata: {
+          orgId: input.orgId,
+          purchaseId: purchase.id,
+          type: "pack_invoice",
+          packSize: String(input.packSize),
+        },
+        auto_advance: true,
+      });
+
+      // Finalize and send
+      const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+
+      // Update purchase with real invoice ID
+      await ctx.db.inspectionPackPurchase.update({
+        where: { id: purchase.id },
+        data: { stripeSessionId: invoice.id },
+      });
+
+      // Audit log
+      await ctx.db.auditLog.create({
+        data: {
+          action: "ADMIN_PACK_INVOICE_SENT",
+          entityType: "Organization",
+          entityId: input.orgId,
+          metadata: {
+            packSize: input.packSize,
+            amountCents: input.amountCents,
+            invoiceId: invoice.id,
+            purchaseId: purchase.id,
+            note: input.note,
+          } as unknown as Prisma.InputJsonValue,
+          userId: ctx.userId,
+        },
+      });
+
+      return {
+        invoiceId: invoice.id,
+        invoiceUrl: finalized.hosted_invoice_url,
+        purchaseId: purchase.id,
+      };
     }),
 
   // ─── Stripe Subscription Management ────────────────────────

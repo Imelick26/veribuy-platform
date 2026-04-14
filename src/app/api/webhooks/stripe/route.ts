@@ -106,6 +106,27 @@ export async function POST(request: Request) {
       /* ──────────────────────────────────────────────────────────── */
       case "invoice.paid": {
         const invoice = event.data.object;
+
+        // ── Pack invoice (one-time inspection pack purchase) ──
+        if (invoice.metadata?.type === "pack_invoice") {
+          const { orgId, purchaseId, packSize } = invoice.metadata;
+          if (orgId && purchaseId && packSize) {
+            await db.$transaction([
+              db.organization.update({
+                where: { id: orgId },
+                data: { bonusInspections: { increment: parseInt(packSize) } },
+              }),
+              db.inspectionPackPurchase.update({
+                where: { id: purchaseId },
+                data: { status: "completed", completedAt: new Date() },
+              }),
+            ]);
+            console.log(`Pack invoice paid: ${packSize} inspections credited to org ${orgId}`);
+          }
+          break;
+        }
+
+        // ── Subscription renewal ──
         const subscriptionId =
           typeof invoice.subscription === "string"
             ? invoice.subscription

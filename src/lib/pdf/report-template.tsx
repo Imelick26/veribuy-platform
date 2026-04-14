@@ -92,6 +92,7 @@ export interface ReportData {
   number: string;
   generatedAt: Date | string;
   orgName?: string;
+  orgLogo?: string;
   inspectorName?: string;
   vehicle: {
     year: number;
@@ -437,8 +438,17 @@ export function ReportDocument({ data }: { data: ReportData }) {
       <Page size="LETTER" style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          {data.orgName && <Text style={styles.headerOrg}>{data.orgName}</Text>}
-          <Text style={styles.headerPowered}>Powered by VeriBuy</Text>
+          {data.orgLogo ? (
+            <View style={{ marginBottom: 4 }}>
+              <Image src={data.orgLogo} style={{ height: 36, maxWidth: 160, objectFit: "contain" as never }} />
+              <Text style={styles.headerPowered}>Powered by VeriBuy</Text>
+            </View>
+          ) : (
+            <View>
+              {data.orgName && <Text style={styles.headerOrg}>{data.orgName}</Text>}
+              <Text style={styles.headerPowered}>Powered by VeriBuy</Text>
+            </View>
+          )}
           <Text style={styles.headerTitle}>
             {data.vehicle.year} {data.vehicle.make} {data.vehicle.model}
           </Text>

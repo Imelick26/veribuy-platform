@@ -64,6 +64,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.orgId = dbUser.orgId;
           token.orgName = dbUser.org.name;
           token.orgSlug = dbUser.org.slug;
+          token.orgLogo = dbUser.org.logo ?? undefined;
         }
       }
       return token;
@@ -77,6 +78,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         user.orgId = token.orgId;
         user.orgName = token.orgName;
         user.orgSlug = token.orgSlug;
+        user.orgLogo = token.orgLogo;
       }
       return session;
     },

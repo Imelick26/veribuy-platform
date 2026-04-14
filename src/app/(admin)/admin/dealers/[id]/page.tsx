@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import Link from "next/link";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Building2, Users, Shield, Mail, ChevronRight, ClipboardCheck, CreditCard, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Building2, Users, Shield, Mail, ChevronRight, ClipboardCheck, CreditCard, AlertTriangle, Package, Send, CheckCircle2, Clock, ExternalLink, ImagePlus } from "lucide-react";
+import { useRef } from "react";
 
 const roleLabels: Record<string, string> = {
   OWNER: "Owner",
@@ -48,6 +49,8 @@ export default function DealerDetailPage() {
     daysUntilDue: 30,
   });
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [packForm, setPackForm] = useState({ packSize: 10, priceDollars: "250", note: "" });
+  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null);
 
   const update = trpc.admin.updateOrg.useMutation({
     onSuccess: () => { refetch(); setEditMode(false); },
@@ -61,6 +64,42 @@ export default function DealerDetailPage() {
   const cancelSub = trpc.admin.cancelSubscription.useMutation({
     onSuccess: () => { refetch(); setShowCancelConfirm(false); },
   });
+  const sendPackInvoice = trpc.admin.createPackInvoice.useMutation({
+    onSuccess: (data) => {
+      setInvoiceUrl(data.invoiceUrl ?? null);
+      setPackForm({ packSize: 10, priceDollars: "250", note: "" });
+      refetch();
+    },
+  });
+  const getLogoUrl = trpc.admin.getLogoUploadUrl.useMutation();
+  const confirmLogo = trpc.admin.confirmLogoUpload.useMutation({ onSuccess: () => refetch() });
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const { uploadUrl, publicUrl, storagePath } = await getLogoUrl.mutateAsync({
+        orgId: id,
+        fileName: file.name,
+        mimeType: file.type,
+      });
+      const res = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      await confirmLogo.mutateAsync({ orgId: id, publicUrl, storagePath });
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  }
 
   function startEdit() {
     if (!org) return;
@@ -140,6 +179,40 @@ export default function DealerDetailPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
+        {/* Logo */}
+        <div className="relative group flex-shrink-0">
+          {org.logo ? (
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              className="h-12 rounded-lg border border-border-default bg-white p-1.5 flex items-center justify-center hover:border-brand-500 transition-colors cursor-pointer"
+              title="Change logo"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={org.logo} alt={org.name} className="max-h-9 max-w-[120px] object-contain" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              className="h-12 w-12 rounded-lg border border-dashed border-border-default bg-surface-sunken flex items-center justify-center hover:border-brand-500 transition-colors cursor-pointer"
+              title="Upload logo"
+            >
+              {logoUploading ? (
+                <div className="spinner-gradient h-4 w-4" />
+              ) : (
+                <ImagePlus className="h-4 w-4 text-text-tertiary" />
+              )}
+            </button>
+          )}
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+            onChange={handleLogoUpload}
+            className="hidden"
+          />
+        </div>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-text-primary tracking-tight">{org.name}</h1>
           <p className="text-text-secondary mt-0.5 text-sm">{org.slug} &middot; {org.type}</p>
@@ -161,6 +234,9 @@ export default function DealerDetailPage() {
           <p className="text-sm text-text-secondary">This Month</p>
           <p className="text-xl font-bold text-text-primary mt-1">
             {org.inspectionsThisMonth} / {org.maxInspectionsPerMonth}
+            {org.bonusInspections > 0 && (
+              <span className="text-sm font-medium text-brand-600"> (+{org.bonusInspections})</span>
+            )}
           </p>
         </Card>
         <Card>
@@ -452,6 +528,132 @@ export default function DealerDetailPage() {
           </form>
         </Card>
       )}
+
+      {/* Inspection Packs */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Package className="h-4 w-4 text-text-tertiary" />
+            <CardTitle>Inspection Packs</CardTitle>
+          </div>
+          {org.bonusInspections > 0 && (
+            <CardDescription>
+              {org.bonusInspections} bonus inspection{org.bonusInspections !== 1 ? "s" : ""} remaining
+            </CardDescription>
+          )}
+        </CardHeader>
+
+        {invoiceUrl && (
+          <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm text-green-800">
+              <CheckCircle2 className="h-4 w-4" />
+              Invoice sent successfully
+            </div>
+            <a
+              href={invoiceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-green-700 hover:text-green-900 flex items-center gap-1"
+            >
+              View Invoice <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        )}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setInvoiceUrl(null);
+            sendPackInvoice.mutate({
+              orgId: id,
+              packSize: packForm.packSize,
+              amountCents: Math.round(parseFloat(packForm.priceDollars) * 100),
+              note: packForm.note || undefined,
+            });
+          }}
+          className="space-y-4"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-text-secondary">Inspections</label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={packForm.packSize}
+                onChange={(e) => setPackForm({ ...packForm, packSize: parseInt(e.target.value) || 1 })}
+                className="w-full text-sm bg-white border border-border-default rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-600"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-text-secondary">Price</label>
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-text-secondary">$</span>
+                <input
+                  type="number"
+                  min={1}
+                  step="0.01"
+                  value={packForm.priceDollars}
+                  onChange={(e) => setPackForm({ ...packForm, priceDollars: e.target.value })}
+                  className="w-full text-sm bg-white border border-border-default rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-600"
+                />
+              </div>
+              <p className="text-xs text-text-tertiary">
+                ${(parseFloat(packForm.priceDollars || "0") / (packForm.packSize || 1)).toFixed(2)}/inspection
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-text-secondary">Note</label>
+              <input
+                type="text"
+                placeholder="e.g. First dealer trial"
+                value={packForm.note}
+                onChange={(e) => setPackForm({ ...packForm, note: e.target.value })}
+                className="w-full text-sm bg-white border border-border-default rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-brand-600"
+              />
+            </div>
+          </div>
+          {sendPackInvoice.error && (
+            <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
+              {sendPackInvoice.error.message}
+            </div>
+          )}
+          <Button type="submit" size="sm" loading={sendPackInvoice.isPending}>
+            <Send className="h-4 w-4" /> Send Invoice
+          </Button>
+        </form>
+
+        {/* Pack purchase history */}
+        {org.packPurchases && org.packPurchases.length > 0 && (
+          <div className="mt-6 border-t border-border-default pt-4">
+            <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-3">Purchase History</p>
+            <div className="space-y-2">
+              {org.packPurchases.map((p) => (
+                <div key={p.id} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    {p.status === "completed" ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                    ) : (
+                      <Clock className="h-3.5 w-3.5 text-amber-500" />
+                    )}
+                    <span className="text-text-primary">{p.packSize} inspections</span>
+                    <span className="text-text-tertiary">&middot;</span>
+                    <span className="text-text-secondary">${(p.amountCents / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={p.status === "completed" ? "success" : "warning"}>
+                      {p.status}
+                    </Badge>
+                    <span className="text-xs text-text-tertiary">
+                      {new Date(p.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* Team Members */}
       <Card>

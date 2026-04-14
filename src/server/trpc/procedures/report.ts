@@ -30,7 +30,7 @@ export const reportRouter = router({
 
       const org = await ctx.db.organization.findUnique({
         where: { id: ctx.orgId },
-        select: { name: true },
+        select: { name: true, logo: true },
       });
 
       // Generate report number
@@ -110,6 +110,7 @@ export const reportRouter = router({
         number,
         generatedAt: new Date(),
         orgName: org?.name,
+        orgLogo: org?.logo ?? undefined,
         inspectorName: inspection.inspector?.name ?? undefined,
         vehicle: inspection.vehicle ? {
           year: inspection.vehicle.year,

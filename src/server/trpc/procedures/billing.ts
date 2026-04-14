@@ -4,7 +4,8 @@ import { router, protectedProcedure } from "../init";
 import { getStripe, SUBSCRIPTION_PLANS, getPlanByTier, getOveragePriceForTier } from "@/lib/stripe";
 import { sendUpgradeRequestEmail } from "@/lib/email";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000";
+console.log("[billing] APP_URL resolved to:", JSON.stringify(APP_URL));
 
 export const billingRouter = router({
   // ── Purchase a single additional report at tier-based pricing ─────

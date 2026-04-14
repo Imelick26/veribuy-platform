@@ -11,6 +11,7 @@ declare module "next-auth" {
       orgId: string;
       orgName: string;
       orgSlug: string;
+      orgLogo?: string;
     };
   }
 }
@@ -21,5 +22,6 @@ declare module "next-auth/jwt" {
     orgId?: string;
     orgName?: string;
     orgSlug?: string;
+    orgLogo?: string;
   }
 }

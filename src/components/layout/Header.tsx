@@ -37,9 +37,20 @@ export function Header() {
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {user && (
           <>
-            <Badge variant="default" className="hidden sm:inline-flex">
-              {(user as Record<string, unknown>).orgName as string}
-            </Badge>
+            {(user as Record<string, unknown>).orgLogo ? (
+              <div className="hidden sm:flex items-center gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={(user as Record<string, unknown>).orgLogo as string}
+                  alt={(user as Record<string, unknown>).orgName as string}
+                  className="h-7 max-w-[120px] object-contain"
+                />
+              </div>
+            ) : (
+              <Badge variant="default" className="hidden sm:inline-flex">
+                {(user as Record<string, unknown>).orgName as string}
+              </Badge>
+            )}
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setShowUserMenu((v) => !v)}
