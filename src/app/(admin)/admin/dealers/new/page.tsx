@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Ca
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Check, Copy } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import Link from "next/link";
 
 const PLAN_PRICING = [
@@ -24,7 +24,7 @@ export default function NewDealerPage() {
   const router = useRouter();
   const [step, setStep] = useState<"idle" | "creating_org" | "creating_sub" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [createdResult, setCreatedResult] = useState<{ orgId: string; tempPassword: string } | null>(null);
+  const [createdOrgId, setCreatedOrgId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     orgName: "",
@@ -95,7 +95,7 @@ export default function NewDealerPage() {
     }
 
     setStep("done");
-    setCreatedResult({ orgId, tempPassword });
+    setCreatedOrgId(orgId);
   }
 
   const monthlyEquiv = parseFloat(form.customAnnualPriceDollars) / 12;
@@ -114,44 +114,28 @@ export default function NewDealerPage() {
         </div>
       </div>
 
-      {/* Success — show temp password */}
-      {createdResult && (
+      {/* Success */}
+      {createdOrgId && (
         <Card className="border-l-4 border-l-green-500">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Check className="h-5 w-5 text-green-600" />
               <CardTitle>Dealer Created</CardTitle>
             </div>
-            <CardDescription>
-              Share these credentials with the dealer owner. They can change the password after logging in.
-            </CardDescription>
           </CardHeader>
           <div className="space-y-3">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-text-secondary">Email</span>
-              <span className="font-medium font-mono">{form.ownerEmail}</span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-text-secondary">Temporary Password</span>
-              <div className="flex items-center gap-2">
-                <span className="font-bold font-mono text-lg tracking-wider">{createdResult.tempPassword}</span>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(createdResult.tempPassword)}
-                  className="text-text-tertiary hover:text-text-primary transition-colors"
-                  title="Copy password"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
+            <p className="text-sm text-text-secondary">
+              {form.createSubscription
+                ? "An invoice has been sent to the dealer. Once they pay, they'll receive a welcome email with instructions to set up their password and start using VeriBuy."
+                : "The dealer account has been created. You can attach a Stripe subscription from the dealer detail page."}
+            </p>
             {error && (
               <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
                 {error}
               </div>
             )}
             <div className="pt-2">
-              <Link href={`/admin/dealers/${createdResult.orgId}`}>
+              <Link href={`/admin/dealers/${createdOrgId}`}>
                 <Button size="sm">Go to Dealer</Button>
               </Link>
             </div>
@@ -160,7 +144,7 @@ export default function NewDealerPage() {
       )}
 
       {/* Creation form — hidden after success */}
-      {!createdResult && <Card>
+      {!createdOrgId && <Card>
         <CardHeader>
           <CardTitle>Organization Details</CardTitle>
           <CardDescription>Set up the dealer and their owner account</CardDescription>

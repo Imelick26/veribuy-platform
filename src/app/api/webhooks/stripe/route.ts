@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getStripe, getPlanByPriceId, getPlanByTier } from "@/lib/stripe";
 import { db } from "@/server/db";
+import crypto from "crypto";
+import { sendDealerWelcomeEmail } from "@/lib/email";
 
 // Stripe webhook event data types don't always align perfectly with the SDK.
 // We use loose typing for webhook payloads since they come directly from Stripe's API.
@@ -111,17 +113,17 @@ export async function POST(request: Request) {
 
         if (!subscriptionId) break;
 
-        // Only process renewal invoices (not the first one)
-        if (invoice.billing_reason === "subscription_create") break;
+        const isFirstInvoice = invoice.billing_reason === "subscription_create";
 
         const org = await db.organization.findUnique({
           where: { stripeSubscriptionId: subscriptionId },
-          select: { id: true },
+          select: { id: true, name: true, subscriptionStatus: true },
         });
 
         if (org) {
           const stripe = getStripe();
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const itemEnd = (sub as any).items?.data?.[0]?.current_period_end;
 
           await db.organization.update({
@@ -131,7 +133,50 @@ export async function POST(request: Request) {
               currentPeriodEnd: itemEnd ? new Date(itemEnd * 1000) : undefined,
             },
           });
-          console.log(`Subscription renewed for org ${org.id}`);
+
+          // On first payment for admin-created subscriptions, send welcome email
+          if (isFirstInvoice || org.subscriptionStatus !== "active") {
+            try {
+              // Find the org owner
+              const owner = await db.user.findFirst({
+                where: { orgId: org.id, role: "OWNER" },
+                select: { id: true, email: true, name: true },
+              });
+
+              if (owner) {
+                // Check if we've already sent a welcome (owner has logged in or token already exists)
+                const existingToken = await db.verificationToken.findFirst({
+                  where: { identifier: owner.email.toLowerCase() },
+                });
+
+                if (!existingToken) {
+                  // Generate a password setup token (same mechanism as password reset)
+                  const token = crypto.randomBytes(32).toString("hex");
+                  await db.verificationToken.create({
+                    data: {
+                      identifier: owner.email.toLowerCase(),
+                      token,
+                      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+                    },
+                  });
+
+                  const setupUrl = `${process.env.NEXTAUTH_URL || "https://app.getveribuy.com"}/reset-password/${token}`;
+                  await sendDealerWelcomeEmail({
+                    to: owner.email,
+                    name: owner.name,
+                    orgName: org.name,
+                    setupUrl,
+                  });
+                  console.log(`Welcome email sent to ${owner.email} for org ${org.id}`);
+                }
+              }
+            } catch (err) {
+              // Don't fail the webhook if email fails
+              console.error(`Failed to send welcome email for org ${org.id}:`, err);
+            }
+          }
+
+          console.log(`Invoice paid for org ${org.id} (${isFirstInvoice ? "first" : "renewal"})`);
         }
         break;
       }

@@ -34,7 +34,53 @@ export async function sendWelcomeEmail(opts: {
           <p style="margin: 0 0 8px; font-size: 14px; color: #777;">Temporary Password</p>
           <p style="margin: 0; font-family: monospace; font-size: 18px; font-weight: 600; letter-spacing: 1px;">${opts.tempPassword}</p>
         </div>
+        <a href="https://app.getveribuy.com/login" style="display: inline-block; background: linear-gradient(135deg, #ff4289, #be00a4, #5c0099); color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; margin-bottom: 20px;">Sign In to VeriBuy</a>
         <p style="color: #555; font-size: 14px; margin: 0 0 8px;">Please change your password after signing in by going to <strong>Settings</strong>.</p>
+        <p style="color: #999; font-size: 12px; margin: 24px 0 0;">&mdash; VeriBuy Vehicle Inspection Intelligence</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendDealerWelcomeEmail(opts: {
+  to: string;
+  name: string;
+  orgName: string;
+  setupUrl: string;
+}) {
+  const resend = getResend();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — skipping dealer welcome email");
+    console.log(`Setup URL: ${opts.setupUrl}`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM_EMAIL,
+    to: opts.to,
+    subject: `Welcome to VeriBuy — Set up your account`,
+    html: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 0;">
+        <h2 style="margin: 0 0 8px;">Welcome to VeriBuy, ${opts.name}!</h2>
+        <p style="color: #555; margin: 0 0 24px;">Your organization <strong>${opts.orgName}</strong> is now active. Set up your password to get started.</p>
+
+        <a href="${opts.setupUrl}" style="display: inline-block; background: linear-gradient(135deg, #ff4289, #be00a4, #5c0099); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; margin-bottom: 28px;">Set Your Password</a>
+
+        <h3 style="margin: 28px 0 12px; font-size: 16px;">Getting Started</h3>
+        <ol style="color: #555; margin: 0 0 24px; padding-left: 20px; line-height: 1.8;">
+          <li><strong>Set your password</strong> using the button above</li>
+          <li><strong>Sign in</strong> at <a href="https://app.getveribuy.com/login" style="color: #7c3aed;">app.getveribuy.com</a></li>
+          <li><strong>Start an inspection</strong> — tap "New Inspection" from the dashboard</li>
+          <li><strong>Walk the vehicle</strong> — follow the guided 21-photo capture</li>
+          <li><strong>Get your report</strong> — AI condition scores, market valuation, and buy/pass recommendation</li>
+        </ol>
+
+        <div style="background: #f5f5f5; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <p style="margin: 0 0 4px; font-size: 13px; color: #777;">Your login email</p>
+          <p style="margin: 0; font-weight: 600;">${opts.to}</p>
+        </div>
+
+        <p style="color: #999; font-size: 13px; margin: 0 0 4px;">This link expires in 7 days. If it expires, use "Forgot Password" on the login page.</p>
         <p style="color: #999; font-size: 12px; margin: 24px 0 0;">&mdash; VeriBuy Vehicle Inspection Intelligence</p>
       </div>
     `,
