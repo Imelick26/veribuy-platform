@@ -559,14 +559,7 @@ export const adminRouter = router({
         },
       });
 
-      // Create invoice item then invoice
-      const invoiceItem = await stripe.invoiceItems.create({
-        customer: customerId,
-        amount: input.amountCents,
-        currency: "usd",
-        description: `VeriBuy Inspection Pack (${input.packSize} inspections)${input.note ? ` — ${input.note}` : ""}`,
-      });
-
+      // Create invoice first (as draft), then add the line item, then finalize
       const invoice = await stripe.invoices.create({
         customer: customerId,
         collection_method: "send_invoice",
@@ -577,11 +570,21 @@ export const adminRouter = router({
           type: "pack_invoice",
           packSize: String(input.packSize),
         },
-        auto_advance: true,
       });
 
-      // Finalize and send
-      const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+      // Attach line item to this specific invoice
+      await stripe.invoiceItems.create({
+        customer: customerId,
+        invoice: invoice.id,
+        amount: input.amountCents,
+        currency: "usd",
+        description: `VeriBuy Inspection Pack (${input.packSize} inspections)${input.note ? ` — ${input.note}` : ""}`,
+      });
+
+      // Finalize — this triggers the email to the customer
+      const finalized = await stripe.invoices.finalizeInvoice(invoice.id, {
+        auto_advance: true,
+      });
 
       // Update purchase with real invoice ID
       await ctx.db.inspectionPackPurchase.update({
