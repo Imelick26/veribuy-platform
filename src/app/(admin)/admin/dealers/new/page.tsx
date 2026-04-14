@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Ca
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Check, Copy } from "lucide-react";
 import Link from "next/link";
 
 const PLAN_PRICING = [
@@ -24,13 +24,13 @@ export default function NewDealerPage() {
   const router = useRouter();
   const [step, setStep] = useState<"idle" | "creating_org" | "creating_sub" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [createdResult, setCreatedResult] = useState<{ orgId: string; tempPassword: string } | null>(null);
 
   const [form, setForm] = useState({
     orgName: "",
     orgType: "DEALER" as "DEALER" | "INSPECTOR_FIRM" | "INSURANCE" | "INDIVIDUAL",
     ownerName: "",
     ownerEmail: "",
-    ownerPassword: "",
     subscription: "BASE" as "CORE" | "BASE" | "PRO" | "ENTERPRISE",
     maxInspectionsPerMonth: 50,
     createSubscription: true,
@@ -59,17 +59,18 @@ export default function NewDealerPage() {
     // Step 1: Create org
     setStep("creating_org");
     let orgId: string;
+    let tempPassword: string;
     try {
       const result = await createOrg.mutateAsync({
         orgName: form.orgName,
         orgType: form.orgType,
         ownerName: form.ownerName,
         ownerEmail: form.ownerEmail,
-        ownerPassword: form.ownerPassword,
         subscription: form.subscription,
         maxInspectionsPerMonth: form.maxInspectionsPerMonth,
       });
       orgId = result.orgId;
+      tempPassword = result.tempPassword;
     } catch (err: unknown) {
       setStep("idle");
       setError(err instanceof Error ? err.message : "Failed to create organization");
@@ -89,16 +90,12 @@ export default function NewDealerPage() {
           daysUntilDue: form.daysUntilDue,
         });
       } catch (err: unknown) {
-        // Org was created but billing failed — navigate anyway
         setError(err instanceof Error ? err.message : "Org created but billing setup failed");
-        setStep("done");
-        setTimeout(() => router.push(`/admin/dealers/${orgId}`), 2000);
-        return;
       }
     }
 
     setStep("done");
-    router.push(`/admin/dealers/${orgId}`);
+    setCreatedResult({ orgId, tempPassword });
   }
 
   const monthlyEquiv = parseFloat(form.customAnnualPriceDollars) / 12;
@@ -117,7 +114,53 @@ export default function NewDealerPage() {
         </div>
       </div>
 
-      <Card>
+      {/* Success — show temp password */}
+      {createdResult && (
+        <Card className="border-l-4 border-l-green-500">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Check className="h-5 w-5 text-green-600" />
+              <CardTitle>Dealer Created</CardTitle>
+            </div>
+            <CardDescription>
+              Share these credentials with the dealer owner. They can change the password after logging in.
+            </CardDescription>
+          </CardHeader>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-text-secondary">Email</span>
+              <span className="font-medium font-mono">{form.ownerEmail}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-text-secondary">Temporary Password</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold font-mono text-lg tracking-wider">{createdResult.tempPassword}</span>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(createdResult.tempPassword)}
+                  className="text-text-tertiary hover:text-text-primary transition-colors"
+                  title="Copy password"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            {error && (
+              <div className="rounded-lg bg-[#fde8e8] px-4 py-3 text-sm text-red-700 ring-1 ring-red-300">
+                {error}
+              </div>
+            )}
+            <div className="pt-2">
+              <Link href={`/admin/dealers/${createdResult.orgId}`}>
+                <Button size="sm">Go to Dealer</Button>
+              </Link>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Creation form — hidden after success */}
+      {!createdResult && <Card>
         <CardHeader>
           <CardTitle>Organization Details</CardTitle>
           <CardDescription>Set up the dealer and their owner account</CardDescription>
@@ -167,17 +210,6 @@ export default function NewDealerPage() {
               required
             />
           </div>
-
-          <Input
-            id="owner-password"
-            label="Initial Password"
-            type="text"
-            placeholder="Secure password for the owner"
-            value={form.ownerPassword}
-            onChange={(e) => setForm({ ...form, ownerPassword: e.target.value })}
-            required
-            minLength={8}
-          />
 
           <hr className="border-border-default" />
 
@@ -287,7 +319,7 @@ export default function NewDealerPage() {
             </Button>
           </div>
         </form>
-      </Card>
+      </Card>}
     </div>
   );
 }

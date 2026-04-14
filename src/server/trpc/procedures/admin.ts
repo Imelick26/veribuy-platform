@@ -91,7 +91,6 @@ export const adminRouter = router({
         orgType: z.enum(["DEALER", "INSPECTOR_FIRM", "INSURANCE", "INDIVIDUAL"]),
         ownerName: z.string().min(1),
         ownerEmail: z.email(),
-        ownerPassword: z.string().min(8),
         subscription: z.enum(["CORE", "BASE", "PRO", "ENTERPRISE"]),
         maxInspectionsPerMonth: z.number().int().min(0),
       })
@@ -107,7 +106,8 @@ export const adminRouter = router({
         .replace(/[^a-z0-9]+/g, "_")
         .replace(/^_|_$/g, "");
 
-      const passwordHash = await bcrypt.hash(input.ownerPassword, 12);
+      const tempPassword = crypto.randomUUID().slice(0, 12);
+      const passwordHash = await bcrypt.hash(tempPassword, 12);
 
       const result = await ctx.db.$transaction(async (tx) => {
         const org = await tx.organization.create({
@@ -131,7 +131,7 @@ export const adminRouter = router({
         return { org, user };
       });
 
-      return { orgId: result.org.id, userId: result.user.id };
+      return { orgId: result.org.id, userId: result.user.id, tempPassword };
     }),
 
   // Update org plan / limits
