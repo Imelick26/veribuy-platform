@@ -122,6 +122,46 @@ export async function POST(request: Request) {
               }),
             ]);
             console.log(`Pack invoice paid: ${packSize} inspections credited to org ${orgId}`);
+
+            // Send welcome email with password setup link (same as subscription flow)
+            try {
+              const org = await db.organization.findUnique({
+                where: { id: orgId },
+                select: { name: true },
+              });
+              const owner = await db.user.findFirst({
+                where: { orgId, role: "OWNER" },
+                select: { id: true, email: true, name: true },
+              });
+
+              if (owner && org) {
+                const existingToken = await db.verificationToken.findFirst({
+                  where: { identifier: owner.email.toLowerCase() },
+                });
+
+                if (!existingToken) {
+                  const token = crypto.randomBytes(32).toString("hex");
+                  await db.verificationToken.create({
+                    data: {
+                      identifier: owner.email.toLowerCase(),
+                      token,
+                      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    },
+                  });
+
+                  const setupUrl = `${process.env.NEXTAUTH_URL || "https://app.getveribuy.com"}/reset-password/${token}`;
+                  await sendDealerWelcomeEmail({
+                    to: owner.email,
+                    name: owner.name,
+                    orgName: org.name,
+                    setupUrl,
+                  });
+                  console.log(`Welcome email sent to ${owner.email} for pack purchase (org ${orgId})`);
+                }
+              }
+            } catch (err) {
+              console.error(`Failed to send welcome email for pack org ${orgId}:`, err);
+            }
           }
           break;
         }
