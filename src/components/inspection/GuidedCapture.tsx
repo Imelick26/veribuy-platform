@@ -20,6 +20,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CaptureGuide } from "./capture-guides";
 
 // ---------------------------------------------------------------------------
 //  Shot definitions — ordered for efficient physical walkthrough
@@ -370,7 +371,7 @@ export function GuidedCapture({
             </div>
           </div>
         ) : (
-          <div className="w-full max-w-lg aspect-[4/3] rounded-2xl bg-slate-800/50 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center gap-4">
+          <div className="w-full max-w-lg aspect-[4/3] rounded-2xl bg-slate-800/50 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center relative overflow-hidden">
             {isCurrentUploading ? (
               <>
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-600 border-t-brand-500" />
@@ -378,12 +379,9 @@ export function GuidedCapture({
               </>
             ) : (
               <>
-                <Camera className="h-16 w-16 text-slate-500" />
-                <div className="text-center px-6">
-                  <p className="text-lg font-semibold text-white mb-1">
-                    {currentShot.label}
-                  </p>
-                  <p className="text-sm text-slate-400">{currentShot.hint}</p>
+                <CaptureGuide type={currentShot.type} className="w-full h-full px-4 pt-3 pb-8" />
+                <div className="absolute bottom-3 left-0 right-0 text-center">
+                  <p className="text-xs text-slate-500">{currentShot.hint}</p>
                 </div>
               </>
             )}
