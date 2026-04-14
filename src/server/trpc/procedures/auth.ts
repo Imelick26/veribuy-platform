@@ -264,11 +264,36 @@ export const authRouter = router({
       return { success: true };
     }),
 
-  // Reset password with token
+  // Check if a reset token is for a new account (never logged in)
+  checkResetToken: publicProcedure
+    .input(z.object({ token: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const record = await ctx.db.verificationToken.findUnique({
+        where: { token: input.token },
+      });
+
+      if (!record || record.expires < new Date()) {
+        return { valid: false, isNewAccount: false };
+      }
+
+      const user = await ctx.db.user.findUnique({
+        where: { email: record.identifier },
+        select: { lastLoginAt: true },
+      });
+
+      return {
+        valid: true,
+        isNewAccount: !user?.lastLoginAt,
+      };
+    }),
+
+  // Reset password with token (+ optional agreement acceptance for new accounts)
   resetPassword: publicProcedure
     .input(z.object({
       token: z.string(),
       newPassword: z.string().min(8, "Password must be at least 8 characters"),
+      acceptAgreement: z.boolean().optional(),
+      agreementVersion: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const record = await ctx.db.verificationToken.findUnique({
@@ -281,6 +306,7 @@ export const authRouter = router({
 
       const user = await ctx.db.user.findUnique({
         where: { email: record.identifier },
+        select: { id: true, orgId: true, lastLoginAt: true },
       });
 
       if (!user) throw new Error("User not found");
@@ -290,6 +316,19 @@ export const authRouter = router({
         where: { id: user.id },
         data: { passwordHash },
       });
+
+      // Record agreement acceptance for new accounts
+      if (input.acceptAgreement && !user.lastLoginAt) {
+        await ctx.db.organization.update({
+          where: { id: user.orgId },
+          data: {
+            agreementAcceptedAt: new Date(),
+            agreementAcceptedBy: user.id,
+            agreementVersion: input.agreementVersion ?? "2026-04-14",
+            agreementAcceptedIp: null, // IP not available in tRPC context — logged at edge if needed
+          },
+        });
+      }
 
       // Clean up the token
       await ctx.db.verificationToken.delete({

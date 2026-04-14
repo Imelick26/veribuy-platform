@@ -33,6 +33,12 @@ model Organization {
   targetMarginPercent  Int      @default(20) // Dealer target margin percentage (e.g., 20 = 20%)
   minProfitPerUnit     Int      @default(150000) // Minimum profit per vehicle in cents ($1,500)
 
+  // Service agreement acceptance
+  agreementAcceptedAt  DateTime?
+  agreementAcceptedBy  String?   // userId of the person who accepted
+  agreementVersion     String?   // e.g. "2026-04-14"
+  agreementAcceptedIp  String?
+
   // Stripe subscription billing
   stripeCustomerId     String?  @unique
   stripeSubscriptionId String?  @unique
