@@ -1,8 +1,9 @@
 /**
- * VinAudit API client for vehicle history reports and market value data.
- * Docs: https://www.vinaudit.com/api
+ * VinAudit API client for vehicle history reports.
+ * Docs: https://www.vinaudit.com/vehicle-history-api
  *
- * Cost: ~$5/report for vehicle history, ~$0.10/query for market value.
+ * Endpoint: /v2/pullreport — requires key + user + pass + mode params.
+ * Cost: ~$5/report for vehicle history (demo: 25 credits, expires 04/24/2026).
  */
 
 export interface VehicleHistoryData {
@@ -65,21 +66,37 @@ export interface VinAuditListing {
   url?: string;
 }
 
-function getApiKey(): string {
+function getCredentials(): { key: string; user: string; pass: string } {
   const key = process.env.VINAUDIT_API_KEY;
-  if (!key) throw new Error("Missing VINAUDIT_API_KEY environment variable");
-  return key;
+  const user = process.env.VINAUDIT_USER;
+  const pass = process.env.VINAUDIT_PASS;
+  if (!key || !user || !pass) {
+    throw new Error("Missing VinAudit credentials (VINAUDIT_API_KEY, VINAUDIT_USER, VINAUDIT_PASS)");
+  }
+  return { key, user, pass };
 }
 
 const VINAUDIT_BASE = "https://api.vinaudit.com";
 
 /**
  * Fetch vehicle history report from VinAudit (~$5/report).
+ *
+ * Uses the v2 pullreport endpoint:
+ * GET /v2/pullreport?format=json&key=KEY&user=USER&pass=PASS&mode=prod&vin=VIN
  */
 export async function fetchVehicleHistory(vin: string): Promise<VehicleHistoryData> {
-  const apiKey = getApiKey();
+  const { key, user, pass } = getCredentials();
 
-  const url = `${VINAUDIT_BASE}/vehicle-history?key=${apiKey}&vin=${vin}&format=json`;
+  const params = new URLSearchParams({
+    format: "json",
+    key,
+    user,
+    pass,
+    mode: "prod",
+    vin,
+  });
+
+  const url = `${VINAUDIT_BASE}/v2/pullreport?${params.toString()}`;
 
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -92,21 +109,38 @@ export async function fetchVehicleHistory(vin: string): Promise<VehicleHistoryDa
 
   const data = await res.json();
 
+  // Check for API-level error responses
+  if (data.error || data.status === "error") {
+    throw new Error(`VinAudit report error: ${data.error || data.message || "Unknown error"}`);
+  }
+
   // Normalize the response into our standard format
   return normalizeHistoryResponse(data);
 }
 
 /**
- * Fetch market value estimate from VinAudit (~$0.10/query).
+ * Fetch market value estimate from VinAudit.
+ *
+ * Note: No longer used for pricing (Black Book is sole pricing source).
+ * Kept for potential future use. Uses the same v2 endpoint with market value mode.
  */
 export async function fetchMarketValue(
   vin: string,
   mileage?: number
 ): Promise<VinAuditMarketValue> {
-  const apiKey = getApiKey();
+  const { key, user, pass } = getCredentials();
 
-  let url = `${VINAUDIT_BASE}/market-value?key=${apiKey}&vin=${vin}&format=json`;
-  if (mileage) url += `&mileage=${mileage}`;
+  const params = new URLSearchParams({
+    format: "json",
+    key,
+    user,
+    pass,
+    mode: "prod",
+    vin,
+  });
+  if (mileage) params.set("mileage", String(mileage));
+
+  const url = `${VINAUDIT_BASE}/market-value?${params.toString()}`;
 
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -122,64 +156,114 @@ export async function fetchMarketValue(
 }
 
 /**
- * Normalize the VinAudit history response into our standard format.
+ * Normalize the VinAudit v2 pullreport response into our standard format.
+ *
+ * Real response structure (verified against live API):
+ *   .titles[]      — { vin, state, date, meter, meter_unit, current }
+ *   .checks[]      — { brander_code, brand_title, date } — title brands (salvage/rebuilt/flood)
+ *   .jsi[]         — junk/salvage/insurance records
+ *   .accidents[]   — accident records
+ *   .sales[]       — sale/listing history
+ *   .salvage[]     — salvage auction records with damage info
+ *   .thefts[]      — theft records
+ *   .lie[]         — lemon/impound/export records
+ *   .attributes    — decoded vehicle info (year, make, model, trim, engine, etc.)
+ *   .clean         — boolean: true = clean title, false = branded
  */
 function normalizeHistoryResponse(data: Record<string, unknown>): VehicleHistoryData {
-  // VinAudit returns various nested structures — extract what we need
   const titleRecords: VinAuditTitleRecord[] = [];
   const odometerReadings: VinAuditOdometer[] = [];
   const recalls: VinAuditRecall[] = [];
 
-  // Extract title records
-  const titles = (data.title_records || data.titles || []) as Array<Record<string, unknown>>;
+  // ── Title records (also contain odometer readings) ──────────────
+  const titles = (data.titles || []) as Array<Record<string, unknown>>;
   for (const t of titles) {
+    const meterReading = t.meter ? Number(String(t.meter).replace(/[^0-9]/g, "")) : undefined;
     titleRecords.push({
-      date: String(t.date || t.report_date || ""),
-      state: String(t.state || t.title_state || ""),
-      titleType: String(t.title_type || t.type || "Clean"),
-      odometerReading: t.odometer ? Number(t.odometer) : undefined,
+      date: String(t.date || ""),
+      state: String(t.state || ""),
+      titleType: "Title",
+      odometerReading: meterReading,
+    });
+    // Each title record includes an odometer reading
+    if (meterReading && meterReading > 0) {
+      odometerReadings.push({
+        date: String(t.date || ""),
+        reading: meterReading,
+        unit: String(t.meter_unit === "K" ? "kilometers" : "miles"),
+        source: "Title Record",
+      });
+    }
+  }
+
+  // ── Title brands/checks (salvage, rebuilt, flood, lemon, etc.) ──
+  const checks = (data.checks || []) as Array<Record<string, unknown>>;
+  const hasSalvage = checks.some((c) => {
+    const brand = String(c.brand_title || "").toLowerCase();
+    return brand.includes("salvage") || brand.includes("rebuilt") || brand.includes("junk");
+  });
+  const hasFlood = checks.some((c) => {
+    const brand = String(c.brand_title || "").toLowerCase();
+    return brand.includes("flood") || brand.includes("water");
+  });
+
+  // Add brand info to the matching title record dates, or as standalone entries
+  for (const c of checks) {
+    titleRecords.push({
+      date: String(c.date || ""),
+      state: String(c.brander_code || c.brander_name || ""),
+      titleType: String(c.brand_title || "Branded"),
     });
   }
 
-  // Extract odometer readings
-  const odometerData = (data.odometer_records || data.odometer || []) as Array<Record<string, unknown>>;
-  for (const o of odometerData) {
-    odometerReadings.push({
-      date: String(o.date || ""),
-      reading: Number(o.reading || o.odometer || 0),
-      unit: String(o.unit || "miles"),
-      source: String(o.source || "Unknown"),
-    });
+  // ── Salvage auction records (structural/primary damage info) ────
+  const salvageRecords = (data.salvage || []) as Array<Record<string, unknown>>;
+  const hasStructuralDamage = salvageRecords.some((s) => {
+    const primary = String(s.primary_damage || "").toLowerCase();
+    const secondary = String(s.secondary_damage || "").toLowerCase();
+    return primary.includes("front") || primary.includes("frame") ||
+           secondary.includes("frame") || primary.includes("structural");
+  });
+
+  // Add salvage odometer readings
+  for (const s of salvageRecords) {
+    const mileStr = String(s.milage || s.mileage || "");
+    const miles = Number(mileStr.replace(/[^0-9]/g, ""));
+    if (miles > 0) {
+      odometerReadings.push({
+        date: String(s.date || ""),
+        reading: miles,
+        unit: "miles",
+        source: "Salvage Auction",
+      });
+    }
   }
 
-  // Extract recalls
-  const recallData = (data.recalls || []) as Array<Record<string, unknown>>;
-  for (const r of recallData) {
-    recalls.push({
-      campaignNumber: String(r.campaign_number || r.nhtsa_id || ""),
-      component: String(r.component || ""),
-      summary: String(r.summary || r.description || ""),
-      consequence: String(r.consequence || ""),
-      remedy: String(r.remedy || ""),
-      completionStatus: r.completion_status ? String(r.completion_status) : undefined,
-    });
-  }
+  // ── Accidents ───────────────────────────────────────────────────
+  const accidents = (data.accidents || []) as Array<Record<string, unknown>>;
 
-  // Determine title status
-  const hasSalvage = titleRecords.some((t) =>
-    t.titleType.toLowerCase().includes("salvage") ||
-    t.titleType.toLowerCase().includes("rebuilt")
-  );
+  // ── Junk/Salvage/Insurance records ──────────────────────────────
+  const jsi = (data.jsi || []) as Array<Record<string, unknown>>;
+
+  // ── Owner count: count unique title transfers ───────────────────
+  // Each title with current=false is a previous owner
+  const ownerCount = Math.max(1, titles.filter((t) => t.state).length);
+
+  // ── Sales history (for service record count proxy) ──────────────
+  const sales = (data.sales || []) as Array<Record<string, unknown>>;
+
+  // Sort odometer readings by date for consistent display
+  odometerReadings.sort((a, b) => a.date.localeCompare(b.date));
 
   return {
     provider: "VinAudit",
-    titleStatus: hasSalvage ? "SALVAGE" : "CLEAN",
-    accidentCount: Number(data.accident_count || data.accidents || 0),
-    ownerCount: Number(data.owner_count || data.owners || 1),
-    serviceRecords: Number(data.service_count || 0),
-    structuralDamage: Boolean(data.structural_damage || data.frame_damage),
-    floodDamage: Boolean(data.flood_damage),
-    openRecallCount: recalls.filter((r) => !r.completionStatus || r.completionStatus !== "completed").length,
+    titleStatus: hasSalvage ? "SALVAGE" : (data.clean === false ? "BRANDED" : "CLEAN"),
+    accidentCount: accidents.length,
+    ownerCount,
+    serviceRecords: sales.length, // sales/listings as proxy for activity
+    structuralDamage: hasStructuralDamage,
+    floodDamage: hasFlood,
+    openRecallCount: recalls.length, // VinAudit doesn't return recalls directly — NHTSA covers this
     recalls,
     titleRecords,
     odometerReadings,

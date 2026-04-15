@@ -39,9 +39,9 @@ interface ReportMarketComparable {
 interface ReportMarketAnalysis {
   baselinePrice: number;          // cents
   adjustedPrice: number;          // cents — final fair value
-  recommendation: string;
-  strongBuyMax: number;
-  fairBuyMax: number;
+  recommendation: string | null;
+  strongBuyMax: number | null;
+  fairBuyMax: number | null;
   overpayingMax?: number | null;
   estRetailPrice?: number | null;
   estReconCost?: number | null;

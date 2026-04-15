@@ -243,6 +243,9 @@ model Inspection {
   report          Report?
   aiValuationLogs ValuationLog[]
 
+  // Acquisition type — how the dealer is acquiring this vehicle
+  acquisitionType     String?     @default("WHOLESALE") // "WHOLESALE" | "TRADE_IN"
+
   // Dealer offer customization — explains gap between VeriBuy valuation and dealer's offer
   offerMode           String?     // "AI_ESTIMATED" | "CUSTOM_NOTES" — how the gap is explained to seller
   offerNotes          String?     // Free-text dealer notes shown on seller report when mode = CUSTOM_NOTES
@@ -470,9 +473,9 @@ model MarketAnalysis {
   adjustments   Json
   adjustedPrice Int      // Final fair market value for THIS car (cents)
 
-  recommendation BuyRecommendation
-  strongBuyMax   Int
-  fairBuyMax     Int
+  recommendation BuyRecommendation?
+  strongBuyMax   Int?
+  fairBuyMax     Int?
 
   estRetailPrice Int?
   estReconCost   Int?
@@ -515,7 +518,17 @@ model MarketAnalysis {
   conditionAttenuation  Float?    // 0-1, how much condition multiplier applies
   sourceCount           Int?      // Number of pricing sources that contributed data
 
+  // Black Book single-source pricing
+  acquisitionType       String?   // "WHOLESALE" | "TRADE_IN"
+  bbConditionTier       String?   // "extra_clean" | "clean" | "average" | "rough"
+  bbRetailByTier        Json?     // { extra_clean, clean, average, rough } in cents
+  bbWholesaleByTier     Json?     // { extra_clean, clean, average, rough } in cents
+  bbTradeInByTier       Json?     // { clean, average, rough } in cents
+  marketAdjustment      Float?    // comp-based market multiplier (e.g. 1.08 = 8% hot market)
+  marketAdjustmentNote  String?   // "12 comps avg $26,500 vs BB retail $23,100"
+
   // AI auditor result
+  aiAuditAccepted       Boolean?  // null = auditor agreed, true = dealer accepted, false = dealer declined
   aiAuditorApproved     Boolean?  // true = coherent, false = adjusted
   aiAuditorCoherence    Float?    // 0-1 coherence score
   aiAuditorFlags        Json?     // string[] of issues found

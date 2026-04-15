@@ -120,7 +120,7 @@ Each factor is a multiplier between 0.10 and 1.0 (where 1.0 = no impact). The co
 
 VEHICLE: ${vehicleDesc}
 CATEGORY: ${bodyCategory}
-BASE MARKET VALUE: $${baseMarketValue.toLocaleString()}
+BLACK BOOK RETAIL VALUE: $${baseMarketValue.toLocaleString()} (condition-tiered, mileage+region adjusted)
 CONDITION SCORE: ${conditionScore}/100${mileage ? `\nMILEAGE: ${mileage.toLocaleString()} miles` : ""}
 
 HISTORY:

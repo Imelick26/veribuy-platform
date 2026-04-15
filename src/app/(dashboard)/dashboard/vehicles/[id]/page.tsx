@@ -47,6 +47,18 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
   });
 
+  const setAcquisitionType = trpc.inspection.setAcquisitionType.useMutation({
+    onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
+  });
+
+  const acceptAudit = trpc.inspection.acceptAuditAdjustment.useMutation({
+    onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
+  });
+
+  const declineAudit = trpc.inspection.declineAuditAdjustment.useMutation({
+    onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -288,6 +300,76 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
+          {/* Acquisition type toggle + BB tier badge */}
+          {(market as MarketAnalysisData)?.bbConditionTier && (
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Acquisition</span>
+                <div className="flex items-center gap-0.5 bg-surface-sunken rounded-md p-0.5">
+                  <button
+                    onClick={() => setAcquisitionType.mutate({ inspectionId: inspection!.id, acquisitionType: "WHOLESALE" })}
+                    className={cn("px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer",
+                      (inspection?.acquisitionType ?? "WHOLESALE") === "WHOLESALE"
+                        ? "bg-surface-default text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                    )}
+                  >Wholesale</button>
+                  <button
+                    onClick={() => setAcquisitionType.mutate({ inspectionId: inspection!.id, acquisitionType: "TRADE_IN" })}
+                    className={cn("px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer",
+                      inspection?.acquisitionType === "TRADE_IN"
+                        ? "bg-surface-default text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
+                    )}
+                  >Trade-In</button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="default">Black Book</Badge>
+                <span className="text-xs text-text-secondary">
+                  Score {conditionScore} → <span className="font-semibold capitalize">{String((market as MarketAnalysisData).bbConditionTier).replace("_", " ")}</span>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* AI Auditor second opinion */}
+          {(market as MarketAnalysisData)?.aiAuditorApproved === false && (market as MarketAnalysisData)?.aiAuditAccepted == null && (
+            <div className="mb-4 p-3 rounded-lg border border-caution-300 bg-caution-50">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldAlert className="h-4 w-4 text-caution-600" />
+                <span className="text-xs font-semibold text-caution-700">AI Second Opinion</span>
+              </div>
+              <p className="text-xs text-caution-700 mb-3">{String((market as MarketAnalysisData).aiAuditorReasoning || "")}</p>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => acceptAudit.mutate({ inspectionId: inspection!.id })}
+                  disabled={acceptAudit.isPending}
+                >
+                  <Check className="h-3 w-3" /> Accept AI Adjustment
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => declineAudit.mutate({ inspectionId: inspection!.id })}
+                  disabled={declineAudit.isPending}
+                >
+                  <X className="h-3 w-3" /> Keep BB Price
+                </Button>
+              </div>
+            </div>
+          )}
+          {(market as MarketAnalysisData)?.aiAuditAccepted === true && (
+            <div className="mb-4 px-3 py-2 rounded-lg border border-green-300 bg-green-50">
+              <p className="text-xs text-green-700"><Check className="h-3 w-3 inline mr-1" />AI adjustment accepted</p>
+            </div>
+          )}
+          {(market as MarketAnalysisData)?.aiAuditAccepted === false && (
+            <div className="mb-4 px-3 py-2 rounded-lg border border-border-default bg-surface-overlay">
+              <p className="text-xs text-text-secondary">AI suggested an adjustment — declined (using BB price)</p>
+            </div>
+          )}
+
           {/* Quick stats line */}
           <div className="flex items-center gap-4 text-xs text-text-secondary flex-wrap">
             {reconEstimate > 0 && (
@@ -299,9 +381,11 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             {avgDaysOnMarket != null && (
               <span>Avg. {avgDaysOnMarket}d on lot</span>
             )}
-            {sourceCount > 0 && (
+            {(market as MarketAnalysisData)?.bbConditionTier ? (
+              <span>Source: Black Book</span>
+            ) : sourceCount > 0 ? (
               <span>{sourceCount} data source{sourceCount !== 1 ? "s" : ""}</span>
-            )}
+            ) : null}
           </div>
 
           {/* Collapsible margin adjuster */}
@@ -409,11 +493,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
                 : <><X className="h-3.5 w-3.5" /> Passed</>
               }
             </div>
-            <Link href="/dashboard/inspections/new">
-              <Button variant="ghost" size="sm">
-                <RefreshCw className="h-3.5 w-3.5" /> Re-Inspect
-              </Button>
-            </Link>
           </>
         ) : latestInspection ? (
           <>
@@ -430,11 +509,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             >
               <ThumbsDown className="h-3.5 w-3.5" /> I Passed
             </button>
-            <Link href="/dashboard/inspections/new">
-              <Button variant="ghost" size="sm">
-                <RefreshCw className="h-3.5 w-3.5" /> Re-Inspect
-              </Button>
-            </Link>
           </>
         ) : (
           <Link href="/dashboard/inspections/new">

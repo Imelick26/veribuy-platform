@@ -129,54 +129,50 @@ export async function auditPrice(
 
     primary: {
       model: "gpt-4o",
-      systemPrompt: `You are a pricing quality auditor for a vehicle valuation platform. Your job is to review a fully assembled pricing result and check for coherence issues.
+      systemPrompt: `You are an independent vehicle pricing advisor. Black Book is the primary pricing source. Your job is to review the pricing result and flag cases where Black Book values may not tell the full story.
 
 CRITICAL KNOWLEDGE — ENTHUSIAST PLATFORMS:
-- 7.3L Powerstroke diesels (1994-2003 Ford F-250/F-350): Worth $12K-30K+. Manual trans adds 20-40%. These are NOT cheap old trucks.
-- 5.9L/6.7L Cummins (Dodge/Ram 2500/3500): $15K-35K+. Manual premium applies.
+- 7.3L Powerstroke diesels (1994-2003 Ford F-250/F-350): Worth $12K-30K+. Manual trans adds 20-40%. These are NOT cheap old trucks. Black Book may undervalue these.
+- 5.9L/6.7L Cummins (Dodge/Ram 2500/3500): $15K-35K+. Manual premium applies. Strong enthusiast demand BB may not fully capture.
 - Duramax diesels (Chevy/GMC 2500/3500): $15K-35K+.
-- Toyota Land Cruiser (all years): Holds value extremely well.
+- Toyota Land Cruiser (all years): Holds value extremely well. BB sometimes lags behind real market.
 - Jeep Wrangler: Minimal depreciation regardless of age.
 - Manual transmission trucks: 20-40% premium, increasingly rare.
 - Diesel + manual + 4WD on a heavy-duty truck is the trifecta — VERY valuable.
 - 200K miles on a diesel truck is MID-LIFE, not high mileage. These run 400K+.
 
-IMPORTANT — ACQUISITION-BASED PRICING:
-The consensus value represents DEALER ACQUISITION COST, not retail or private-party price. Each source has been pre-normalized to strip dealer markup, adjust auction bias, etc. before consensus. So the source prices you see ARE acquisition-equivalent already. Do NOT re-apply acquisition discounts or try to strip markup — that's already done.
+PRICING MODEL:
+Black Book provides condition-tiered retail/wholesale/trade-in values. The condition tier is selected based on VeriBuy's inspection score (0-100). BB values are already adjusted for mileage and region. A market adjustment may be applied if comparable dealer listings diverge significantly from BB retail.
 
-The math should be: consensus × config × regional = adjusted base → × condition × history − recon = fair purchase price.
-Verify the math follows this chain. If you recalculate, use the adjusted base as your starting point, NOT the raw consensus.
+The math is: BB Retail [tier] × market adjustment × history multiplier − recon = estimated retail. Then dealer margin is subtracted to get the buy price.
 
 You should flag issues like:
-- Config premium misapplied (e.g., Lariat/XLT treated like a performance trim)
-- Enthusiast platform UNDERPRICED (e.g., a clean manual Powerstroke priced at $9K is wrong)
-- History multiplier inconsistent with title status severity
-- Condition multiplier doesn't match the condition score magnitude
-- Recon cost inconsistent with condition findings
-- Final price outside plausible range for this specific vehicle configuration
-- Individual reasoning contradicts the numbers
-- Double-counting (condition penalized twice, etc.)
+- Enthusiast platform UNDERPRICED by BB (e.g., clean manual Powerstroke valued at $9K)
+- History multiplier too lenient for severe title/damage issues
+- History multiplier too harsh (e.g., 1 minor accident on a truck shouldn't drop value 15%)
+- Condition tier mapping seems wrong (e.g., score 74 = "average" but issues are cosmetic-only on a work truck)
+- Recon cost doesn't match the confirmed findings
+- Market adjustment seems off (comps tell a different story than BB)
+- Final price outside plausible range for this specific vehicle
 
 ONLY flag real issues. Don't flag things that are correct but unusual.
-If everything looks reasonable, approve with high coherence score.
-If the price is clearly wrong for this platform/config, provide an adjusted price.`,
-      userPrompt: `Audit this pricing result for coherence:
+If everything looks reasonable, approve with a high coherence score.
+If the price needs adjustment, provide a suggested retail price in cents. The dealer will decide whether to accept your suggestion or keep the BB price.`,
+      userPrompt: `Review this pricing result:
 
 VEHICLE: ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} miles` : ""}
 
-SOURCE PRICES (acquisition-normalized): ${sourceSummary}
+BLACK BOOK: ${sourceSummary}
 
-VERIFIED MATH TRACE (each step's output feeds the next step's input):
+PRICING CHAIN:
 ${(input.pricingTrace || []).filter((s) => s.label !== "Fair Purchase Price").map((step, i) => {
   const pad = step.label.padEnd(24);
   return `Step ${i + 1}: ${pad} ${step.operation.padEnd(12)} = $${step.outputDollars.toLocaleString()}  [${step.explanation}]`;
 }).join("\n")}
 
 FAIR PURCHASE PRICE: $${fairDollars.toLocaleString()}
-Deal rating: ${input.dealRating} — "${input.dealReasoning}"
 
-YOUR JOB: Verify each step's multiplier/amount makes sense for THIS vehicle.
-Do NOT recalculate from scratch — verify each step independently.
+YOUR JOB: Does the BB pricing make sense for THIS specific vehicle? Consider the vehicle's history, condition, and how comparable listings align. If you think the retail value should be different, suggest an adjusted price.
 
 FULL VEHICLE CONTEXT:
 Category: ${input.bodyCategory || "unknown"}${conditionContext}${areaScoreContext}${findingsContext}${compsContext}
@@ -184,10 +180,10 @@ Category: ${input.bodyCategory || "unknown"}${conditionContext}${areaScoreContex
 Return JSON:
 {
   "approved": boolean,
-  "adjustedFairPrice": number | null (in CENTS — only if not approved, your corrected estimate),
+  "adjustedFairPrice": number | null (in CENTS — only if not approved, your suggested fair purchase price),
   "flags": ["list of specific issues found"],
-  "coherenceScore": number (0.0-1.0, how internally consistent is this result),
-  "reasoning": "2-3 sentences explaining your audit conclusion"
+  "coherenceScore": number (0.0-1.0, how confident are you in the current pricing),
+  "reasoning": "2-3 sentences explaining your assessment. If suggesting an adjustment, explain WHY BB may be off for this vehicle."
 }`,
       temperature: 0.1,
       maxTokens: 800,

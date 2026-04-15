@@ -1,785 +1,519 @@
 /**
- * Market Data Orchestrator (v3 — 6-Source Consensus)
+ * Market Data Fetcher (v5 — Black Book + AI Intelligence)
  *
- * Fetches vehicle market value from up to 5 API sources in parallel,
- * then combines them using a weighted consensus algorithm.
+ * Fetches vehicle market value from Black Book as the sole pricing source.
+ * BB provides wholesale, retail, and trade-in values across 4 condition tiers
+ * (rough / average / clean / extra_clean), plus mileage+region-adjusted variants.
  *
- * Sources (parallel fan-out via Promise.allSettled):
- *   1. Black Book — wholesale + retail (condition-tiered)
- *   2. VehicleDatabases.com — condition-tiered retail pricing
- *   3. NADA Guides — dealer/lender standard with loan value
- *   4. VinAudit — VIN-based market value
- *   5. MarketCheck — real dealer inventory
- *   6. Category-aware fallback curves (always available, lowest weight)
+ * KEY INNOVATION: Condition score interpolation between BB tiers.
+ * Instead of snapping to the nearest tier (creating $2,600 cliffs), we
+ * interpolate smoothly between tier values. Every point of condition score
+ * moves the price proportionally. This is VeriBuy's core value-add.
  *
- * After consensus, configuration premiums are applied with a mode
- * determined by the consensus engine (full/partial/none).
+ * AI Market Intelligence replaces the deterministic comp adjustment.
+ * AI Fallback Valuation replaces crude hardcoded curves when BB has no data.
+ *
+ * BB Retail Market Insights provides comparable dealer inventory + sold stats
+ * for market validation and dealer decision context.
  */
 
-import { fetchVehicleDatabasesData, fetchVDBAuctionHistory } from "./vehicledatabases";
-import { fetchMarketValue as fetchVinAuditValue } from "./vinaudit";
+import {
+  fetchBlackBookValuation,
+  fetchBlackBookByYMM,
+  fetchBlackBookRetailInsights,
+  mapScoreToBBCondition,
+  type BBValuation,
+  type BBCondition,
+  type BBRetailComp,
+  type BBRetailInsightsResult,
+} from "./blackbook";
+import { analyzeMarketIntelligence, type MarketIntelligenceResult } from "./ai/market-intelligence";
+import { estimateFallbackValuation } from "./ai/fallback-valuation";
 import { reportSuccess, reportFailure, reportMissingKey } from "./api-health";
-import { fetchMarketCheckData } from "./marketcheck";
-import { fetchNADAValuation, fetchNADAByYMM } from "./nada-guides";
-import { fetchBlackBookValuation, fetchBlackBookByYMM, mapScoreToBBCondition } from "./blackbook";
-import {
-  calculateConfigPremiums,
-  classifyBody,
-  type ConfigPremium,
-  type VehicleConfig,
-} from "./config-premiums";
-import { zipToState, getRegionalMultiplier } from "./geo-pricing";
-import {
-  calculateConsensus,
-  selectTierPrices,
-  mapConditionToTier,
-  type SourceEstimate,
-  type ConsensusResult,
-  type PricingTraceStep,
-} from "./pricing-consensus";
-import type { NormalizedListing } from "./marketcheck";
-import { analyzeConsensusWeights } from "./ai/consensus-weighter";
-import { analyzeConfigPremiums } from "./ai/config-premium-analyzer";
-import { analyzeRegionalPricing } from "./ai/geo-pricing-analyzer";
-import { estimateMarketValue, toSourceEstimate } from "./ai/market-value-estimator";
-import { normalizeSourcesForAcquisition, applyNormalization } from "./ai/source-normalizer";
+import { classifyBody, type VehicleConfig } from "./config-premiums";
+import { zipToState } from "./geo-pricing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export interface MarketDataResult {
-  /** Consensus estimated value in dollars (private party, after config premiums) */
-  estimatedValue: number;
-  /** Low end of range in dollars (trade-in based) */
-  valueLow: number;
-  /** High end of range in dollars (dealer retail based) */
-  valueHigh: number;
-  /** Mileage adjustment in dollars */
-  mileageAdjustment: number;
-  /** Comparable listings from all sources */
-  nearbyListings: NormalizedListing[];
+export type AcquisitionType = "WHOLESALE" | "TRADE_IN";
 
-  /** Primary data source */
-  dataSource: string;
-  /** Confidence in the consensus price (0-1) */
-  confidence: number;
-  /** Base value BEFORE config premiums (dollars) */
-  baseValuePreConfig: number;
-  /** Applied configuration premiums */
-  configPremiums: ConfigPremium[];
-  /** Combined config premium multiplier */
-  configMultiplier: number;
-
-  /** Five-perspective pricing (dollars) */
-  tradeInValue: number;
-  privatePartyValue: number;
-  dealerRetailValue: number;
+export interface BBMarketDataResult {
+  /** Full BB valuation (null if using AI fallback) */
+  bbValuation: BBValuation | null;
+  /** BB condition tier selected based on inspection score */
+  conditionTier: BBCondition;
+  /** Acquisition value in cents — adjustedWholesale[interpolated] or tradeIn[interpolated] */
+  acquisitionValue: number;
+  /** BB retail reference in cents — interpolated BB retail for this condition */
+  retailValue: number;
+  /** Market-validated retail in cents — BB retail adjusted by AI market intelligence */
+  marketValidatedRetail: number;
+  /** Wholesale value in cents — interpolated BB wholesale */
   wholesaleValue: number;
-  loanValue: number;
-
-  /** VDB condition tier used (if applicable) */
-  vdbConditionTier: string | null;
-
-  /** All individual source results for transparency */
-  sourceResults: SourceEstimate[];
-  /** Consensus method used */
-  consensusMethod: string;
-  /** Config premium mode used */
-  configPremiumMode: "full" | "partial" | "none";
-  /** Condition attenuation factor applied */
-  conditionAttenuation: number;
-  /** Number of sources that contributed */
-  sourceCount: number;
-
-  /** AI valuation metadata */
-  /** Step-by-step dollar trace of the pricing chain */
-  pricingTrace: PricingTraceStep[];
-
-  aiMetadata?: {
-    consensusTier: number;
-    configPremiumTier: number;
-    geoPricingTier: number;
-    sourceNormTier: number;
-    consensusReasoning?: string;
-    configReasoning?: string;
-    geoReasoning?: string;
-    sourceNormReasoning?: string;
-    /** Per-source normalization details */
-    sourceNormalization?: Array<{
-      source: string;
-      originalValue: number;
-      acquisitionValue: number;
-      multiplier: number;
-      reason: string;
-    }>;
-  };
+  /** Trade-in value in cents — interpolated BB trade-in */
+  tradeInValue: number;
+  /** Market adjustment multiplier from AI (1.0 = no adjustment) */
+  marketAdjustment: number;
+  /** Human-readable market adjustment explanation */
+  marketAdjustmentNote: string;
+  /** Market demand signal from AI */
+  demandSignal: "strong" | "normal" | "weak";
+  /** AI market intelligence flags for the dealer */
+  marketFlags: string[];
+  /** All BB retail values by tier (cents) */
+  bbRetailByTier: Record<BBCondition, number>;
+  /** All BB wholesale values by tier (cents) */
+  bbWholesaleByTier: Record<BBCondition, number>;
+  /** All BB trade-in values by tier (cents) — no extra_clean */
+  bbTradeInByTier: { clean: number; average: number; rough: number };
+  /** Private party values by tier (cents) — no extra_clean */
+  bbPrivatePartyByTier: { clean: number; average: number; rough: number };
+  /** Comparable listings from BB Retail Market Insights */
+  comparables: BBRetailComp[];
+  /** BB Retail Insights aggregate stats */
+  retailInsights: BBRetailInsightsResult | null;
+  /** "blackbook", "ai_fallback", or "emergency_fallback" */
+  dataSource: "blackbook" | "ai_fallback" | "emergency_fallback";
+  /** Confidence (0.90 for BB, varies for AI/emergency) */
+  confidence: number;
 }
 
 /* ------------------------------------------------------------------ */
-/*  Category-Aware Fallback Curves                                     */
+/*  Condition Score Interpolation                                      */
 /* ------------------------------------------------------------------ */
 
-const FALLBACK_CURVES: Record<string, Record<string, number>> = {
-  truck: {
-    "0-5": 38000, "5-10": 28000, "10-15": 20000, "15-20": 16000,
-    "20-25": 12000, "25-30": 9000, "30+": 7000,
-  },
-  suv: {
-    "0-5": 32000, "5-10": 24000, "10-15": 16000, "15-20": 12000,
-    "20-25": 9000, "25-30": 7000, "30+": 5000,
-  },
-  sports: {
-    "0-5": 30000, "5-10": 22000, "10-15": 15000, "15-20": 11000,
-    "20-25": 8000, "25-30": 6000, "30+": 5000,
-  },
-  sedan: {
-    "0-5": 24000, "5-10": 16000, "10-15": 10000, "15-20": 6000,
-    "20-25": 4000, "25-30": 3000, "30+": 2500,
-  },
-  other: {
-    "0-5": 28000, "5-10": 20000, "10-15": 12000, "15-20": 8000,
-    "20-25": 6000, "25-30": 4500, "30+": 3500,
-  },
-};
+/**
+ * Tier boundaries: score ranges that map to each BB condition tier.
+ *
+ *   90-100 → extra_clean
+ *   75-89  → clean
+ *   50-74  → average
+ *   0-49   → rough
+ */
+const TIER_BOUNDARIES: Array<{ tier: BBCondition; low: number; high: number }> = [
+  { tier: "rough",       low: 0,  high: 49 },
+  { tier: "average",     low: 50, high: 74 },
+  { tier: "clean",       low: 75, high: 89 },
+  { tier: "extra_clean", low: 90, high: 100 },
+];
 
-function getAgeBracket(age: number): string {
-  if (age <= 5) return "0-5";
-  if (age <= 10) return "5-10";
-  if (age <= 15) return "10-15";
-  if (age <= 20) return "15-20";
-  if (age <= 25) return "20-25";
-  if (age <= 30) return "25-30";
-  return "30+";
+/**
+ * Interpolate a value between BB condition tiers based on condition score.
+ *
+ * Instead of snapping to the nearest tier (e.g., score 74 → "average" = $20,500),
+ * we interpolate between the two nearest tier values:
+ *
+ *   Score 82 (between average@75 and clean@90):
+ *     position = (82 - 75) / (90 - 75) = 0.467
+ *     value = average + 0.467 × (clean - average)
+ *
+ * This eliminates pricing cliffs at tier boundaries and makes every
+ * point of condition score meaningful.
+ */
+function interpolateTierValue(
+  score: number,
+  tierValues: Record<BBCondition, number>,
+): number {
+  // Clamp score to 0-100
+  const s = Math.max(0, Math.min(100, score));
+
+  // Order: rough(0-49) → average(50-74) → clean(75-89) → extra_clean(90-100)
+  const ordered: Array<{ tier: BBCondition; midpoint: number }> = [
+    { tier: "rough",       midpoint: 25 },
+    { tier: "average",     midpoint: 62 },
+    { tier: "clean",       midpoint: 82 },
+    { tier: "extra_clean", midpoint: 95 },
+  ];
+
+  // If at or below the lowest midpoint, return rough
+  if (s <= ordered[0].midpoint) return tierValues.rough;
+  // If at or above the highest midpoint, return extra_clean
+  if (s >= ordered[ordered.length - 1].midpoint) return tierValues.extra_clean;
+
+  // Find the two surrounding midpoints
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const lower = ordered[i];
+    const upper = ordered[i + 1];
+    if (s >= lower.midpoint && s <= upper.midpoint) {
+      const position = (s - lower.midpoint) / (upper.midpoint - lower.midpoint);
+      const lowerVal = tierValues[lower.tier];
+      const upperVal = tierValues[upper.tier];
+      return Math.round(lowerVal + position * (upperVal - lowerVal));
+    }
+  }
+
+  // Shouldn't reach here, but fallback to nearest tier
+  return tierValues[mapScoreToBBCondition(s)];
 }
 
 /**
- * Average annual mileage by vehicle category (industry data).
- * Used for mileage adjustment on sources that don't account for mileage.
+ * Interpolate trade-in values (no extra_clean tier).
  */
-const AVG_ANNUAL_MILES: Record<string, number> = {
-  truck: 13500,   // trucks driven more (towing, rural)
-  suv: 12500,
-  sedan: 12000,
-  sports: 8000,   // sports cars driven less (weekend cars)
-  other: 12000,
-};
+function interpolateTradeInValue(
+  score: number,
+  tradeInValues: { clean: number; average: number; rough: number },
+): number {
+  const s = Math.max(0, Math.min(100, score));
 
-/**
- * Per-mile adjustment rate by price tier.
- * Higher-value vehicles lose more per excess mile.
- * Expressed as dollars per mile of deviation from expected.
- */
-function getMileageAdjustmentRate(baseValue: number): number {
-  if (baseValue >= 50000) return 0.15;   // $0.15/mi for expensive vehicles
-  if (baseValue >= 30000) return 0.12;
-  if (baseValue >= 15000) return 0.08;
-  if (baseValue >= 8000) return 0.05;
-  return 0.03;                           // cheap cars: mileage matters less
+  // Trade-in uses: rough(0-49) → average(50-74) → clean(75+)
+  const ordered = [
+    { midpoint: 25,  value: tradeInValues.rough },
+    { midpoint: 62,  value: tradeInValues.average },
+    { midpoint: 82,  value: tradeInValues.clean },
+  ];
+
+  if (s <= ordered[0].midpoint) return tradeInValues.rough;
+  if (s >= ordered[ordered.length - 1].midpoint) return tradeInValues.clean;
+
+  for (let i = 0; i < ordered.length - 1; i++) {
+    if (s >= ordered[i].midpoint && s <= ordered[i + 1].midpoint) {
+      const position = (s - ordered[i].midpoint) / (ordered[i + 1].midpoint - ordered[i].midpoint);
+      return Math.round(ordered[i].value + position * (ordered[i + 1].value - ordered[i].value));
+    }
+  }
+
+  return tradeInValues.average;
 }
 
-function getFallbackEstimate(vehicle: VehicleConfig, mileage?: number): SourceEstimate {
+/* ------------------------------------------------------------------ */
+/*  Emergency Fallback (when AI fallback also fails)                   */
+/* ------------------------------------------------------------------ */
+
+function getEmergencyFallbackResult(
+  vehicle: VehicleConfig,
+  conditionTier: BBCondition,
+  conditionScore: number,
+  acquisitionType: AcquisitionType,
+  mileage?: number,
+): BBMarketDataResult {
   const bodyType = classifyBody(vehicle);
   const age = new Date().getFullYear() - vehicle.year;
-  const bracket = getAgeBracket(age);
-  const curve = FALLBACK_CURVES[bodyType] || FALLBACK_CURVES.other;
-  let estimated = curve[bracket] || 5000;
 
-  // Apply mileage adjustment — compare actual to expected
+  // Very crude curves — only used when both BB AND AI fallback fail
+  const CURVES: Record<string, Record<string, number>> = {
+    truck:  { "0-5": 38000, "5-10": 28000, "10-15": 20000, "15-20": 16000, "20-25": 12000, "25-30": 9000, "30+": 7000 },
+    suv:    { "0-5": 32000, "5-10": 24000, "10-15": 16000, "15-20": 12000, "20-25": 9000,  "25-30": 7000, "30+": 5000 },
+    sports: { "0-5": 30000, "5-10": 22000, "10-15": 15000, "15-20": 11000, "20-25": 8000,  "25-30": 6000, "30+": 5000 },
+    sedan:  { "0-5": 24000, "5-10": 16000, "10-15": 10000, "15-20": 6000,  "20-25": 4000,  "25-30": 3000, "30+": 2500 },
+    other:  { "0-5": 28000, "5-10": 20000, "10-15": 12000, "15-20": 8000,  "20-25": 6000,  "25-30": 4500, "30+": 3500 },
+  };
+  const AVG_MILES: Record<string, number> = { truck: 13500, suv: 12500, sedan: 12000, sports: 8000, other: 12000 };
+
+  const bracket = age <= 5 ? "0-5" : age <= 10 ? "5-10" : age <= 15 ? "10-15" : age <= 20 ? "15-20" : age <= 25 ? "20-25" : age <= 30 ? "25-30" : "30+";
+  let estimated = (CURVES[bodyType] || CURVES.other)[bracket] || 5000;
+
   if (mileage && age > 0) {
-    const avgAnnual = AVG_ANNUAL_MILES[bodyType] || 12000;
-    const expectedMiles = avgAnnual * age;
-    const milesDelta = mileage - expectedMiles; // positive = over-mileage
-    const rate = getMileageAdjustmentRate(estimated);
-    const adjustment = Math.round(milesDelta * rate);
-
-    // Cap adjustment at ±30% of base value
-    const maxAdj = Math.round(estimated * 0.30);
-    const clampedAdj = Math.max(-maxAdj, Math.min(maxAdj, adjustment));
-    estimated = Math.max(1000, estimated - clampedAdj);
+    const avgAnnual = AVG_MILES[bodyType] || 12000;
+    const milesDelta = mileage - avgAnnual * age;
+    const rate = estimated >= 30000 ? 0.12 : estimated >= 15000 ? 0.08 : 0.05;
+    const adj = Math.round(milesDelta * rate);
+    const cap = Math.round(estimated * 0.30);
+    estimated = Math.max(1000, estimated - Math.max(-cap, Math.min(cap, adj)));
   }
 
+  const retailCents = Math.round(estimated * 1.25) * 100;
+  const wholesaleCents = Math.round(estimated * 0.65) * 100;
+  const tradeInCents = Math.round(estimated * 0.75) * 100;
+
+  const bbRetailByTier: Record<BBCondition, number> = {
+    extra_clean: Math.round(retailCents * 1.10),
+    clean: retailCents,
+    average: Math.round(retailCents * 0.85),
+    rough: Math.round(retailCents * 0.70),
+  };
+  const bbWholesaleByTier: Record<BBCondition, number> = {
+    extra_clean: Math.round(wholesaleCents * 1.10),
+    clean: wholesaleCents,
+    average: Math.round(wholesaleCents * 0.85),
+    rough: Math.round(wholesaleCents * 0.70),
+  };
+  const bbTradeInByTier = {
+    clean: tradeInCents,
+    average: Math.round(tradeInCents * 0.85),
+    rough: Math.round(tradeInCents * 0.70),
+  };
+  const bbPrivatePartyByTier = {
+    clean: Math.round(tradeInCents * 1.10),
+    average: Math.round(tradeInCents * 0.95),
+    rough: Math.round(tradeInCents * 0.80),
+  };
+
+  const interpRetail = interpolateTierValue(conditionScore, bbRetailByTier);
+  const interpWholesale = interpolateTierValue(conditionScore, bbWholesaleByTier);
+  const interpTradeIn = interpolateTradeInValue(conditionScore, bbTradeInByTier);
+
   return {
-    source: "fallback",
-    estimatedValue: estimated,
-    tradeInValue: Math.round(estimated * 0.75),
-    dealerRetailValue: Math.round(estimated * 1.25),
-    wholesaleValue: Math.round(estimated * 0.65),
-    loanValue: Math.round(estimated * 0.80),
-    confidence: 0.25,
-    isConditionTiered: false,
+    bbValuation: null,
+    conditionTier,
+    acquisitionValue: acquisitionType === "TRADE_IN" ? interpTradeIn : interpWholesale,
+    retailValue: interpRetail,
+    marketValidatedRetail: interpRetail,
+    wholesaleValue: interpWholesale,
+    tradeInValue: interpTradeIn,
+    marketAdjustment: 1.0,
+    marketAdjustmentNote: "Black Book and AI fallback unavailable — using emergency estimates",
+    demandSignal: "normal",
+    marketFlags: ["Emergency fallback pricing — values are rough estimates only"],
+    bbRetailByTier,
+    bbWholesaleByTier,
+    bbTradeInByTier,
+    bbPrivatePartyByTier,
+    comparables: [],
+    retailInsights: null,
+    dataSource: "emergency_fallback",
+    confidence: 0.15,
   };
 }
 
 /* ------------------------------------------------------------------ */
-/*  Source Fetchers (return SourceEstimate | null)                      */
-/* ------------------------------------------------------------------ */
-
-async function fetchBlackBookSource(
-  vin: string,
-  vehicle: VehicleConfig,
-  mileage: number | undefined,
-  state: string,
-  conditionScore: number,
-): Promise<SourceEstimate | null> {
-  // Try VIN first, fallback to YMM
-  let result = await fetchBlackBookValuation(vin, mileage, state);
-  if (!result) {
-    result = await fetchBlackBookByYMM(vehicle.year, vehicle.make, vehicle.model, mileage, state);
-  }
-  if (!result) return null;
-
-  // Pick condition-appropriate values
-  const condition = mapScoreToBBCondition(conditionScore);
-
-  const wholesaleVal = result.adjustedWholesale[condition] || result.wholesale[condition] || 0;
-  const retailVal = result.adjustedRetail[condition] || result.retail[condition] || 0;
-  const tradeInVal = condition === "extra_clean"
-    ? result.tradeIn.clean // no extra_clean for trade-in, use clean
-    : (result.tradeIn as Record<string, number>)[condition] || 0;
-
-  // Private party estimate = midpoint of wholesale and retail
-  const estimatedValue = Math.round((wholesaleVal + retailVal) / 2) || retailVal || wholesaleVal;
-  if (estimatedValue <= 0) return null;
-
-  return {
-    source: "blackbook",
-    estimatedValue,
-    tradeInValue: tradeInVal || Math.round(estimatedValue * 0.85),
-    dealerRetailValue: retailVal || Math.round(estimatedValue * 1.15),
-    wholesaleValue: wholesaleVal || Math.round(estimatedValue * 0.78),
-    loanValue: 0, // Black Book doesn't provide loan value
-    confidence: 0.90,
-    isConditionTiered: true,
-    raw: { condition, wholesale: wholesaleVal, retail: retailVal, tradeIn: tradeInVal },
-  };
-}
-
-async function fetchVDBSource(
-  vin: string,
-  mileage: number | undefined,
-  state: string,
-  conditionScore: number,
-): Promise<{ estimate: SourceEstimate; tier: string } | null> {
-  const result = await fetchVehicleDatabasesData(vin, mileage, state);
-  if (!result) return null;
-
-  const { tier, prices } = selectTierPrices(result.tiers, conditionScore);
-
-  // Use private party as the primary comparison value
-  const estimatedValue = prices.privateParty || prices.dealerRetail || prices.tradeIn;
-  if (estimatedValue <= 0) return null;
-
-  return {
-    estimate: {
-      source: "vehicledatabases",
-      estimatedValue,
-      tradeInValue: prices.tradeIn,
-      dealerRetailValue: prices.dealerRetail,
-      wholesaleValue: Math.round(prices.tradeIn * 0.90), // estimate wholesale from trade-in
-      loanValue: 0,
-      confidence: 0.90,
-      isConditionTiered: true,
-      raw: { tier, allTiers: result.tiers },
-    },
-    tier,
-  };
-}
-
-async function fetchNADASource(
-  vin: string,
-  vehicle: VehicleConfig,
-  mileage: number | undefined,
-  conditionScore: number,
-): Promise<SourceEstimate | null> {
-  // Try VIN first (pass year to help resolve), fallback to YMM
-  let result = await fetchNADAValuation(vin, mileage, vehicle.year);
-  if (!result) {
-    result = await fetchNADAByYMM(vehicle.year, vehicle.make, vehicle.model, mileage);
-  }
-  if (!result) return null;
-
-  // Pick condition-appropriate values
-  let retailVal: number;
-  let tradeInVal: number;
-
-  if (conditionScore >= 75) {
-    retailVal = result.retailClean;
-    tradeInVal = result.tradeInClean;
-  } else if (conditionScore >= 50) {
-    retailVal = result.retailAverage;
-    tradeInVal = result.tradeInAverage;
-  } else {
-    retailVal = result.retailRough;
-    tradeInVal = result.tradeInRough;
-  }
-
-  // Private party = midpoint of trade-in and retail
-  const estimatedValue = Math.round((tradeInVal + retailVal) / 2) || retailVal || tradeInVal;
-  if (estimatedValue <= 0) return null;
-
-  return {
-    source: "nada",
-    estimatedValue,
-    tradeInValue: tradeInVal || Math.round(estimatedValue * 0.85),
-    dealerRetailValue: retailVal || Math.round(estimatedValue * 1.15),
-    wholesaleValue: 0, // NADA doesn't provide wholesale
-    loanValue: result.loanValue || Math.round(tradeInVal * 1.05),
-    confidence: 0.85,
-    isConditionTiered: true,
-    raw: result,
-  };
-}
-
-async function fetchVinAuditSource(
-  vin: string,
-  mileage: number | undefined,
-): Promise<SourceEstimate | null> {
-  const result = await fetchVinAuditValue(vin, mileage);
-  if (!result || result.estimatedValue <= 1000) return null;
-
-  return {
-    source: "vinaudit",
-    estimatedValue: result.estimatedValue,
-    tradeInValue: Math.round(result.estimatedValue * 0.82),
-    dealerRetailValue: result.valueHigh || Math.round(result.estimatedValue * 1.2),
-    wholesaleValue: 0,
-    loanValue: 0,
-    confidence: 0.80,
-    isConditionTiered: false,
-    raw: result,
-  };
-}
-
-async function fetchMarketCheckSource(
-  vehicle: VehicleConfig,
-  zip: string,
-  mileage: number | undefined,
-): Promise<{ estimate: SourceEstimate; listings: NormalizedListing[] } | null> {
-  const result = await fetchMarketCheckData(
-    {
-      year: vehicle.year,
-      make: vehicle.make,
-      model: vehicle.model,
-      trim: vehicle.trim,
-      drivetrain: vehicle.drivetrain,
-      transmission: vehicle.transmission,
-      bodyStyle: vehicle.bodyStyle,
-    },
-    zip,
-    mileage,
-  );
-  if (!result) return null;
-
-  // Scale confidence based on listing count
-  const listingConfidence = result.nearbyListings.length >= 10 ? 0.85
-    : result.nearbyListings.length >= 5 ? 0.75
-    : result.nearbyListings.length >= 2 ? 0.65
-    : 0.50;
-
-  return {
-    estimate: {
-      source: "marketcheck",
-      estimatedValue: result.estimatedValue,
-      tradeInValue: Math.round(result.estimatedValue * 0.85),
-      dealerRetailValue: result.valueHigh || Math.round(result.estimatedValue * 1.15),
-      wholesaleValue: 0,
-      loanValue: 0,
-      confidence: listingConfidence,
-      isConditionTiered: false,
-      raw: {
-        stats: { low: result.valueLow, high: result.valueHigh },
-        listingCount: result.nearbyListings.length,
-        totalFound: result.totalFound,
-        avgDaysOnMarket: result.avgDaysOnMarket,
-      },
-    },
-    listings: result.nearbyListings,
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Orchestrator                                                       */
+/*  Main Fetcher                                                       */
 /* ------------------------------------------------------------------ */
 
 /**
- * Fetch market data from all sources in parallel, apply consensus, then config premiums.
+ * Fetch market data from Black Book (valuations + retail market insights).
+ *
+ * Pipeline:
+ *   1. BB Used Car API → tier values (or AI fallback if BB fails)
+ *   2. Interpolate between tiers using condition score
+ *   3. BB Retail Listings API → comps + sold stats
+ *   4. AI Market Intelligence → validates BB against real market data
  *
  * @param vehicle        - Vehicle with VIN and decoded specs
- * @param zip            - ZIP code for nearby search
+ * @param zip            - ZIP code for regional adjustment
  * @param mileage        - Current odometer reading
- * @param conditionScore - AI condition score (0-100), defaults to 70
+ * @param conditionScore - Inspection condition score (0-100), defaults to 70
+ * @param acquisitionType - "WHOLESALE" or "TRADE_IN"
  */
 export async function fetchMarketData(
   vehicle: VehicleConfig & { vin: string },
   zip: string = "97201",
   mileage?: number,
   conditionScore: number = 70,
-): Promise<MarketDataResult> {
-  // Derive state from ZIP for regional pricing + API calls that need it
+  acquisitionType: AcquisitionType = "WHOLESALE",
+): Promise<BBMarketDataResult> {
   const state = zipToState(zip);
-
-  const sourceEstimates: SourceEstimate[] = [];
-  let allListings: NormalizedListing[] = [];
-  let vdbConditionTier: string | null = null;
-  let mileageAdjustment = 0;
-
-  // ── Check for missing API keys (report once per hour) ────────────
-  if (!process.env.BLACKBOOK_USERNAME) reportMissingKey("BlackBook", "BLACKBOOK_USERNAME").catch(() => {});
-  if (!process.env.VEHICLEDATABASES_API_KEY) reportMissingKey("VehicleDatabases", "VEHICLEDATABASES_API_KEY").catch(() => {});
-  if (!process.env.NADA_RAPIDAPI_KEY) reportMissingKey("NADA", "NADA_RAPIDAPI_KEY").catch(() => {});
-  if (!process.env.VINAUDIT_API_KEY) reportMissingKey("VinAudit", "VINAUDIT_API_KEY").catch(() => {});
-  if (!process.env.MARKETCHECK_API_KEY) reportMissingKey("MarketCheck", "MARKETCHECK_API_KEY").catch(() => {});
-
-  // ── Parallel fan-out: fire all API calls simultaneously ─────────
-  const [bbResult, vdbResult, nadaResult, vinAuditResult, marketCheckResult, vdbAuctionResult] = await Promise.allSettled([
-    // Black Book
-    fetchBlackBookSource(vehicle.vin, vehicle, mileage, state, conditionScore).then((r) => {
-      if (r) reportSuccess("BlackBook");
-      return r;
-    }).catch((err) => {
-      const statusMatch = String(err).match(/\((\d{3})\)/);
-      reportFailure("BlackBook", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
-      return null;
-    }),
-    // VehicleDatabases
-    fetchVDBSource(vehicle.vin, mileage, state, conditionScore).then((r) => {
-      if (r) reportSuccess("VehicleDatabases");
-      return r;
-    }).catch((err) => {
-      const statusMatch = String(err).match(/\((\d{3})\)/);
-      reportFailure("VehicleDatabases", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
-      return null;
-    }),
-    // NADA Guides
-    fetchNADASource(vehicle.vin, vehicle, mileage, conditionScore).then((r) => {
-      if (r) reportSuccess("NADA");
-      return r;
-    }).catch((err) => {
-      const statusMatch = String(err).match(/\((\d{3})\)/);
-      reportFailure("NADA", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
-      return null;
-    }),
-    // VinAudit
-    fetchVinAuditSource(vehicle.vin, mileage).then((r) => {
-      if (r) reportSuccess("VinAudit");
-      return r;
-    }).catch((err) => {
-      const statusMatch = String(err).match(/\((\d{3})\)/);
-      reportFailure("VinAudit", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
-      return null;
-    }),
-    // MarketCheck
-    fetchMarketCheckSource(vehicle, zip, mileage).then((r) => {
-      if (r) reportSuccess("MarketCheck");
-      return r;
-    }).catch((err) => {
-      const statusMatch = String(err).match(/\((\d{3})\)/);
-      reportFailure("MarketCheck", err, statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
-      return null;
-    }),
-    // VDB Auction History (real sold-at-auction prices)
-    fetchVDBAuctionHistory(vehicle.vin).catch((err) => {
-      console.warn(`[VDB Auction] Failed: ${err instanceof Error ? err.message : err}`);
-      return null;
-    }),
-  ]);
-
-  // ── Collect results ──────────────────────────────────────────────
-
-  // Black Book
-  const bb = bbResult.status === "fulfilled" ? bbResult.value : null;
-  if (bb) {
-    sourceEstimates.push(bb);
-    console.log(
-      `[MarketData] BlackBook: $${bb.estimatedValue} PP / $${bb.wholesaleValue} WS / $${bb.dealerRetailValue} DR`,
-    );
-  }
-
-  // VehicleDatabases
-  const vdb = vdbResult.status === "fulfilled" ? vdbResult.value : null;
-  if (vdb) {
-    sourceEstimates.push(vdb.estimate);
-    vdbConditionTier = vdb.tier;
-    console.log(
-      `[MarketData] VehicleDatabases (${vdb.tier}): $${vdb.estimate.estimatedValue} PP / $${vdb.estimate.tradeInValue} TI / $${vdb.estimate.dealerRetailValue} DR`,
-    );
-  }
-
-  // NADA Guides
-  const nada = nadaResult.status === "fulfilled" ? nadaResult.value : null;
-  if (nada) {
-    sourceEstimates.push(nada);
-    console.log(
-      `[MarketData] NADA: $${nada.estimatedValue} PP / $${nada.tradeInValue} TI / $${nada.loanValue} Loan`,
-    );
-  }
-
-  // VinAudit
-  const vinAudit = vinAuditResult.status === "fulfilled" ? vinAuditResult.value : null;
-  if (vinAudit) {
-    sourceEstimates.push(vinAudit);
-    console.log(`[MarketData] VinAudit: $${vinAudit.estimatedValue}`);
-  }
-
-  // MarketCheck
-  const mc = marketCheckResult.status === "fulfilled" ? marketCheckResult.value : null;
-  if (mc) {
-    sourceEstimates.push(mc.estimate);
-    allListings = mc.listings;
-    console.log(
-      `[MarketData] MarketCheck: $${mc.estimate.estimatedValue} (${mc.listings.length} comps)`,
-    );
-  }
-
-  // VDB Auction History — real sold-at-auction prices as comps
-  const vdbAuction = vdbAuctionResult.status === "fulfilled" ? vdbAuctionResult.value : null;
-  if (vdbAuction && vdbAuction.records.length > 0) {
-    const auctionListings: NormalizedListing[] = vdbAuction.records.map((r) => ({
-      title: r.vehicleName || `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
-      price: r.salePrice,
-      mileage: r.mileage || 0,
-      location: r.location || "Auction",
-      source: `${r.auctionHouse || "Auction"} (Sold${r.saleDate ? ` ${r.saleDate}` : ""})`,
-      url: undefined,
-    }));
-    allListings.push(...auctionListings);
-    console.log(`[MarketData] VDB Auction History: ${auctionListings.length} sold records`);
-  }
-
-  // AI-powered fallback — understands enthusiast platforms, diesel premiums, etc.
+  const conditionTier = mapScoreToBBCondition(conditionScore);
   const bodyCategory = classifyBody(vehicle);
-  const apiSourceValues = sourceEstimates
-    .filter((s) => s.estimatedValue > 0)
-    .map((s) => ({ source: s.source, value: s.estimatedValue }));
 
-  const aiFallback = await estimateMarketValue({
-    vehicle: {
-      year: vehicle.year, make: vehicle.make, model: vehicle.model,
-      trim: vehicle.trim, engine: vehicle.engine, transmission: vehicle.transmission,
-      drivetrain: vehicle.drivetrain, bodyStyle: vehicle.bodyStyle,
-    },
-    mileage,
-    conditionScore,
-    bodyCategory,
-    otherSourceValues: apiSourceValues.length > 0 ? apiSourceValues : undefined,
-  });
-
-  const fallback = toSourceEstimate(aiFallback.result);
-  sourceEstimates.push(fallback);
-  console.log(
-    `[MarketData] AI Fallback (tier ${aiFallback.fallbackTier}${aiFallback.result.isEnthusiastPlatform ? ", ENTHUSIAST" : ""}): ` +
-    `$${fallback.estimatedValue.toLocaleString()} (conf ${(fallback.confidence * 100).toFixed(0)}%) — ${aiFallback.result.reasoning}`,
-  );
-
-  // ── Normalize all sources to acquisition cost ───────────────────
-  const compBreakdown = {
-    activeDealer: allListings.filter((l) => !l.source.includes("Sold") && !l.source.includes("Auction")).length,
-    soldDealer: allListings.filter((l) => l.source.includes("Sold") && !l.source.includes("Auction")).length,
-    auction: allListings.filter((l) => l.source.includes("Auction")).length,
-    total: allListings.length,
-  };
-  const isEnthusiastPlatform = aiFallback.result.isEnthusiastPlatform || false;
-
-  const aiNormalization = await normalizeSourcesForAcquisition({
-    vehicle: {
-      year: vehicle.year, make: vehicle.make, model: vehicle.model,
-      trim: vehicle.trim, engine: vehicle.engine, drivetrain: vehicle.drivetrain,
-      transmission: vehicle.transmission,
-    },
-    conditionScore,
-    bodyCategory,
-    isEnthusiastPlatform,
-    sourceEstimates,
-    compSummary: compBreakdown,
-  });
-
-  // Log normalization results
-  for (const ns of aiNormalization.result.normalizedSources) {
-    const delta = ns.acquisitionValue - ns.originalValue;
-    const sign = delta >= 0 ? "+" : "";
-    console.log(
-      `[SourceNorm] ${ns.source}: $${ns.originalValue.toLocaleString()} → $${ns.acquisitionValue.toLocaleString()} (${ns.multiplier.toFixed(2)}x, ${sign}$${delta.toLocaleString()}) — ${ns.reason}`,
-    );
+  if (!process.env.BLACKBOOK_USERNAME) {
+    reportMissingKey("BlackBook", "BLACKBOOK_USERNAME").catch(() => {});
   }
-  console.log(`[SourceNorm] Strategy (tier ${aiNormalization.fallbackTier}): ${aiNormalization.result.reasoning}`);
 
-  // Replace sourceEstimates with acquisition-normalized values
-  const normalizedEstimates = applyNormalization(sourceEstimates, aiNormalization.result);
+  // ── Step 1: BB Valuation (VIN first, YMM fallback) ──────────────
+  let bbValuation: BBValuation | null = null;
+  try {
+    bbValuation = await fetchBlackBookValuation(vehicle.vin, mileage, state);
+    if (!bbValuation) {
+      bbValuation = await fetchBlackBookByYMM(vehicle.year, vehicle.make, vehicle.model, mileage, state);
+    }
+    if (bbValuation) reportSuccess("BlackBook");
+  } catch (err) {
+    const statusMatch = String(err).match(/\((\d{3})\)/);
+    reportFailure("BlackBook", err instanceof Error ? err : String(err), statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
+    console.error(`[MarketData] BlackBook valuation failed: ${err instanceof Error ? err.message : err}`);
+  }
 
-  // ── Mileage cross-check from comparable listings ────────────────
-  if (mileage && allListings.length >= 3) {
-    const listingsWithMiles = allListings.filter((l) => l.mileage && l.mileage > 0);
-    if (listingsWithMiles.length >= 3) {
-      const avgCompMiles = Math.round(
-        listingsWithMiles.reduce((sum, l) => sum + l.mileage, 0) / listingsWithMiles.length,
-      );
-      const mileageRatio = mileage / avgCompMiles;
-      if (mileageRatio > 1.5 || mileageRatio < 0.5) {
-        console.warn(
-          `[MarketData] Mileage outlier: vehicle ${mileage} mi vs comparable avg ${avgCompMiles} mi (${(mileageRatio * 100).toFixed(0)}%)`,
-        );
-      }
-      mileageAdjustment = Math.round((avgCompMiles - mileage) * getMileageAdjustmentRate(
-        sourceEstimates[0]?.estimatedValue || 20000,
-      ));
+  // ── Step 1b: AI Fallback if BB has no data ────────────────────────
+  let dataSource: "blackbook" | "ai_fallback" | "emergency_fallback" = "blackbook";
+  let bbRetailByTier: Record<BBCondition, number>;
+  let bbWholesaleByTier: Record<BBCondition, number>;
+  let bbTradeInByTier: { clean: number; average: number; rough: number };
+  let bbPrivatePartyByTier: { clean: number; average: number; rough: number };
+  let baseConfidence: number;
+
+  if (bbValuation) {
+    // Convert BB dollar values to cents for all tiers
+    bbRetailByTier = {
+      extra_clean: Math.round((bbValuation.adjustedRetail.extra_clean || bbValuation.retail.extra_clean) * 100),
+      clean: Math.round((bbValuation.adjustedRetail.clean || bbValuation.retail.clean) * 100),
+      average: Math.round((bbValuation.adjustedRetail.average || bbValuation.retail.average) * 100),
+      rough: Math.round((bbValuation.adjustedRetail.rough || bbValuation.retail.rough) * 100),
+    };
+    bbWholesaleByTier = {
+      extra_clean: Math.round((bbValuation.adjustedWholesale.extra_clean || bbValuation.wholesale.extra_clean) * 100),
+      clean: Math.round((bbValuation.adjustedWholesale.clean || bbValuation.wholesale.clean) * 100),
+      average: Math.round((bbValuation.adjustedWholesale.average || bbValuation.wholesale.average) * 100),
+      rough: Math.round((bbValuation.adjustedWholesale.rough || bbValuation.wholesale.rough) * 100),
+    };
+    bbTradeInByTier = {
+      clean: Math.round((bbValuation.adjustedTradeIn.clean || bbValuation.tradeIn.clean) * 100),
+      average: Math.round((bbValuation.adjustedTradeIn.average || bbValuation.tradeIn.average) * 100),
+      rough: Math.round((bbValuation.adjustedTradeIn.rough || bbValuation.tradeIn.rough) * 100),
+    };
+    bbPrivatePartyByTier = {
+      clean: Math.round((bbValuation.adjustedPrivateParty.clean || bbValuation.privateParty.clean) * 100),
+      average: Math.round((bbValuation.adjustedPrivateParty.average || bbValuation.privateParty.average) * 100),
+      rough: Math.round((bbValuation.adjustedPrivateParty.rough || bbValuation.privateParty.rough) * 100),
+    };
+    baseConfidence = 0.90;
+  } else {
+    // BB failed — use AI fallback valuation
+    console.warn(`[MarketData] Black Book unavailable — trying AI fallback valuation`);
+    try {
+      const aiResult = await estimateFallbackValuation({
+        vehicle: {
+          year: vehicle.year, make: vehicle.make, model: vehicle.model,
+          trim: vehicle.trim, engine: vehicle.engine, drivetrain: vehicle.drivetrain,
+          transmission: vehicle.transmission, bodyStyle: vehicle.bodyStyle,
+        },
+        bodyCategory,
+        mileage,
+        conditionScore,
+        conditionTier,
+        region: state,
+      });
+
+      const fb = aiResult.result;
+      bbRetailByTier = {
+        extra_clean: Math.round(fb.retailByTier.extra_clean * 100),
+        clean: Math.round(fb.retailByTier.clean * 100),
+        average: Math.round(fb.retailByTier.average * 100),
+        rough: Math.round(fb.retailByTier.rough * 100),
+      };
+      bbWholesaleByTier = {
+        extra_clean: Math.round(fb.wholesaleByTier.extra_clean * 100),
+        clean: Math.round(fb.wholesaleByTier.clean * 100),
+        average: Math.round(fb.wholesaleByTier.average * 100),
+        rough: Math.round(fb.wholesaleByTier.rough * 100),
+      };
+      bbTradeInByTier = {
+        clean: Math.round(fb.tradeInByTier.clean * 100),
+        average: Math.round(fb.tradeInByTier.average * 100),
+        rough: Math.round(fb.tradeInByTier.rough * 100),
+      };
+      bbPrivatePartyByTier = {
+        clean: Math.round(fb.tradeInByTier.clean * 110), // ~10% above trade-in
+        average: Math.round(fb.tradeInByTier.average * 110),
+        rough: Math.round(fb.tradeInByTier.rough * 110),
+      };
+      dataSource = "ai_fallback";
+      baseConfidence = fb.confidence;
+      console.log(`[MarketData] AI fallback valuation: retail clean=$${fb.retailByTier.clean.toLocaleString()} (confidence ${fb.confidence.toFixed(2)}, tier ${aiResult.fallbackTier})`);
+    } catch (fbErr) {
+      console.error(`[MarketData] AI fallback also failed: ${fbErr instanceof Error ? fbErr.message : fbErr}`);
+      return getEmergencyFallbackResult(vehicle, conditionTier, conditionScore, acquisitionType, mileage);
     }
   }
 
-  // ── AI Consensus Weighting ──────────────────────────────────────
-  const conditionTier = mapConditionToTier(conditionScore);
+  // ── Step 2: Interpolate between tiers ─────────────────────────────
+  const retailValue = interpolateTierValue(conditionScore, bbRetailByTier);
+  const wholesaleValue = interpolateTierValue(conditionScore, bbWholesaleByTier);
+  const tradeInValue = interpolateTradeInValue(conditionScore, bbTradeInByTier);
+  const acquisitionValue = acquisitionType === "TRADE_IN" ? tradeInValue : wholesaleValue;
 
-  const aiConsensus = await analyzeConsensusWeights({
-    vehicle: {
-      year: vehicle.year, make: vehicle.make, model: vehicle.model,
-      trim: vehicle.trim, engine: vehicle.engine, drivetrain: vehicle.drivetrain,
-      transmission: vehicle.transmission,
-    },
-    mileage,
-    conditionScore,
-    conditionTier,
-    sourceEstimates: normalizedEstimates,
-  });
-
-  // Build a ConsensusResult-shaped object from AI result for downstream compat
-  const cr = aiConsensus.result;
-  const consensus: ConsensusResult = {
-    estimatedValue: cr.consensusValue,
-    tradeInValue: cr.tradeInValue,
-    dealerRetailValue: cr.dealerRetailValue,
-    wholesaleValue: cr.wholesaleValue,
-    loanValue: cr.loanValue,
-    confidence: cr.confidenceAssessment,
-    primarySource: (Object.entries(cr.sourceWeights).sort((a, b) => b[1] - a[1])[0]?.[0] || "fallback") as ConsensusResult["primarySource"],
-    consensusMethod: aiConsensus.fallbackTier === 3 ? "weighted-median" : "weighted-median",
-    sourceResults: normalizedEstimates,
-    configPremiumMode: cr.configPremiumMode,
-    conditionAttenuation: cr.conditionAttenuation,
-    sourceCount: normalizedEstimates.filter((s) => s.estimatedValue > 0).length,
-  };
-
-  console.log(
-    `[MarketData] AI Consensus (tier ${aiConsensus.fallbackTier}, ${consensus.sourceCount} sources): ` +
-    `$${consensus.estimatedValue} PP | $${consensus.wholesaleValue} WS | $${consensus.loanValue} Loan | ` +
-    `Confidence: ${(consensus.confidence * 100).toFixed(0)}%` +
-    (aiConsensus.reasoning ? ` — ${aiConsensus.reasoning}` : ""),
-  );
-
-  // ── AI Config Premiums + AI Regional Pricing (parallel) ─────────
-  const nearbyListingPrices = allListings.filter((l) => l.price > 0).map((l) => l.price);
-  const nearbyListingTitles = allListings.slice(0, 10).map((l) => ({ title: l.title || `${vehicle.year} ${vehicle.make} ${vehicle.model}`, price: l.price }));
-
-  const [aiConfigResult, aiGeoResult] = await Promise.all([
-    analyzeConfigPremiums({
-      vehicle,
-      bodyCategory,
-      baseConsensusValue: consensus.estimatedValue,
-      premiumMode: consensus.configPremiumMode,
-      nearbyListings: nearbyListingTitles,
-    }),
-    analyzeRegionalPricing({
-      vehicle: { year: vehicle.year, make: vehicle.make, model: vehicle.model, trim: vehicle.trim },
-      bodyCategory,
-      zip,
-      state,
-      baseValue: consensus.estimatedValue,
-      nearbyListingPrices: nearbyListingPrices.length > 0 ? nearbyListingPrices : undefined,
-    }),
-  ]);
-
-  const premiums: ConfigPremium[] = aiConfigResult.result.premiums;
-  const combinedMultiplier = aiConfigResult.result.configMultiplier;
-  const regionalMultiplier = aiGeoResult.result.regionalMultiplier;
-
-  // Combined adjustment = config premiums × regional multiplier
-  const totalMultiplier = combinedMultiplier * regionalMultiplier;
-
-  const adjustedEstimated = Math.round(consensus.estimatedValue * totalMultiplier);
-  const adjustedTradeIn = Math.round(consensus.tradeInValue * totalMultiplier);
-  const adjustedRetail = Math.round(consensus.dealerRetailValue * totalMultiplier);
-  const adjustedWholesale = Math.round(consensus.wholesaleValue * totalMultiplier);
-  const adjustedLoan = Math.round(consensus.loanValue * totalMultiplier);
-
-  if (premiums.length > 0 || regionalMultiplier !== 1.0) {
-    console.log(
-      `[MarketData] AI Config (tier ${aiConfigResult.fallbackTier}, ${consensus.configPremiumMode} mode, ${combinedMultiplier.toFixed(2)}x): ` +
-      `${premiums.map((p) => p.factor).join(", ") || "none"}`,
-    );
-    if (regionalMultiplier !== 1.0) {
-      console.log(
-        `[MarketData] AI Regional (tier ${aiGeoResult.fallbackTier}): ${state} ${bodyCategory} → ${regionalMultiplier.toFixed(2)}x`,
-      );
+  // ── Step 3: BB Retail Insights (needs UVC from valuation) ─────────
+  let insights: BBRetailInsightsResult | null = null;
+  if (bbValuation?.uvc) {
+    try {
+      insights = await fetchBlackBookRetailInsights(bbValuation.uvc, zip, mileage);
+    } catch (err) {
+      console.warn(`[MarketData] BB Retail Insights failed: ${err instanceof Error ? err.message : err}`);
     }
-    console.log(
-      `[MarketData] $${consensus.estimatedValue} x ${totalMultiplier.toFixed(3)} = $${adjustedEstimated}`,
-    );
   }
 
-  // ── Build pricing trace ─────────────────────────────────────────
-  const afterConfig = Math.round(consensus.estimatedValue * combinedMultiplier);
-  const pricingTrace: PricingTraceStep[] = [
-    {
-      label: "Acquisition Consensus",
-      inputDollars: consensus.estimatedValue,
-      operation: "starting point",
-      outputDollars: consensus.estimatedValue,
-      explanation: `${consensus.sourceCount} source(s), ${(consensus.confidence * 100).toFixed(0)}% conf`,
-    },
-    {
-      label: "Config Premium",
-      inputDollars: consensus.estimatedValue,
-      operation: `× ${combinedMultiplier.toFixed(3)}`,
-      outputDollars: afterConfig,
-      explanation: `Mode: ${consensus.configPremiumMode}. ${premiums.map((p) => `${p.factor} (${p.multiplier.toFixed(2)}x)`).join(", ") || "none"}`,
-    },
-    {
-      label: "Regional Adjustment",
-      inputDollars: afterConfig,
-      operation: `× ${regionalMultiplier.toFixed(3)}`,
-      outputDollars: adjustedEstimated,
-      explanation: `${state} ${bodyCategory} market`,
-    },
-  ];
+  // ── Step 4: AI Market Intelligence ────────────────────────────────
+  const retailDollars = Math.round(retailValue / 100);
+  const comps = insights?.comps ?? [];
+
+  let marketAdjustment = 1.0;
+  let marketAdjustmentNote = "No comparable listings available";
+  let demandSignal: "strong" | "normal" | "weak" = "normal";
+  let marketFlags: string[] = [];
+  let marketConfidence = 0.5;
+
+  try {
+    const mktResult = await analyzeMarketIntelligence({
+      vehicle: {
+        year: vehicle.year, make: vehicle.make, model: vehicle.model,
+        trim: vehicle.trim, engine: vehicle.engine,
+        drivetrain: vehicle.drivetrain, transmission: vehicle.transmission,
+      },
+      bodyCategory,
+      mileage,
+      region: state,
+      bbInterpolatedRetail: retailDollars,
+      bbRetailByTier: {
+        extra_clean: Math.round(bbRetailByTier.extra_clean / 100),
+        clean: Math.round(bbRetailByTier.clean / 100),
+        average: Math.round(bbRetailByTier.average / 100),
+        rough: Math.round(bbRetailByTier.rough / 100),
+      },
+      conditionScore,
+      conditionTier,
+      activeComps: comps.map((c) => ({
+        price: c.price,
+        mileage: c.mileage,
+        daysOnMarket: c.daysOnMarket,
+        series: c.series,
+        certified: c.certified,
+        distanceToDealer: c.distanceToDealer,
+      })),
+      activeStats: insights ? {
+        count: insights.activeCount,
+        meanPrice: insights.activeMeanPrice,
+        medianPrice: insights.activeMedianPrice,
+        meanMileage: insights.activeMeanMileage,
+        medianMileage: 0, // not stored separately
+      } : null,
+      soldStats: insights?.soldCount ? {
+        count: insights.soldCount,
+        meanPrice: insights.soldMeanPrice,
+        medianPrice: insights.soldMedianPrice,
+        meanMileage: insights.soldMeanMileage,
+        medianMileage: 0,
+        meanDaysToTurn: insights.soldMeanDaysToTurn ?? 0,
+        marketDaysSupply: insights.marketDaysSupply ?? 0,
+      } : null,
+    });
+
+    marketAdjustment = mktResult.result.marketAdjustment;
+    marketAdjustmentNote = mktResult.result.reasoning;
+    demandSignal = mktResult.result.demandSignal;
+    marketFlags = mktResult.result.flags;
+    marketConfidence = mktResult.result.confidence;
+
+    console.log(
+      `[MarketData] AI Market Intelligence: adj=${marketAdjustment.toFixed(2)}x, ` +
+      `demand=${demandSignal}, confidence=${marketConfidence.toFixed(2)}, ` +
+      `tier ${mktResult.fallbackTier}${marketFlags.length > 0 ? `, flags: ${marketFlags.join("; ")}` : ""}`,
+    );
+  } catch (err) {
+    console.warn(`[MarketData] Market intelligence failed, using BB as-is: ${err instanceof Error ? err.message : err}`);
+    marketAdjustmentNote = "Market intelligence unavailable — using BB retail as-is";
+    marketFlags = ["Market intelligence unavailable"];
+  }
+
+  const marketValidatedRetail = Math.round(retailValue * marketAdjustment);
+
+  console.log(
+    `[MarketData] Final (${conditionTier} tier, score ${conditionScore}, ${acquisitionType}): ` +
+    `Interpolated Retail $${(retailValue / 100).toLocaleString()} | ` +
+    `Market Adj ${marketAdjustment.toFixed(2)}x → $${(marketValidatedRetail / 100).toLocaleString()} | ` +
+    `Wholesale $${(wholesaleValue / 100).toLocaleString()} | Trade-In $${(tradeInValue / 100).toLocaleString()} | ` +
+    `${comps.length} comps | Source: ${dataSource}`,
+  );
 
   return {
-    estimatedValue: adjustedEstimated,
-    valueLow: adjustedTradeIn,
-    valueHigh: adjustedRetail,
-    mileageAdjustment,
-    nearbyListings: allListings,
-
-    dataSource: consensus.primarySource,
-    confidence: consensus.confidence,
-    baseValuePreConfig: consensus.estimatedValue,
-    configPremiums: premiums,
-    configMultiplier: combinedMultiplier,
-
-    tradeInValue: adjustedTradeIn,
-    privatePartyValue: adjustedEstimated,
-    dealerRetailValue: adjustedRetail,
-    wholesaleValue: adjustedWholesale,
-    loanValue: adjustedLoan,
-
-    vdbConditionTier,
-
-    sourceResults: consensus.sourceResults,
-    consensusMethod: consensus.consensusMethod,
-    configPremiumMode: consensus.configPremiumMode,
-    conditionAttenuation: consensus.conditionAttenuation,
-    sourceCount: consensus.sourceCount,
-
-    pricingTrace,
-
-    aiMetadata: {
-      consensusTier: aiConsensus.fallbackTier,
-      configPremiumTier: aiConfigResult.fallbackTier,
-      geoPricingTier: aiGeoResult.fallbackTier,
-      sourceNormTier: aiNormalization.fallbackTier,
-      consensusReasoning: aiConsensus.reasoning,
-      configReasoning: aiConfigResult.result.combinedReasoning,
-      geoReasoning: aiGeoResult.result.reasoning,
-      sourceNormReasoning: aiNormalization.result.reasoning,
-      sourceNormalization: aiNormalization.result.normalizedSources,
-    },
+    bbValuation,
+    conditionTier,
+    acquisitionValue,
+    retailValue,
+    marketValidatedRetail,
+    wholesaleValue,
+    tradeInValue,
+    marketAdjustment,
+    marketAdjustmentNote,
+    demandSignal,
+    marketFlags,
+    bbRetailByTier,
+    bbWholesaleByTier,
+    bbTradeInByTier,
+    bbPrivatePartyByTier,
+    comparables: comps,
+    retailInsights: insights,
+    dataSource,
+    confidence: baseConfidence * marketConfidence,
   };
 }

@@ -48,7 +48,7 @@ interface StepPanelProps {
     marketAnalysis?: {
       baselinePrice: number;
       adjustedPrice: number;
-      recommendation: string;
+      recommendation: string | null;
       strongBuyMax: number | null;
       fairBuyMax: number | null;
       estRetailPrice: number | null;

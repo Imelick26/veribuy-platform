@@ -10,9 +10,9 @@ import { formatCurrency, cn } from "@/lib/utils";
 export interface MarketAnalysisData {
   baselinePrice: number;          // cents — market baseline
   adjustedPrice: number;          // cents — recommended buy price
-  recommendation: string;
-  strongBuyMax: number;
-  fairBuyMax: number;
+  recommendation: string | null;
+  strongBuyMax: number | null;
+  fairBuyMax: number | null;
   overpayingMax?: number | null;
 
   estRetailPrice?: number | null;
@@ -82,6 +82,16 @@ export interface MarketAnalysisData {
   aiAuditorCoherence?: number | null;
   aiAuditorFlags?: string[] | null;
   aiAuditorReasoning?: string | null;
+
+  // Black Book single-source fields
+  acquisitionType?: string | null;
+  bbConditionTier?: string | null;
+  bbRetailByTier?: Record<string, number> | null;
+  bbWholesaleByTier?: Record<string, number> | null;
+  bbTradeInByTier?: Record<string, number> | null;
+  marketAdjustment?: number | null;
+  marketAdjustmentNote?: string | null;
+  aiAuditAccepted?: boolean | null;
 }
 
 export interface MarketAnalysisSectionProps {
