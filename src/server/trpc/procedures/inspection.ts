@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
 import { router, protectedProcedure } from "../init";
 import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, estimateTireReplacementCost, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
-import { getProgress as getAnalysisProgress } from "@/lib/ai/media-analyzer/progress";
+import { type AnalysisProgressData, safeEmitter } from "@/lib/ai/media-analyzer/progress";
 import { fetchMarketData, type AcquisitionType } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
@@ -43,8 +43,8 @@ async function generateInspectionNumber(db: typeof import("@/server/db").db) {
 
 export const inspectionRouter = router({
   // Lightweight query polled by the client while the AI condition scan is running.
-  // Returns the current progress from the in-memory store (see @/lib/ai/media-analyzer/progress).
-  // If no analysis is in flight for this inspection, returns null.
+  // Progress is persisted by the pipeline into InspectionStep.data.analysisProgress
+  // so serverless function instances all see the same state.
   getAnalysisProgress: protectedProcedure
     .input(z.object({ inspectionId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -54,7 +54,18 @@ export const inspectionRouter = router({
         select: { id: true },
       });
       if (!inspection) return null;
-      return getAnalysisProgress(input.inspectionId);
+
+      const step = await ctx.db.inspectionStep.findUnique({
+        where: {
+          inspectionId_step: {
+            inspectionId: input.inspectionId,
+            step: "AI_CONDITION_SCAN",
+          },
+        },
+        select: { data: true },
+      });
+      const data = step?.data as { analysisProgress?: AnalysisProgressData } | null;
+      return data?.analysisProgress ?? null;
     }),
 
   // Create a new inspection
@@ -376,8 +387,25 @@ export const inspectionRouter = router({
       // tire assessment, and cross-correlation — no need for separate calls.
       const odometerPhoto = mediaForAnalysis.find((m) => m.captureType === "ODOMETER");
 
+      // Progress emitter: persist each update into InspectionStep.data.analysisProgress
+      // so the client's polling query (which may hit a different serverless instance
+      // on Vercel) can read the same value. We merge rather than overwrite so any
+      // other keys on `data` survive.
+      const inspectionId = input.inspectionId;
+      const onProgress = safeEmitter(async (progress) => {
+        const existing = await ctx.db.inspectionStep.findUnique({
+          where: { inspectionId_step: { inspectionId, step: "AI_CONDITION_SCAN" } },
+          select: { data: true },
+        });
+        const base = (existing?.data as Record<string, unknown> | null) ?? {};
+        await ctx.db.inspectionStep.update({
+          where: { inspectionId_step: { inspectionId, step: "AI_CONDITION_SCAN" } },
+          data: { data: { ...base, analysisProgress: progress } },
+        });
+      });
+
       const [conditionAssessment, odometerResult] = await Promise.all([
-        analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes, input.inspectionId),
+        analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes, onProgress),
         odometerPhoto && !inspection.odometer
           ? extractOdometerFromPhoto(odometerPhoto.url, inspection.vehicle.year)
           : Promise.resolve(null),
@@ -387,7 +415,7 @@ export const inspectionRouter = router({
       // Scores and findings are NOT persisted yet — they go to CONDITION_REVIEW.
       // Note: runPipeline is memoized per media set, so this second call shares
       // the same in-flight result as the analyzeVehicleCondition call above.
-      const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis, input.inspectionId);
+      const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis, onProgress);
       const preliminaryFindings = pipelineFindings.unexpectedFindings
         .filter((uf) => uf.confidence >= 0.4) // Low threshold — flag anything uncertain for inspector review
         .map((uf, index) => ({

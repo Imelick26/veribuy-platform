@@ -12,6 +12,7 @@ import type {
   TireAssessment,
 } from "@/types/risk";
 import type { VehicleInfo, MediaForAnalysis } from "../types";
+import type { ProgressEmitter } from "../progress";
 import { runPipeline } from "../pipeline";
 
 // ---------------------------------------------------------------------------
@@ -61,9 +62,9 @@ export async function analyzeVehicleCondition(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
   inspectorNotes?: string,
-  inspectionId?: string,
+  onProgress?: ProgressEmitter,
 ): Promise<ConditionAssessment> {
-  const result = await runPipeline(vehicle, media, inspectorNotes, inspectionId);
+  const result = await runPipeline(vehicle, media, inspectorNotes, onProgress);
   const scores = result.synthesis.areaScores;
 
   // --- 8-bucket overall score using default weights (area scores are 0-100) ---
@@ -154,9 +155,9 @@ export async function analyzeVehicleCondition(
 export async function scanForUnexpectedIssues(
   vehicle: { year: number; make: string; model: string },
   media: MediaForAnalysis[],
-  inspectionId?: string,
+  onProgress?: ProgressEmitter,
 ): Promise<OverallConditionResult> {
-  const result = await runPipeline(vehicle, media, undefined, inspectionId);
+  const result = await runPipeline(vehicle, media, undefined, onProgress);
 
   return {
     unexpectedFindings: result.unexpectedFindings,

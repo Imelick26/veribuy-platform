@@ -22,7 +22,7 @@ import type { UnexpectedFinding } from "@/types/risk";
 import { runPhase1 } from "./passes/pass1-detection";
 import { runPhase2 } from "./passes/pass2-quantification";
 import { runPhase3, runPhase4 } from "./passes/pass3-correlation";
-import { startProgress, updateProgress, finishProgress } from "./progress";
+import { type ProgressEmitter, noopEmitter } from "./progress";
 
 // ---------------------------------------------------------------------------
 //  Memoization cache
@@ -46,7 +46,7 @@ export async function runPipeline(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
   inspectorNotes?: string,
-  inspectionId?: string,
+  onProgress?: ProgressEmitter,
 ): Promise<PipelineResult> {
   const cacheKey = buildCacheKey(media);
   const cached = pipelineCache.get(cacheKey);
@@ -55,7 +55,7 @@ export async function runPipeline(
     return cached;
   }
 
-  const promise = executePipeline(vehicle, media, inspectorNotes, inspectionId);
+  const promise = executePipeline(vehicle, media, inspectorNotes, onProgress ?? noopEmitter);
   pipelineCache.set(cacheKey, promise);
 
   try {
@@ -96,31 +96,37 @@ function isTruck(vehicle: VehicleInfo): boolean {
 async function executePipeline(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
-  inspectorNotes?: string,
-  inspectionId?: string,
+  inspectorNotes: string | undefined,
+  emit: ProgressEmitter,
 ): Promise<PipelineResult> {
   const startTime = Date.now();
   const vehicleIsTruck = isTruck(vehicle);
   console.log(`[pipeline] Starting 4-phase analysis for ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicleIsTruck ? "truck" : "non-truck"}) with ${media.length} photos`);
 
   // ── Progress tracking setup ──
-  // Weight the progress bar so the slow phases (1+2) use most of the range.
   const photoCount = media.filter((m) => m.captureType !== "ODOMETER").length;
-  if (inspectionId) {
-    startProgress(inspectionId, `Inspecting ${photoCount} photos and comparing across the vehicle…`);
-  }
+  const initialStage = `Inspecting ${photoCount} photos and comparing across the vehicle…`;
+  await emit({
+    percent: 3,
+    stage: initialStage,
+    detail: "",
+    updatedAt: Date.now(),
+    startedAt: startTime,
+  });
+
   let completedPhotos = 0;
   const onPhotoComplete = () => {
     completedPhotos += 1;
-    if (!inspectionId) return;
     // Phase 1 is 0-50% of the bar, 5% reserved for Phase 2's share
-    const pct = Math.round((completedPhotos / Math.max(1, photoCount)) * 50);
-    updateProgress(
-      inspectionId,
-      pct,
-      `Inspecting ${photoCount} photos and comparing across the vehicle…`,
-      `${completedPhotos} of ${photoCount} photos analyzed`,
-    );
+    const pct = 3 + Math.round((completedPhotos / Math.max(1, photoCount)) * 50);
+    // Fire-and-forget — the emitter is already wrapped in safeEmitter.
+    void emit({
+      percent: pct,
+      stage: initialStage,
+      detail: `${completedPhotos} of ${photoCount} photos analyzed`,
+      updatedAt: Date.now(),
+      startedAt: startTime,
+    });
   };
 
   // ── Phases 1 and 2 run in parallel (independent) ──
@@ -129,14 +135,13 @@ async function executePipeline(
     runPhase2(vehicle, media),
   ]);
 
-  if (inspectionId) {
-    updateProgress(
-      inspectionId,
-      65,
-      "Following up on flagged areas…",
-      `${phase1.findings.length} findings so far`,
-    );
-  }
+  await emit({
+    percent: 65,
+    stage: "Following up on flagged areas…",
+    detail: `${phase1.findings.length} findings so far`,
+    updatedAt: Date.now(),
+    startedAt: startTime,
+  });
 
   // ── Phase 3: Targeted re-scans (conditional) ──
   const allComparisonFindings: ComparisonFinding[] = [
@@ -153,14 +158,13 @@ async function executePipeline(
   const allFindings: DetectedFinding[] = [...phase1.findings, ...phase3.rescanFindings];
   const allComparisons: ComparisonFinding[] = [...allComparisonFindings, ...phase3.rescanComparisonFindings];
 
-  if (inspectionId) {
-    updateProgress(
-      inspectionId,
-      80,
-      "Synthesizing condition scores…",
-      `${allFindings.length + allComparisons.length} total findings`,
-    );
-  }
+  await emit({
+    percent: 80,
+    stage: "Synthesizing condition scores…",
+    detail: `${allFindings.length + allComparisons.length} total findings`,
+    updatedAt: Date.now(),
+    startedAt: startTime,
+  });
 
   // ── Phase 4: Score synthesis with exterior photos ──
   const phase4 = await runPhase4(
@@ -197,7 +201,13 @@ async function executePipeline(
     `${metadata.totalApiCalls} API calls, ${(durationMs / 1000).toFixed(1)}s`,
   );
 
-  if (inspectionId) finishProgress(inspectionId);
+  await emit({
+    percent: 100,
+    stage: "Analysis complete",
+    detail: "",
+    updatedAt: Date.now(),
+    startedAt: startTime,
+  });
 
   // Use tire assessment from Phase 2, or build from Phase 1 per-tire data as fallback
   let tireAssessment = phase2.tireResult.tireAssessment;

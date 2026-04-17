@@ -367,13 +367,7 @@ export function StepPanel({
               </div>
 
               {isRunningConditionScan ? (
-                <div className="text-center py-4">
-                  <Loader2 className="h-8 w-8 text-brand-600 animate-spin mx-auto mb-3" />
-                  <p className="font-semibold text-text-primary mb-1">Scanning Photos...</p>
-                  <p className="text-xs text-text-tertiary">
-                    Running 4 parallel AI assessments + unexpected issue scan...
-                  </p>
-                </div>
+                <AIAnalysisProgress inspectionId={inspection.id} />
               ) : (
                 <Button
                   onClick={onRunConditionScan}
@@ -567,10 +561,6 @@ export function StepPanel({
                         </span>
                       )}
                     </Button>
-
-                    {isRunningAIAnalysis && (
-                      <AIAnalysisProgress inspectionId={inspection.id} />
-                    )}
                   </>
                 );
               })()}
