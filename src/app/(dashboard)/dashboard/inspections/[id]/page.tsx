@@ -115,22 +115,28 @@ export default function InspectionDetailPage({
     onSuccess: () => utils.inspection.get.invalidate({ id }),
   });
 
-  // Auto-trigger risk enrichment when page loads without a risk profile
+  // Auto-trigger risk enrichment when page loads without a risk profile.
+  // Previously this only checked the legacy step name RISK_REVIEW — new
+  // inspections use RISK_INSPECTION and were silently never enriched. We
+  // also re-enrich when the step is marked COMPLETED but no profile data
+  // exists (the old bug left inspections in that state).
   const enrichTriggeredRef = useRef(false);
   useEffect(() => {
     if (
-      inspection &&
-      !riskProfile &&
-      !enrichRiskProfile.isPending &&
-      !enrichTriggeredRef.current
-    ) {
-      // Only auto-trigger if RISK_REVIEW step exists and isn't completed
-      const riskStep = inspection.steps.find((s) => s.step === "RISK_REVIEW");
-      if (riskStep && riskStep.status !== "COMPLETED") {
-        enrichTriggeredRef.current = true;
-        enrichRiskProfile.mutate({ inspectionId: id });
-      }
-    }
+      !inspection ||
+      riskProfile ||
+      enrichRiskProfile.isPending ||
+      enrichTriggeredRef.current
+    ) return;
+
+    const riskStep = inspection.steps.find(
+      (s) => s.step === "RISK_INSPECTION" || s.step === "RISK_REVIEW",
+    );
+    if (!riskStep) return;
+    if (!inspection.vehicle) return; // need VIN decoded first
+
+    enrichTriggeredRef.current = true;
+    enrichRiskProfile.mutate({ inspectionId: id });
   }, [inspection, riskProfile, enrichRiskProfile, id]);
 
   const addFinding = trpc.inspection.addFinding.useMutation({

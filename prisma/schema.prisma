@@ -243,8 +243,10 @@ model Inspection {
   report          Report?
   aiValuationLogs ValuationLog[]
 
-  // Acquisition type — how the dealer is acquiring this vehicle
-  acquisitionType     String?     @default("WHOLESALE") // "WHOLESALE" | "TRADE_IN"
+  // Acquisition type — how the dealer is acquiring this vehicle.
+  // Standardized on TRADE_IN as the buy-side benchmark; wholesale path
+  // remains supported for legacy records but is no longer the default.
+  acquisitionType     String?     @default("TRADE_IN") // "WHOLESALE" | "TRADE_IN"
 
   // Dealer offer customization — explains gap between VeriBuy valuation and dealer's offer
   offerMode           String?     // "AI_ESTIMATED" | "CUSTOM_NOTES" — how the gap is explained to seller

@@ -291,7 +291,7 @@ export async function fetchMarketData(
   zip: string = "97201",
   mileage?: number,
   conditionScore: number = 70,
-  acquisitionType: AcquisitionType = "WHOLESALE",
+  acquisitionType: AcquisitionType = "TRADE_IN",
 ): Promise<BBMarketDataResult> {
   const state = zipToState(zip);
   const conditionTier = mapScoreToBBCondition(conditionScore);

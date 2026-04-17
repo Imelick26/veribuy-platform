@@ -1036,8 +1036,11 @@ export const inspectionRouter = router({
         const condData = conditionStep?.data as { conditionAssessment?: { overallScore?: number } } | null;
         conditionScore = condData?.conditionAssessment?.overallScore || 70;
       }
-      // Read acquisition type from inspection (default WHOLESALE)
-      const acquisitionType = (inspection.acquisitionType as AcquisitionType) || "WHOLESALE";
+      // Acquisition type — we're standardizing on TRADE_IN as the buy-side
+      // benchmark. The wholesale path is kept in market-data for cases where
+      // an inspection has an explicit override, but new inspections default
+      // to TRADE_IN without a dealer-facing toggle.
+      const acquisitionType = (inspection.acquisitionType as AcquisitionType) || "TRADE_IN";
 
       const marketData = await fetchMarketData(
         {
