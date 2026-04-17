@@ -398,9 +398,13 @@ export const inspectionRouter = router({
           select: { data: true },
         });
         const base = (existing?.data as Record<string, unknown> | null) ?? {};
+        const merged: Prisma.InputJsonValue = {
+          ...base,
+          analysisProgress: { ...progress },
+        } as Prisma.InputJsonValue;
         await ctx.db.inspectionStep.update({
           where: { inspectionId_step: { inspectionId, step: "AI_CONDITION_SCAN" } },
-          data: { data: { ...base, analysisProgress: progress } },
+          data: { data: merged },
         });
       });
 
