@@ -307,12 +307,21 @@ export default function InspectionDetailPage({
     });
   }, [inspection]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-trigger condition scan when entering AI_CONDITION_SCAN step
+  // Auto-trigger condition scan when entering AI_CONDITION_SCAN step.
+  // Skip if a scan is already running on the server (step status IN_PROGRESS) —
+  // the progress bar will poll and show its progress without restarting the
+  // pipeline from scratch. This is what makes page refresh safe mid-scan.
   const conditionScanTriggeredRef = useRef(false);
   useEffect(() => {
     if (!inspection || conditionScanTriggeredRef.current) return;
     const scanStep = inspection.steps.find((s) => s.step === "AI_CONDITION_SCAN");
     if (!scanStep || scanStep.status === "COMPLETED") return;
+    // If the scan is already running on another request (eg after a refresh),
+    // don't kick off a duplicate — let it finish.
+    if (scanStep.status === "IN_PROGRESS") {
+      conditionScanTriggeredRef.current = true;
+      return;
+    }
     // Only trigger if VIN_CONFIRM is completed
     const vinStep = inspection.steps.find((s) => s.step === "VIN_CONFIRM");
     if (!vinStep || vinStep.status !== "COMPLETED") return;
@@ -322,6 +331,12 @@ export default function InspectionDetailPage({
     conditionScanTriggeredRef.current = true;
     runConditionScan.mutate({ inspectionId: id, inspectorNotes });
   }, [inspection, runConditionScan, id]);
+
+  // Derived: scan is in flight if our mutation is pending OR the server says
+  // the step is IN_PROGRESS (which is true after a page refresh during a scan).
+  const scanInFlight =
+    runConditionScan.isPending ||
+    (inspection?.steps.some((s) => s.step === "AI_CONDITION_SCAN" && s.status === "IN_PROGRESS") ?? false);
 
   // Media upload hook
   const mediaUpload = useMediaUpload(id);
@@ -744,7 +759,7 @@ export default function InspectionDetailPage({
           aiAnalysisResults={aiAnalysisResults || undefined}
           overallConditionResult={undefined}
           onRunConditionScan={() => runConditionScan.mutate({ inspectionId: id, inspectorNotes })}
-          isRunningConditionScan={runConditionScan.isPending}
+          isRunningConditionScan={scanInFlight}
           conditionScanComplete={inspection.steps.some((s) => s.step === "AI_CONDITION_SCAN" && s.status === "COMPLETED")}
           onConfirmVin={(vin) => confirmVin.mutate({ inspectionId: id, vin })}
           isConfirmingVin={confirmVin.isPending}

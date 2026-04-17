@@ -138,14 +138,6 @@ function AIAnalysisProgress({ inspectionId }: { inspectionId: string }) {
   const percent = data?.percent ?? 0;
   const stage = data?.stage ?? "Starting analysis…";
   const detail = data?.detail ?? "";
-  const startedAt = data?.startedAt ?? Date.now();
-
-  // Render-time elapsed estimate. Good enough — no setInterval needed since
-  // the poll refetch itself re-renders roughly once per second.
-  const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-  const elapsedLabel = elapsedSec < 60
-    ? `${elapsedSec}s elapsed`
-    : `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s elapsed`;
 
   return (
     <div className="mt-3 p-4 rounded-xl border border-brand-200 bg-brand-50/60 space-y-3">
@@ -168,8 +160,6 @@ function AIAnalysisProgress({ inspectionId }: { inspectionId: string }) {
           We're inspecting each photo, cross-checking paint, panels, tires, and wear patterns.
         </p>
       </div>
-
-      <p className="text-[10px] text-text-tertiary font-medium">{elapsedLabel}</p>
     </div>
   );
 }

@@ -438,11 +438,15 @@ export const inspectionRouter = router({
       // Build tire finding if applicable (also preliminary — awaits verification)
       const tireResult = conditionAssessment.tireAssessment;
       if (tireResult) {
+        // Map each position to its capture type so we can link the finding
+        // to the actual tire photo the AI looked at. Previously this finding
+        // was created with photoIndex: -1, photoId: null which caused the UI
+        // to fall back to an unrelated photo (often the dashboard).
         const tires = [
-          { pos: "Front Left", ...tireResult.frontDriver },
-          { pos: "Front Right", ...tireResult.frontPassenger },
-          { pos: "Rear Left", ...tireResult.rearDriver },
-          { pos: "Rear Right", ...tireResult.rearPassenger },
+          { pos: "Front Left",  captureType: "TIRE_FRONT_DRIVER",    ...tireResult.frontDriver },
+          { pos: "Front Right", captureType: "TIRE_FRONT_PASSENGER", ...tireResult.frontPassenger },
+          { pos: "Rear Left",   captureType: "TIRE_REAR_DRIVER",     ...tireResult.rearDriver },
+          { pos: "Rear Right",  captureType: "TIRE_REAR_PASSENGER",  ...tireResult.rearPassenger },
         ];
         const replaceCount = tires.filter((t) => t.condition === "REPLACE").length;
         const wornCount = tires.filter((t) => t.condition === "WORN").length;
@@ -455,6 +459,18 @@ export const inspectionRouter = router({
             .map((t) => `${t.pos} (${t.condition.toLowerCase()})`)
             .join(", ");
 
+          // Pick the most-affected tire's photo: first REPLACE, else first WORN.
+          // This ensures the UI shows an image that actually demonstrates the issue.
+          const worstTire =
+            tires.find((t) => t.condition === "REPLACE") ??
+            tires.find((t) => t.condition === "WORN");
+          const worstTireMedia = worstTire
+            ? mediaForAnalysis.find((m) => m.captureType === worstTire.captureType)
+            : undefined;
+          const tirePhotoIndex = worstTireMedia
+            ? mediaForAnalysis.findIndex((m) => m.id === worstTireMedia.id)
+            : -1;
+
           preliminaryFindings.push({
             index: preliminaryFindings.length,
             title: `Tire Replacement (${needsAttention} tire${needsAttention > 1 ? "s" : ""})`,
@@ -462,8 +478,8 @@ export const inspectionRouter = router({
             severity: replaceCount > 0 ? "MAJOR" : "MODERATE",
             category: "TIRES_WHEELS",
             confidence: 0.9,
-            photoIndex: -1,
-            photoId: null,
+            photoIndex: tirePhotoIndex,
+            photoId: worstTireMedia?.id ?? null,
           });
         }
       }
