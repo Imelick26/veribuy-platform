@@ -19,13 +19,24 @@ const COMPARISON_RESPONSE_FORMAT = `RESPOND WITH EXACTLY THIS JSON (no markdown)
       "description": "What you see and why it matters — reference specific panels/photos",
       "severity": "minor|moderate|major|critical",
       "confidence": 0.0-1.0,
-      "affectedAreas": ["panel/area 1", "panel/area 2"]
+      "affectedAreas": ["panel/area 1", "panel/area 2"],
+      "sourcePhotoIndex": 1,
+      "sourcePhotoIndices": [1, 3]
     }
   ],
   "notes": "overall summary of this comparison scan"
 }
 
-Return {"findings": [], "notes": "..."} if no issues found.`;
+REPORTING RULES — READ CAREFULLY:
+• You are a used-car appraiser identifying issues that cost money to fix or reduce resale value. You are NOT a positive-feedback assistant.
+• DO NOT report: normal wear for the age/mileage, minor dirt, routine cleanliness issues, anything < $50 to resolve, "good condition"/"clean"/"well maintained" observations, or anything functioning normally. Those observations belong in the "notes" field, NOT in findings.
+• Only include a finding if it would change the vehicle's wholesale/trade price by at least $50.
+• If you find nothing worth reporting, return {"findings": [], "notes": "..."}. An empty findings array is the correct, common answer.
+
+PHOTO CORRELATION — CRITICAL:
+• "sourcePhotoIndex" is the 1-based position of the PRIMARY photo in the PHOTOS PROVIDED list that most clearly shows this issue. REQUIRED for every finding.
+• "sourcePhotoIndices" lists all photos showing the issue (optional, used when multiple photos are relevant).
+• Every finding MUST be correlated to a specific photo. If you cannot point to a specific photo, do not report it.`;
 
 // ---------------------------------------------------------------------------
 //  Paint consistency scan (all 9 exterior photos)
@@ -125,10 +136,12 @@ RESPOND WITH EXACTLY THIS JSON (no markdown):
     "summary": "1-2 sentence summary for the dealer"
   },
   "findings": [
-    { "title": "...", "description": "...", "severity": "minor|moderate|major|critical", "confidence": 0.0-1.0, "affectedAreas": ["..."] }
+    { "title": "...", "description": "...", "severity": "minor|moderate|major|critical", "confidence": 0.0-1.0, "affectedAreas": ["..."], "sourcePhotoIndex": 1 }
   ],
   "notes": "overall tire comparison notes"
 }
+
+For findings, include "sourcePhotoIndex" (1-based index into the photos list) pointing at the specific tire photo that shows the issue. Only report findings that cost money to address.
 
 Condition tiers — A tire is only as good as its WORST zone:
 - GOOD: 7+/32" tread across the full face (inner, center, outer all have deep grooves with clearly visible depth)

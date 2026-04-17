@@ -111,7 +111,7 @@ async function runPaintScan(vehicle: VehicleInfo, media: MediaForAnalysis[]): Pr
     label: "phase2:paint",
   });
 
-  return normalizeComparisonFindings(response, "paint_mismatch");
+  return normalizeComparisonFindings(response, "paint_mismatch", photos);
 }
 
 async function runAlignmentScan(vehicle: VehicleInfo, media: MediaForAnalysis[]): Promise<ComparisonFinding[]> {
@@ -131,7 +131,7 @@ async function runAlignmentScan(vehicle: VehicleInfo, media: MediaForAnalysis[])
     label: "phase2:alignment",
   });
 
-  return normalizeComparisonFindings(response, "panel_alignment");
+  return normalizeComparisonFindings(response, "panel_alignment", photos);
 }
 
 async function runTireComparison(vehicle: VehicleInfo, media: MediaForAnalysis[]): Promise<TireComparisonResult> {
@@ -176,7 +176,7 @@ async function runTireComparison(vehicle: VehicleInfo, media: MediaForAnalysis[]
       overallTireScore: Math.max(1, Math.min(10, Math.round(Number(ta?.overallTireScore) || 5))),
       summary: String(ta?.summary || "Tire comparison completed"),
     },
-    findings: normalizeComparisonFindings(response, "tire_inconsistency"),
+    findings: normalizeComparisonFindings(response, "tire_inconsistency", photos),
   };
 }
 
@@ -197,7 +197,7 @@ async function runInteriorConsistency(vehicle: VehicleInfo, media: MediaForAnaly
     label: "phase2:interior",
   });
 
-  return normalizeComparisonFindings(response, "wear_inconsistency");
+  return normalizeComparisonFindings(response, "wear_inconsistency", photos);
 }
 
 async function runWearVsMileage(vehicle: VehicleInfo, media: MediaForAnalysis[]): Promise<ComparisonFinding[]> {
@@ -217,7 +217,7 @@ async function runWearVsMileage(vehicle: VehicleInfo, media: MediaForAnalysis[])
     label: "phase2:wear",
   });
 
-  return normalizeComparisonFindings(response, "mileage_discrepancy");
+  return normalizeComparisonFindings(response, "mileage_discrepancy", photos);
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +235,14 @@ interface ComparisonResponseFinding {
   severity?: string;
   confidence?: number;
   affectedAreas?: string[];
+  /**
+   * 1-based index into the PHOTOS PROVIDED list identifying the single photo
+   * that most clearly shows this issue. Used to correlate the finding back to
+   * the actual image for display.
+   */
+  sourcePhotoIndex?: number;
+  /** Optional multiple indices if more than one photo is relevant */
+  sourcePhotoIndices?: number[];
 }
 
 interface TireComparisonResponse extends ComparisonResponse {
@@ -253,21 +261,46 @@ const VALID_SEVERITIES: SeverityLevel[] = ["minor", "moderate", "major", "critic
 function normalizeComparisonFindings(
   response: { result: ComparisonResponse; raw: string } | null,
   type: ComparisonFinding["type"],
+  sourcePhotos: MediaForAnalysis[],
 ): ComparisonFinding[] {
   if (!response || !Array.isArray(response.result.findings)) return [];
 
   return response.result.findings
     .filter((f) => f.title && f.description)
-    .map((f) => ({
-      title: String(f.title),
-      description: String(f.description),
-      severity: VALID_SEVERITIES.includes(f.severity as SeverityLevel)
-        ? (f.severity as SeverityLevel)
-        : "minor",
-      confidence: Math.max(0, Math.min(1, Number(f.confidence) || 0.5)),
-      type,
-      affectedAreas: Array.isArray(f.affectedAreas) ? f.affectedAreas.map(String) : [],
-    }));
+    .map((f) => {
+      // Resolve AI's 1-based photo indices back to photoIds from the photo set
+      // we actually sent to this call. Fallback: all sent photos in order.
+      const aiIndices: number[] = [];
+      if (typeof f.sourcePhotoIndex === "number") aiIndices.push(f.sourcePhotoIndex);
+      if (Array.isArray(f.sourcePhotoIndices)) {
+        for (const n of f.sourcePhotoIndices) {
+          if (typeof n === "number" && !aiIndices.includes(n)) aiIndices.push(n);
+        }
+      }
+      const resolvedIds = aiIndices
+        .map((i) => sourcePhotos[Math.max(0, Math.min(sourcePhotos.length - 1, i - 1))]?.id)
+        .filter((id): id is string => !!id);
+
+      // Ensure we always have at least one source photo ID so the UI never
+      // falls back to the old hardcoded map. If the AI didn't provide an
+      // index, use all photos that were sent to this scan (the UI will
+      // display the first one).
+      const sourcePhotoIds = resolvedIds.length > 0
+        ? resolvedIds
+        : sourcePhotos.map((p) => p.id);
+
+      return {
+        title: String(f.title),
+        description: String(f.description),
+        severity: VALID_SEVERITIES.includes(f.severity as SeverityLevel)
+          ? (f.severity as SeverityLevel)
+          : "minor",
+        confidence: Math.max(0, Math.min(1, Number(f.confidence) || 0.5)),
+        type,
+        affectedAreas: Array.isArray(f.affectedAreas) ? f.affectedAreas.map(String) : [],
+        sourcePhotoIds,
+      };
+    });
 }
 
 function normalizeTireLevel(condition?: string): TireConditionLevel {

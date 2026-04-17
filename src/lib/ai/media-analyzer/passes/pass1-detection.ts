@@ -18,9 +18,10 @@ import type {
 import { getPhotoChecklist, buildPhase1SystemPrompt, buildTireSystemPrompt } from "../prompts/detection";
 import { callVision, validatePhotoUrls, processWithConcurrency, buildPhotoLabels } from "../utils";
 
-// 3 concurrent keeps us under the 30K TPM rate limit for gpt-4o
-// Each vision call uses ~2-3K tokens; 3 concurrent = ~9K TPM headroom
-const MAX_CONCURRENT = 3;
+// Higher concurrency for faster analysis — trades rate-limit headroom for speed.
+// Tier-based: our account has higher TPM limits so we can push more in parallel.
+// If 429s start showing up in logs, drop this back down.
+const MAX_CONCURRENT = 10;
 
 /** Capture types to skip (handled separately) */
 const SKIP_TYPES = new Set(["ODOMETER"]);
@@ -61,6 +62,7 @@ export async function runPhase1(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
   isTruck: boolean,
+  onPhotoComplete?: () => void,
 ): Promise<{ findings: DetectedFinding[]; callResults: InspectionCallResult[]; apiCalls: number }> {
   const mileageStr = vehicle.mileage
     ? `${vehicle.mileage.toLocaleString()} miles`
@@ -80,7 +82,11 @@ export async function runPhase1(
 
   const results = await processWithConcurrency(
     photosToAnalyze,
-    (photo) => inspectSinglePhoto(vehicle, photo, isTruck, mileageStr, systemPrompt),
+    async (photo) => {
+      const result = await inspectSinglePhoto(vehicle, photo, isTruck, mileageStr, systemPrompt);
+      onPhotoComplete?.();
+      return result;
+    },
     MAX_CONCURRENT,
   );
 
@@ -353,6 +359,13 @@ const VALID_SEVERITIES: SeverityLevel[] = ["minor", "moderate", "major", "critic
 const VALID_PAINT_DAMAGE: PaintDamageLevel[] = ["none", "clear_coat", "base_coat", "bare_metal"];
 const VALID_AREA_CONDITIONS = ["good", "fair", "worn", "damaged"] as const;
 
+// Regexes used by the post-filter to drop "things are fine" findings that
+// slip through despite the prompt's explicit rules. Matches on defectType,
+// location, or description.
+const POSITIVE_PHRASES = /(in\s+good\s+(condition|shape)|well[\s-]?maintained|looks?\s+clean|no\s+(damage|issues|problems|defects|visible)|appears?\s+(normal|fine)|nothing\s+wrong|factory\s+condition|as[\s-]?expected|routine\s+cleaning)/i;
+const DAMAGE_INDICATORS = /(dent|scratch|rust|corrosion|chip|crack|tear|stain|leak|worn|bald|bent|broken|missing|damage|oxidation|fade|scuff|gouge|pit|hole|loose|sagging|rot|warp|bubble|peel|fray|burn|mismatch|misalign|uneven|gap|overspray|blend)/i;
+const MIN_REPAIR_COST_CENTS = 5000; // $50 threshold
+
 function normalizeFindings(
   response: Phase1Response,
   photo: MediaForAnalysis,
@@ -364,6 +377,17 @@ function normalizeFindings(
     .filter((f) => {
       if (!f.defectType || !f.location) return false;
       if (typeof f.confidence !== "number" || f.confidence < 0.4) return false;
+
+      // Post-filter: reject "things are fine" findings that describe positive
+      // observations rather than real defects. The prompt forbids these, but
+      // some slip through — this is the belt-and-suspenders check.
+      const combined = `${f.defectType} ${f.location} ${f.description ?? ""}`.toLowerCase();
+      const hasPositivePhrase = POSITIVE_PHRASES.test(combined);
+      const hasDamageWord = DAMAGE_INDICATORS.test(combined);
+      if (hasPositivePhrase && !hasDamageWord) {
+        console.log(`[phase1:filter] Dropping positive-observation finding: ${f.defectType} — ${f.description ?? ""}`);
+        return false;
+      }
       return true;
     })
     .map((f) => {

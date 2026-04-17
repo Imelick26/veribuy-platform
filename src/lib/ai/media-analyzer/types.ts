@@ -79,6 +79,13 @@ export interface ComparisonFinding {
   confidence: number;
   type: "paint_mismatch" | "panel_alignment" | "tire_inconsistency" | "wear_inconsistency" | "mileage_discrepancy" | "other";
   affectedAreas: string[];        // e.g. ["driver door", "driver fender"]
+  /**
+   * Photo IDs that this comparison finding was derived from, in order of relevance.
+   * Populated by each Phase 2/3 pass with the IDs of photos actually sent to the
+   * AI call. First ID is the best photo to display in the UI — typically the
+   * photo that most clearly shows the issue.
+   */
+  sourcePhotoIds: string[];
   repairCostLow?: number;         // cents (if applicable)
   repairCostHigh?: number;
 }

@@ -22,6 +22,7 @@ import type { UnexpectedFinding } from "@/types/risk";
 import { runPhase1 } from "./passes/pass1-detection";
 import { runPhase2 } from "./passes/pass2-quantification";
 import { runPhase3, runPhase4 } from "./passes/pass3-correlation";
+import { startProgress, updateProgress, finishProgress } from "./progress";
 
 // ---------------------------------------------------------------------------
 //  Memoization cache
@@ -45,6 +46,7 @@ export async function runPipeline(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
   inspectorNotes?: string,
+  inspectionId?: string,
 ): Promise<PipelineResult> {
   const cacheKey = buildCacheKey(media);
   const cached = pipelineCache.get(cacheKey);
@@ -53,7 +55,7 @@ export async function runPipeline(
     return cached;
   }
 
-  const promise = executePipeline(vehicle, media, inspectorNotes);
+  const promise = executePipeline(vehicle, media, inspectorNotes, inspectionId);
   pipelineCache.set(cacheKey, promise);
 
   try {
@@ -95,16 +97,46 @@ async function executePipeline(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
   inspectorNotes?: string,
+  inspectionId?: string,
 ): Promise<PipelineResult> {
   const startTime = Date.now();
   const vehicleIsTruck = isTruck(vehicle);
   console.log(`[pipeline] Starting 4-phase analysis for ${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicleIsTruck ? "truck" : "non-truck"}) with ${media.length} photos`);
 
-  // ── Phase 1: Focused per-photo inspection ──
-  const phase1 = await runPhase1(vehicle, media, vehicleIsTruck);
+  // ── Progress tracking setup ──
+  // Weight the progress bar so the slow phases (1+2) use most of the range.
+  const photoCount = media.filter((m) => m.captureType !== "ODOMETER").length;
+  if (inspectionId) {
+    startProgress(inspectionId, `Inspecting ${photoCount} photos and comparing across the vehicle…`);
+  }
+  let completedPhotos = 0;
+  const onPhotoComplete = () => {
+    completedPhotos += 1;
+    if (!inspectionId) return;
+    // Phase 1 is 0-50% of the bar, 5% reserved for Phase 2's share
+    const pct = Math.round((completedPhotos / Math.max(1, photoCount)) * 50);
+    updateProgress(
+      inspectionId,
+      pct,
+      `Inspecting ${photoCount} photos and comparing across the vehicle…`,
+      `${completedPhotos} of ${photoCount} photos analyzed`,
+    );
+  };
 
-  // ── Phase 2: Multi-photo comparison scans ──
-  const phase2 = await runPhase2(vehicle, media);
+  // ── Phases 1 and 2 run in parallel (independent) ──
+  const [phase1, phase2] = await Promise.all([
+    runPhase1(vehicle, media, vehicleIsTruck, onPhotoComplete),
+    runPhase2(vehicle, media),
+  ]);
+
+  if (inspectionId) {
+    updateProgress(
+      inspectionId,
+      65,
+      "Following up on flagged areas…",
+      `${phase1.findings.length} findings so far`,
+    );
+  }
 
   // ── Phase 3: Targeted re-scans (conditional) ──
   const allComparisonFindings: ComparisonFinding[] = [
@@ -120,6 +152,15 @@ async function executePipeline(
   // Merge all findings
   const allFindings: DetectedFinding[] = [...phase1.findings, ...phase3.rescanFindings];
   const allComparisons: ComparisonFinding[] = [...allComparisonFindings, ...phase3.rescanComparisonFindings];
+
+  if (inspectionId) {
+    updateProgress(
+      inspectionId,
+      80,
+      "Synthesizing condition scores…",
+      `${allFindings.length + allComparisons.length} total findings`,
+    );
+  }
 
   // ── Phase 4: Score synthesis with exterior photos ──
   const phase4 = await runPhase4(
@@ -155,6 +196,8 @@ async function executePipeline(
     `[pipeline] Complete: ${metadata.totalFindings} findings + ${metadata.comparisonFindings} comparisons, ` +
     `${metadata.totalApiCalls} API calls, ${(durationMs / 1000).toFixed(1)}s`,
   );
+
+  if (inspectionId) finishProgress(inspectionId);
 
   // Use tire assessment from Phase 2, or build from Phase 1 per-tire data as fallback
   let tireAssessment = phase2.tireResult.tireAssessment;
@@ -268,9 +311,11 @@ function buildUnexpectedFindings(
     (f) => f.confidence >= 0.5 && f.type !== "tire_inconsistency",
   );
 
-  // Map comparison finding types to the most relevant source photo
-  const comparisonPhotoMap: Record<string, string[]> = {
+  // Fallback lookup — only used if a finding somehow has no sourcePhotoIds
+  // (shouldn't happen, but belt-and-suspenders for legacy data).
+  const fallbackPhotoMap: Record<string, string[]> = {
     paint_mismatch: ["FRONT_CENTER", "FRONT_34_DRIVER", "DRIVER_SIDE"],
+    panel_alignment: ["FRONT_CENTER", "DRIVER_SIDE", "PASSENGER_SIDE"],
     interior_consistency: ["FRONT_SEATS", "DASHBOARD_DRIVER", "REAR_SEATS"],
     wear_inconsistency: ["DASHBOARD_DRIVER", "FRONT_SEATS", "ENGINE_BAY"],
     mileage_discrepancy: ["ODOMETER", "DASHBOARD_DRIVER"],
@@ -278,12 +323,24 @@ function buildUnexpectedFindings(
   };
 
   const fromComparisons: UnexpectedFinding[] = filteredComparisons.map((f) => {
-    // Find the best matching photo for this comparison finding
-    const preferredTypes = comparisonPhotoMap[f.type] || ["FRONT_CENTER"];
+    // FIRST preference: the photo IDs the AI/Phase 2 pass actually flagged.
+    // This is how we prevent the "dirty engine bay shows dashboard photo" bug.
     let bestPhotoIndex = -1;
-    for (const captureType of preferredTypes) {
-      const idx = media.findIndex((m) => m.captureType === captureType);
-      if (idx >= 0) { bestPhotoIndex = idx; break; }
+    if (f.sourcePhotoIds && f.sourcePhotoIds.length > 0) {
+      for (const pid of f.sourcePhotoIds) {
+        const idx = media.findIndex((m) => m.id === pid);
+        if (idx >= 0) { bestPhotoIndex = idx; break; }
+      }
+    }
+
+    // Fallback (legacy data without sourcePhotoIds) — use the old type-based
+    // lookup as a last resort so the UI can still render something.
+    if (bestPhotoIndex < 0) {
+      const preferredTypes = fallbackPhotoMap[f.type] || ["FRONT_CENTER"];
+      for (const captureType of preferredTypes) {
+        const idx = media.findIndex((m) => m.captureType === captureType);
+        if (idx >= 0) { bestPhotoIndex = idx; break; }
+      }
     }
 
     return {

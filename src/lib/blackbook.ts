@@ -89,13 +89,37 @@ function getCredentials(): { username: string; password: string } {
   const username = process.env.BLACKBOOK_USERNAME;
   const password = process.env.BLACKBOOK_PASSWORD;
   if (!username || !password) {
-    throw new Error("Missing BLACKBOOK_USERNAME or BLACKBOOK_PASSWORD environment variables");
+    const missing: string[] = [];
+    if (!username) missing.push("BLACKBOOK_USERNAME");
+    if (!password) missing.push("BLACKBOOK_PASSWORD");
+    throw new Error(`Missing Black Book credentials: ${missing.join(", ")}. Check .env.local and restart the dev server.`);
   }
   return { username, password };
 }
 
+// Log credential presence exactly once per process so we can confirm the
+// running server actually picked up the .env.local values. Runs the first
+// time any BB function is called.
+let bbEnvChecked = false;
+function logCredentialStatus(): void {
+  if (bbEnvChecked) return;
+  bbEnvChecked = true;
+  const hasUser = !!process.env.BLACKBOOK_USERNAME;
+  const hasPass = !!process.env.BLACKBOOK_PASSWORD;
+  console.log(
+    `[BlackBook] Credentials: BLACKBOOK_USERNAME=${hasUser ? "set" : "MISSING"} ` +
+    `BLACKBOOK_PASSWORD=${hasPass ? "set" : "MISSING"}` +
+    (hasUser && hasPass ? "" : " — restart dev server after adding to .env.local"),
+  );
+}
+
 const BB_USED_CAR_BASE = "https://service.blackbookcloud.com/UsedCarWS/UsedCarWS";
 const BB_RETAIL_BASE = "https://service.blackbookcloud.com/RetailAPI/RetailAPI";
+
+// BB requires a `customerid` query param on every call (for usage tracking on
+// their side). Any string works — we send our product name so BB's logs show
+// which app made the request. Default value matches the test harness style.
+const BB_CUSTOMER_ID = process.env.BLACKBOOK_CUSTOMERID || "veribuy";
 
 function parseNum(val: unknown): number {
   if (typeof val === "number") return val;
@@ -128,13 +152,21 @@ export async function fetchBlackBookValuation(
   mileage?: number,
   state?: string,
 ): Promise<BBValuation | null> {
+  logCredentialStatus();
   const auth = buildAuth();
 
-  const params = new URLSearchParams({ vin });
+  // Endpoint: /UsedCarWS/UsedCarWS/UsedVehicle/VIN/{vin}
+  // Required query params: language, customerid. Optional: mileage, state.
+  const params = new URLSearchParams({
+    language: "en",
+    customerid: BB_CUSTOMER_ID,
+  });
   if (mileage) params.set("mileage", String(mileage));
   if (state) params.set("state", state);
 
-  const url = `${BB_USED_CAR_BASE}/VIN/${vin}?${params}`;
+  const url = `${BB_USED_CAR_BASE}/UsedVehicle/VIN/${vin}?${params}`;
+  // Redacted URL for logs (never log the base64 auth header)
+  console.log(`[BlackBook] GET ${url} (VIN valuation, mileage=${mileage ?? "n/a"}, state=${state ?? "n/a"})`);
 
   const res = await fetch(url, {
     method: "GET",
@@ -146,15 +178,28 @@ export async function fetchBlackBookValuation(
 
   if (!res.ok) {
     const text = await res.text();
+    const snippet = text.slice(0, 500);
     if (res.status === 404 || res.status === 422) {
-      console.warn(`[BlackBook] No data for VIN ${vin}: ${text}`);
+      console.warn(`[BlackBook] No data for VIN ${vin} (${res.status}): ${snippet}`);
       return null;
     }
-    throw new Error(`BlackBook API error (${res.status}): ${text}`);
+    if (res.status === 401 || res.status === 403) {
+      console.error(`[BlackBook] AUTH FAILURE (${res.status}) for VIN ${vin} — BLACKBOOK_USERNAME/PASSWORD rejected: ${snippet}`);
+    } else {
+      console.error(`[BlackBook] API error ${res.status} for VIN ${vin}: ${snippet}`);
+    }
+    throw new Error(`BlackBook API error (${res.status}): ${snippet}`);
   }
 
   const data = await res.json();
-  return normalizeValuationResponse(data, vin, mileage);
+  const normalized = normalizeValuationResponse(data, vin, mileage);
+  if (!normalized) {
+    console.warn(
+      `[BlackBook] VIN ${vin} returned 200 but no parseable valuation. ` +
+      `Response keys: ${Object.keys(data || {}).join(", ")}`,
+    );
+  }
+  return normalized;
 }
 
 /**
@@ -167,17 +212,23 @@ export async function fetchBlackBookByYMM(
   mileage?: number,
   state?: string,
 ): Promise<BBValuation | null> {
+  logCredentialStatus();
   const auth = buildAuth();
 
+  // Endpoint: /UsedCarWS/UsedCarWS/UsedVehicle/{year}/{make}?model=&series=&language=&customerid=
+  // BB's YMM lookup (aka "Used Vehicle By Drilldown") puts year and make in
+  // the path and model in a query param. Series/style are optional and improve
+  // match quality when present.
   const params = new URLSearchParams({
-    year: String(year),
-    make,
-    series: model,
+    model,
+    language: "en",
+    customerid: BB_CUSTOMER_ID,
   });
   if (mileage) params.set("mileage", String(mileage));
   if (state) params.set("state", state);
 
-  const url = `${BB_USED_CAR_BASE}/UsedCar?${params}`;
+  const url = `${BB_USED_CAR_BASE}/UsedVehicle/${encodeURIComponent(String(year))}/${encodeURIComponent(make)}?${params}`;
+  console.log(`[BlackBook] GET ${url} (YMM drilldown)`);
 
   const res = await fetch(url, {
     method: "GET",
@@ -189,11 +240,17 @@ export async function fetchBlackBookByYMM(
 
   if (!res.ok) {
     const text = await res.text();
+    const snippet = text.slice(0, 500);
     if (res.status === 404 || res.status === 422) {
-      console.warn(`[BlackBook] No data for ${year} ${make} ${model}: ${text}`);
+      console.warn(`[BlackBook] No data for ${year} ${make} ${model} (${res.status}): ${snippet}`);
       return null;
     }
-    throw new Error(`BlackBook API error (${res.status}): ${text}`);
+    if (res.status === 401 || res.status === 403) {
+      console.error(`[BlackBook] AUTH FAILURE (${res.status}) for YMM ${year} ${make} ${model}: ${snippet}`);
+    } else {
+      console.error(`[BlackBook] API error ${res.status} for YMM ${year} ${make} ${model}: ${snippet}`);
+    }
+    throw new Error(`BlackBook API error (${res.status}): ${snippet}`);
   }
 
   const data = await res.json();
@@ -434,7 +491,8 @@ export async function fetchBlackBookRetailInsights(
 
   const auth = buildAuth();
 
-  // Build search params per BB Retail Listings API docs
+  // Build search params per BB Retail Listings API docs.
+  // customerid is REQUIRED — BB rejects the request otherwise.
   const params = new URLSearchParams({
     uvc,
     zipcode: zip,
@@ -447,6 +505,7 @@ export async function fetchBlackBookRetailInsights(
     dealer_stats: "false",
     listings_per_page: String(maxListings),
     page_number: "1",
+    customerid: BB_CUSTOMER_ID,
   });
 
   // Filter comps to reasonable mileage range if mileage provided
@@ -456,6 +515,7 @@ export async function fetchBlackBookRetailInsights(
   }
 
   const url = `${BB_RETAIL_BASE}/Listings?${params}`;
+  console.log(`[BlackBook] GET ${BB_RETAIL_BASE}/Listings (UVC ${uvc}, zip ${zip}, radius ${radiusMiles})`);
 
   const res = await fetch(url, {
     method: "GET",
@@ -467,11 +527,17 @@ export async function fetchBlackBookRetailInsights(
 
   if (!res.ok) {
     const text = await res.text();
+    const snippet = text.slice(0, 500);
     if (res.status === 404 || res.status === 422) {
-      console.warn(`[BlackBook] No retail listings for UVC ${uvc}: ${text}`);
+      console.warn(`[BlackBook] No retail listings for UVC ${uvc} (${res.status}): ${snippet}`);
       return null;
     }
-    throw new Error(`BlackBook Retail API error (${res.status}): ${text}`);
+    if (res.status === 401 || res.status === 403) {
+      console.error(`[BlackBook] Retail Insights AUTH FAILURE (${res.status}): ${snippet}`);
+    } else {
+      console.error(`[BlackBook] Retail API error ${res.status}: ${snippet}`);
+    }
+    throw new Error(`BlackBook Retail API error (${res.status}): ${snippet}`);
   }
 
   const data = await res.json() as Record<string, unknown>;

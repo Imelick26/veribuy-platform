@@ -20,7 +20,6 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { CaptureGuide } from "./capture-guides";
 
 // ---------------------------------------------------------------------------
 //  Shot definitions — ordered for efficient physical walkthrough
@@ -30,36 +29,252 @@ export interface CaptureShot {
   type: string;
   label: string;
   hint: string;
+  /** Step-by-step instructions written for people with no car background */
+  steps: string[];
   section: "EXTERIOR" | "INTERIOR" | "MECHANICAL";
 }
 
+// NOTE ON SIDES: "driver side" = the side where the steering wheel sits (left in the US).
+// "passenger side" = the opposite side. Every shot below uses those plain words.
+
 export const GUIDED_SHOTS: CaptureShot[] = [
   // ── Exterior (walk around vehicle) ──
-  { type: "FRONT_CENTER",        label: "Front Center",           hint: "6-8 ft, centered, full vehicle visible",       section: "EXTERIOR" },
-  { type: "FRONT_34_DRIVER",     label: "Front 3/4 Driver",       hint: "45° angle from driver side",                   section: "EXTERIOR" },
-  { type: "DRIVER_SIDE",         label: "Driver Side",            hint: "Full profile, 8-10 ft distance",               section: "EXTERIOR" },
-  { type: "REAR_34_DRIVER",      label: "Rear 3/4 Driver",        hint: "45° angle from rear driver side",              section: "EXTERIOR" },
-  { type: "REAR_CENTER",         label: "Rear Center",            hint: "6-8 ft, centered, full vehicle visible",       section: "EXTERIOR" },
-  { type: "REAR_34_PASSENGER",   label: "Rear 3/4 Passenger",     hint: "45° angle from rear passenger side",           section: "EXTERIOR" },
-  { type: "PASSENGER_SIDE",      label: "Passenger Side",         hint: "Full profile, 8-10 ft distance",               section: "EXTERIOR" },
-  { type: "FRONT_34_PASSENGER",  label: "Front 3/4 Passenger",    hint: "45° angle from passenger side",                section: "EXTERIOR" },
-  { type: "ROOF",                label: "Roof",                   hint: "Overhead or elevated angle showing full roof",  section: "EXTERIOR" },
+  {
+    type: "FRONT_CENTER",
+    label: "Front of the vehicle",
+    hint: "Stand 6–8 feet in front, centered on the grille.",
+    steps: [
+      "Stand directly in front of the vehicle, about 6–8 feet back (roughly 2 long steps).",
+      "Hold the phone straight, not tilted — match the height of the headlights if possible.",
+      "Center the grille in the middle of the screen. The whole front of the car should fit in the frame, including both headlights, bumper, and the front license plate area.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "FRONT_34_DRIVER",
+    label: "Front corner — driver side",
+    hint: "Stand off to the driver-side front corner so the front AND driver side are both visible.",
+    steps: [
+      "Walk to the front-left corner of the car (driver side — the side with the steering wheel).",
+      "Stand 6–8 feet back at roughly a 45° angle — you should see BOTH the front bumper AND the driver side of the car in the frame.",
+      "Include the driver-side headlight, front fender, front door, and front wheel.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "DRIVER_SIDE",
+    label: "Full driver side",
+    hint: "Stand 8–10 feet back so the full length of the car fits in the frame.",
+    steps: [
+      "Walk to the middle of the driver side (the side with the steering wheel).",
+      "Back up until the entire car fits in the screen — front bumper to rear bumper, top of the roof to bottom of the tires. This is usually 8–10 feet away.",
+      "Keep the phone level. Both wheels and both door handles should be visible.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "REAR_34_DRIVER",
+    label: "Rear corner — driver side",
+    hint: "Stand off to the rear driver-side corner so the back AND driver side are both visible.",
+    steps: [
+      "Walk to the rear-left corner of the car (driver side, near the back bumper).",
+      "Stand 6–8 feet back at roughly a 45° angle — you should see BOTH the rear of the car AND the driver side in the frame.",
+      "Include the driver-side taillight, rear door, rear fender, and rear wheel.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "REAR_CENTER",
+    label: "Back of the vehicle",
+    hint: "Stand 6–8 feet behind, centered on the trunk/tailgate.",
+    steps: [
+      "Walk around to the back of the vehicle and stand 6–8 feet away, centered behind it.",
+      "Match the height of the taillights if possible. Keep the phone level.",
+      "The whole back of the car should fit in the frame — both taillights, rear bumper, license plate, and the trunk/tailgate.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "REAR_34_PASSENGER",
+    label: "Rear corner — passenger side",
+    hint: "Stand off to the rear passenger-side corner so the back AND passenger side are both visible.",
+    steps: [
+      "Walk to the rear-right corner of the car (passenger side — opposite the steering wheel).",
+      "Stand 6–8 feet back at roughly a 45° angle — you should see BOTH the rear of the car AND the passenger side in the frame.",
+      "Include the passenger-side taillight, rear door, rear fender, and rear wheel.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "PASSENGER_SIDE",
+    label: "Full passenger side",
+    hint: "Stand 8–10 feet back so the full length of the car fits in the frame.",
+    steps: [
+      "Walk to the middle of the passenger side (opposite the steering wheel).",
+      "Back up until the entire car fits in the screen — front bumper to rear bumper, top of the roof to bottom of the tires. This is usually 8–10 feet away.",
+      "Keep the phone level. Both wheels and both door handles should be visible.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "FRONT_34_PASSENGER",
+    label: "Front corner — passenger side",
+    hint: "Stand off to the front passenger-side corner so the front AND passenger side are both visible.",
+    steps: [
+      "Walk to the front-right corner of the car (passenger side, near the headlight).",
+      "Stand 6–8 feet back at roughly a 45° angle — you should see BOTH the front of the car AND the passenger side in the frame.",
+      "Include the passenger-side headlight, front fender, front door, and front wheel.",
+    ],
+    section: "EXTERIOR",
+  },
+  {
+    type: "ROOF",
+    label: "Roof",
+    hint: "Capture the full roof from above or an elevated angle.",
+    steps: [
+      "If you can safely get above the car (from a step, curb, or nearby elevated spot), aim the camera down at the roof.",
+      "If you can't get above, stand at one end of the car, hold the phone high, and angle it down so as much of the roof surface as possible is visible.",
+      "Try to capture the whole roof from front windshield to rear window, including any sunroof or roof rails.",
+    ],
+    section: "EXTERIOR",
+  },
 
   // ── Interior (open doors, sit inside) ──
-  { type: "DASHBOARD_DRIVER",    label: "Dashboard & Steering",   hint: "Wide shot showing dash, steering wheel, gauges, center console", section: "INTERIOR" },
-  { type: "ODOMETER",            label: "Odometer",               hint: "Instrument cluster showing current mileage, clearly readable",   section: "INTERIOR" },
-  { type: "FRONT_SEATS",         label: "Front Seats",            hint: "Both front seats visible, show bolsters and center console",      section: "INTERIOR" },
-  { type: "REAR_SEATS",          label: "Rear Seats",             hint: "Full rear seating area and floor",                                section: "INTERIOR" },
-  { type: "CARGO_AREA",          label: "Trunk / Cargo",          hint: "Open trunk or cargo area",                                        section: "INTERIOR" },
+  {
+    type: "DASHBOARD_DRIVER",
+    label: "Dashboard and steering wheel",
+    hint: "Sit in the driver seat. Capture the dashboard, steering wheel, and center screen.",
+    steps: [
+      "Open the driver door and sit in the driver seat (the one with the steering wheel).",
+      "Hold the phone in front of you at chest height, pointed forward at the dashboard.",
+      "Back up the phone until the frame shows: the full steering wheel, the gauges behind it, and the center screen/radio on the right. All three should be visible in one shot.",
+    ],
+    section: "INTERIOR",
+  },
+  {
+    type: "ODOMETER",
+    label: "Odometer (mileage reading)",
+    hint: "The numbers showing total miles, on the gauge cluster behind the steering wheel.",
+    steps: [
+      "Sit in the driver seat. If needed, turn the key or press the start button to wake the dashboard.",
+      "Look at the gauges behind the steering wheel — one of them shows a number of miles (like \"127,342\"). That's the odometer.",
+      "Zoom in close enough that the miles number is clearly readable in the photo. No glare, no blur — we need to read the exact number.",
+    ],
+    section: "INTERIOR",
+  },
+  {
+    type: "FRONT_SEATS",
+    label: "Front seats",
+    hint: "Both front seats visible in one shot — open the driver door and step back.",
+    steps: [
+      "Open the driver door. Stand outside the car, just beside the open door.",
+      "Aim the camera across both front seats so BOTH the driver seat and the passenger seat are in the frame.",
+      "Include the full seat cushions, the seat backs, the center console (armrest / cupholders / shifter) between them, and the floor in front of each seat.",
+    ],
+    section: "INTERIOR",
+  },
+  {
+    type: "REAR_SEATS",
+    label: "Back seats",
+    hint: "Open a rear door and capture the entire back seating area.",
+    steps: [
+      "Open one of the rear doors (either side works).",
+      "Stand outside the car and aim the camera straight into the back seating area.",
+      "Include all the back seats (bench or individual), the seat backs, and the floor. If there's a third row in an SUV/van, get as much of it as you can in the frame.",
+    ],
+    section: "INTERIOR",
+  },
+  {
+    type: "CARGO_AREA",
+    label: "Trunk or cargo area",
+    hint: "Open the trunk, tailgate, or hatch. Capture the storage space inside.",
+    steps: [
+      "Walk to the back of the vehicle and open the trunk, tailgate, or rear hatch.",
+      "Stand a couple feet back from the opening and aim the camera straight into the cargo space.",
+      "Include the full floor of the cargo area, the inside of the lid/hatch, and the rear seat backs from behind. For pickup trucks, capture the full length of the truck bed from tailgate to cab.",
+    ],
+    section: "INTERIOR",
+  },
 
   // ── Mechanical (hood open, get low) ──
-  { type: "ENGINE_BAY",              label: "Engine Bay",              hint: "Hood open, overhead angle",                           section: "MECHANICAL" },
-  { type: "DOOR_JAMB_DRIVER",         label: "Door Jamb Sticker",       hint: "Open driver door — sticker on jamb with VIN, tire pressure, build info", section: "MECHANICAL" },
-  { type: "UNDERCARRIAGE",           label: "Undercarriage",           hint: "From ground level, showing underside",                section: "MECHANICAL" },
-  { type: "TIRE_FRONT_DRIVER",       label: "Front Tire (Driver)",     hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
-  { type: "TIRE_REAR_DRIVER",        label: "Rear Tire (Driver)",      hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
-  { type: "TIRE_FRONT_PASSENGER",    label: "Front Tire (Passenger)",  hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
-  { type: "TIRE_REAR_PASSENGER",     label: "Rear Tire (Passenger)",   hint: "Close-up showing tread depth and sidewall",           section: "MECHANICAL" },
+  {
+    type: "ENGINE_BAY",
+    label: "Engine (under the hood)",
+    hint: "Open the hood. Take the photo from above, looking straight down.",
+    steps: [
+      "Open the hood (pull the release lever usually located near the driver's footwell, then lift the hood and prop it up with the metal stick underneath).",
+      "Stand in front of the car, facing the engine.",
+      "Hold the phone directly above the engine, pointing straight down, high enough that the ENTIRE engine bay fits in the frame — front of the engine to the windshield, driver-side fender to passenger-side fender.",
+    ],
+    section: "MECHANICAL",
+  },
+  {
+    type: "DOOR_JAMB_DRIVER",
+    label: "Door jamb sticker",
+    hint: "The small white/silver sticker on the edge of the driver door frame.",
+    steps: [
+      "Open the driver door (the door on the side with the steering wheel).",
+      "Look at the metal frame that the door latches onto — usually on the side of the car, between the front seat and where the door closes. You'll see a small white or silver sticker with printed text.",
+      "Hold the phone close enough (about 6–12 inches) that the text on the sticker — VIN, tire pressure, build date — is clearly readable in the photo.",
+    ],
+    section: "MECHANICAL",
+  },
+  {
+    type: "UNDERCARRIAGE",
+    label: "Underneath the vehicle",
+    hint: "Crouch at the very front of the car. Aim the camera UNDER the car, pointing toward the back.",
+    steps: [
+      "Walk to the very front of the vehicle and stand facing it.",
+      "Crouch or kneel down below the front bumper. Your head should be near the ground.",
+      "Hold the phone low — as close to the ground as you can — and point the camera BACKWARD, through the space under the car, toward the rear of the vehicle.",
+      "The goal: one photo that shows as much of the underside of the car as possible in a single shot, looking from the front toward the back.",
+    ],
+    section: "MECHANICAL",
+  },
+  {
+    type: "TIRE_FRONT_DRIVER",
+    label: "Front tire — driver side",
+    hint: "Close-up of the front-left tire (driver side = side with the steering wheel).",
+    steps: [
+      "Walk to the FRONT tire on the DRIVER side of the car (the front wheel on the side with the steering wheel).",
+      "Crouch down so the camera is at tire height. Get within about 2 feet of the tire.",
+      "Aim straight at the face of the tire. The full circle of the tire should fit in the frame — the rubber tread pattern, the sidewall, and the wheel in the middle all clearly visible.",
+    ],
+    section: "MECHANICAL",
+  },
+  {
+    type: "TIRE_REAR_DRIVER",
+    label: "Rear tire — driver side",
+    hint: "Close-up of the rear-left tire (driver side = side with the steering wheel).",
+    steps: [
+      "Walk to the REAR tire on the DRIVER side of the car (the back wheel on the side with the steering wheel).",
+      "Crouch down so the camera is at tire height. Get within about 2 feet of the tire.",
+      "Aim straight at the face of the tire. The full circle of the tire should fit in the frame — the rubber tread pattern, the sidewall, and the wheel in the middle all clearly visible.",
+    ],
+    section: "MECHANICAL",
+  },
+  {
+    type: "TIRE_FRONT_PASSENGER",
+    label: "Front tire — passenger side",
+    hint: "Close-up of the front-right tire (passenger side = opposite the steering wheel).",
+    steps: [
+      "Walk to the FRONT tire on the PASSENGER side of the car (the front wheel on the side opposite the steering wheel).",
+      "Crouch down so the camera is at tire height. Get within about 2 feet of the tire.",
+      "Aim straight at the face of the tire. The full circle of the tire should fit in the frame — the rubber tread pattern, the sidewall, and the wheel in the middle all clearly visible.",
+    ],
+    section: "MECHANICAL",
+  },
+  {
+    type: "TIRE_REAR_PASSENGER",
+    label: "Rear tire — passenger side",
+    hint: "Close-up of the rear-right tire (passenger side = opposite the steering wheel).",
+    steps: [
+      "Walk to the REAR tire on the PASSENGER side of the car (the back wheel on the side opposite the steering wheel).",
+      "Crouch down so the camera is at tire height. Get within about 2 feet of the tire.",
+      "Aim straight at the face of the tire. The full circle of the tire should fit in the frame — the rubber tread pattern, the sidewall, and the wheel in the middle all clearly visible.",
+    ],
+    section: "MECHANICAL",
+  },
 ];
 
 const SECTIONS = [
@@ -371,19 +586,39 @@ export function GuidedCapture({
             </div>
           </div>
         ) : (
-          <div className="w-full max-w-lg aspect-[4/3] rounded-2xl bg-slate-800/50 border-2 border-dashed border-slate-600 flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="w-full max-w-lg rounded-2xl bg-slate-800/60 border border-slate-700 flex flex-col relative overflow-hidden shadow-xl">
             {isCurrentUploading ? (
-              <>
+              <div className="aspect-[4/3] flex flex-col items-center justify-center gap-3">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-600 border-t-brand-500" />
                 <p className="text-sm text-slate-400">Uploading...</p>
-              </>
+              </div>
             ) : (
-              <>
-                <CaptureGuide type={currentShot.type} className="w-full h-full px-4 pt-3 pb-8" />
-                <div className="absolute bottom-3 left-0 right-0 text-center">
-                  <p className="text-xs text-slate-500">{currentShot.hint}</p>
+              <div className="p-5 sm:p-6">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="shrink-0 h-10 w-10 rounded-full bg-brand-500/20 border border-brand-500/40 flex items-center justify-center">
+                    <Camera className="h-5 w-5 text-brand-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">{currentShot.label}</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">{currentShot.hint}</p>
+                  </div>
                 </div>
-              </>
+
+                <ol className="space-y-3">
+                  {currentShot.steps.map((step, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="shrink-0 h-6 w-6 rounded-full bg-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <p className="text-sm text-slate-200 leading-relaxed pt-0.5">{step}</p>
+                    </li>
+                  ))}
+                </ol>
+
+                <p className="text-[11px] text-slate-500 mt-4 pt-3 border-t border-slate-700/60">
+                  Take your time — a clear photo from the right angle gives the most accurate report.
+                </p>
+              </div>
             )}
           </div>
         )}

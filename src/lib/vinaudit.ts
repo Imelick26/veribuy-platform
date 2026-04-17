@@ -71,9 +71,30 @@ function getCredentials(): { key: string; user: string; pass: string } {
   const user = process.env.VINAUDIT_USER;
   const pass = process.env.VINAUDIT_PASS;
   if (!key || !user || !pass) {
-    throw new Error("Missing VinAudit credentials (VINAUDIT_API_KEY, VINAUDIT_USER, VINAUDIT_PASS)");
+    const missing: string[] = [];
+    if (!key) missing.push("VINAUDIT_API_KEY");
+    if (!user) missing.push("VINAUDIT_USER");
+    if (!pass) missing.push("VINAUDIT_PASS");
+    throw new Error(`Missing VinAudit credentials: ${missing.join(", ")}. Check .env.local and restart the dev server.`);
   }
   return { key, user, pass };
+}
+
+// Log credential presence exactly once per process so we can confirm the
+// running server picked up all three VinAudit env vars.
+let vaEnvChecked = false;
+function logCredentialStatus(): void {
+  if (vaEnvChecked) return;
+  vaEnvChecked = true;
+  const hasKey = !!process.env.VINAUDIT_API_KEY;
+  const hasUser = !!process.env.VINAUDIT_USER;
+  const hasPass = !!process.env.VINAUDIT_PASS;
+  console.log(
+    `[VinAudit] Credentials: VINAUDIT_API_KEY=${hasKey ? "set" : "MISSING"} ` +
+    `VINAUDIT_USER=${hasUser ? "set" : "MISSING"} ` +
+    `VINAUDIT_PASS=${hasPass ? "set" : "MISSING"}` +
+    (hasKey && hasUser && hasPass ? "" : " — restart dev server after adding to .env.local"),
+  );
 }
 
 const VINAUDIT_BASE = "https://api.vinaudit.com";
@@ -85,6 +106,7 @@ const VINAUDIT_BASE = "https://api.vinaudit.com";
  * GET /v2/pullreport?format=json&key=KEY&user=USER&pass=PASS&mode=prod&vin=VIN
  */
 export async function fetchVehicleHistory(vin: string): Promise<VehicleHistoryData> {
+  logCredentialStatus();
   const { key, user, pass } = getCredentials();
 
   const params = new URLSearchParams({
@@ -97,6 +119,7 @@ export async function fetchVehicleHistory(vin: string): Promise<VehicleHistoryDa
   });
 
   const url = `${VINAUDIT_BASE}/v2/pullreport?${params.toString()}`;
+  console.log(`[VinAudit] GET ${VINAUDIT_BASE}/v2/pullreport (VIN ${vin})`);
 
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -104,15 +127,31 @@ export async function fetchVehicleHistory(vin: string): Promise<VehicleHistoryDa
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`VinAudit API error (${res.status}): ${text}`);
+    const snippet = text.slice(0, 500);
+    if (res.status === 401 || res.status === 403) {
+      console.error(`[VinAudit] AUTH FAILURE (${res.status}) for VIN ${vin}: ${snippet}`);
+    } else {
+      console.error(`[VinAudit] API error ${res.status} for VIN ${vin}: ${snippet}`);
+    }
+    throw new Error(`VinAudit API error (${res.status}): ${snippet}`);
   }
 
   const data = await res.json();
 
   // Check for API-level error responses
   if (data.error || data.status === "error") {
-    throw new Error(`VinAudit report error: ${data.error || data.message || "Unknown error"}`);
+    const msg = data.error || data.message || "Unknown error";
+    console.error(`[VinAudit] Report error for VIN ${vin}: ${msg}. Response keys: ${Object.keys(data || {}).join(", ")}`);
+    throw new Error(`VinAudit report error: ${msg}`);
   }
+
+  console.log(
+    `[VinAudit] VIN ${vin} response keys: ${Object.keys(data || {}).join(", ")} ` +
+    `(titles=${Array.isArray(data.titles) ? data.titles.length : 0}, ` +
+    `checks=${Array.isArray(data.checks) ? data.checks.length : 0}, ` +
+    `accidents=${Array.isArray(data.accidents) ? data.accidents.length : 0}, ` +
+    `salvage=${Array.isArray(data.salvage) ? data.salvage.length : 0})`,
+  );
 
   // Normalize the response into our standard format
   return normalizeHistoryResponse(data);

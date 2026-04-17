@@ -61,8 +61,9 @@ export async function analyzeVehicleCondition(
   vehicle: VehicleInfo,
   media: MediaForAnalysis[],
   inspectorNotes?: string,
+  inspectionId?: string,
 ): Promise<ConditionAssessment> {
-  const result = await runPipeline(vehicle, media, inspectorNotes);
+  const result = await runPipeline(vehicle, media, inspectorNotes, inspectionId);
   const scores = result.synthesis.areaScores;
 
   // --- 8-bucket overall score using default weights (area scores are 0-100) ---
@@ -153,8 +154,9 @@ export async function analyzeVehicleCondition(
 export async function scanForUnexpectedIssues(
   vehicle: { year: number; make: string; model: string },
   media: MediaForAnalysis[],
+  inspectionId?: string,
 ): Promise<OverallConditionResult> {
-  const result = await runPipeline(vehicle, media);
+  const result = await runPipeline(vehicle, media, undefined, inspectionId);
 
   return {
     unexpectedFindings: result.unexpectedFindings,

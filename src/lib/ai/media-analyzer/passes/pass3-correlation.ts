@@ -169,7 +169,7 @@ async function runSingleRescan(
   if (!response) return { trigger, findings: [], comparisonFindings: [], apiCalls: 1 };
 
   const findings = normalizeRescanFindings(response.result, trigger);
-  const comparisonFindings = normalizeRescanToComparison(response.result, trigger);
+  const comparisonFindings = normalizeRescanToComparison(response.result, trigger, validPhotos);
 
   return { trigger, findings, comparisonFindings, apiCalls: 1 };
 }
@@ -313,7 +313,11 @@ function normalizeRescanFindings(response: RescanResponse, trigger: RescanTrigge
     });
 }
 
-function normalizeRescanToComparison(response: RescanResponse, trigger: RescanTrigger): ComparisonFinding[] {
+function normalizeRescanToComparison(
+  response: RescanResponse,
+  trigger: RescanTrigger,
+  sourcePhotos: MediaForAnalysis[],
+): ComparisonFinding[] {
   if (!response.confirmed || !response.assessment) return [];
 
   return [{
@@ -323,6 +327,7 @@ function normalizeRescanToComparison(response: RescanResponse, trigger: RescanTr
     confidence: 0.8,
     type: trigger === "paint_mismatch" ? "paint_mismatch" : trigger === "panel_gaps" ? "panel_alignment" : "other",
     affectedAreas: [],
+    sourcePhotoIds: sourcePhotos.map((p) => p.id),
   }];
 }
 

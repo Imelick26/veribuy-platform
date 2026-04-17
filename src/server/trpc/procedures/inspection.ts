@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { Prisma } from "@/generated/prisma/client";
 import { router, protectedProcedure } from "../init";
 import { analyzeRiskMedia, scanForUnexpectedIssues, analyzeVehicleCondition, estimateTireReplacementCost, extractVinFromPhoto, extractOdometerFromPhoto } from "@/lib/ai/media-analyzer";
+import { getProgress as getAnalysisProgress } from "@/lib/ai/media-analyzer/progress";
 import { fetchMarketData, type AcquisitionType } from "@/lib/market-data";
 import { fetchRecalls } from "@/lib/nhtsa";
 import { fetchVehicleHistory as fetchVinAuditHistory } from "@/lib/vinaudit";
@@ -41,6 +42,21 @@ async function generateInspectionNumber(db: typeof import("@/server/db").db) {
 }
 
 export const inspectionRouter = router({
+  // Lightweight query polled by the client while the AI condition scan is running.
+  // Returns the current progress from the in-memory store (see @/lib/ai/media-analyzer/progress).
+  // If no analysis is in flight for this inspection, returns null.
+  getAnalysisProgress: protectedProcedure
+    .input(z.object({ inspectionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Scope check — confirm the caller has access to this inspection.
+      const inspection = await ctx.db.inspection.findFirst({
+        where: { id: input.inspectionId, orgId: ctx.orgId },
+        select: { id: true },
+      });
+      if (!inspection) return null;
+      return getAnalysisProgress(input.inspectionId);
+    }),
+
   // Create a new inspection
   create: protectedProcedure
     .input(
@@ -361,7 +377,7 @@ export const inspectionRouter = router({
       const odometerPhoto = mediaForAnalysis.find((m) => m.captureType === "ODOMETER");
 
       const [conditionAssessment, odometerResult] = await Promise.all([
-        analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes),
+        analyzeVehicleCondition(vehicleInfo, mediaForAnalysis, input.inspectorNotes, input.inspectionId),
         odometerPhoto && !inspection.odometer
           ? extractOdometerFromPhoto(odometerPhoto.url, inspection.vehicle.year)
           : Promise.resolve(null),
@@ -369,7 +385,9 @@ export const inspectionRouter = router({
 
       // Build preliminary findings from the pipeline for inspector verification.
       // Scores and findings are NOT persisted yet — they go to CONDITION_REVIEW.
-      const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis);
+      // Note: runPipeline is memoized per media set, so this second call shares
+      // the same in-flight result as the analyzeVehicleCondition call above.
+      const pipelineFindings = await scanForUnexpectedIssues(vehicleInfo, mediaForAnalysis, input.inspectionId);
       const preliminaryFindings = pipelineFindings.unexpectedFindings
         .filter((uf) => uf.confidence >= 0.4) // Low threshold — flag anything uncertain for inspector review
         .map((uf, index) => ({
@@ -885,11 +903,15 @@ export const inspectionRouter = router({
         vinAuditHistory?.openRecallCount ?? 0,
       );
 
+      // CRITICAL: when VinAudit fails, we previously populated the record with
+      // what looked like a clean bill of health (CLEAN title, 0 accidents, 1
+      // owner). That misled dealers. Now the provider is "UNKNOWN" and the
+      // rawData flag surfaces the failure so the UI can warn the dealer.
       const historyRecord = {
-        provider: vinAuditHistory ? "VinAudit" : "NHTSA",
-        titleStatus: vinAuditHistory?.titleStatus ?? "CLEAN",
+        provider: vinAuditHistory ? "VinAudit" : "UNKNOWN",
+        titleStatus: vinAuditHistory?.titleStatus ?? "UNKNOWN",
         accidentCount: vinAuditHistory?.accidentCount ?? 0,
-        ownerCount: vinAuditHistory?.ownerCount ?? 1,
+        ownerCount: vinAuditHistory?.ownerCount ?? 0,
         serviceRecords: vinAuditHistory?.serviceRecords ?? 0,
         structuralDamage: vinAuditHistory?.structuralDamage ?? false,
         floodDamage: vinAuditHistory?.floodDamage ?? false,
@@ -900,6 +922,14 @@ export const inspectionRouter = router({
           vinAuditHistory: vinAuditHistory?.rawData ?? null,
           vinAuditTitleRecords: vinAuditHistory?.titleRecords ?? null,
           vinAuditOdometer: vinAuditHistory?.odometerReadings ?? null,
+          // When VinAudit isn't available, record a warning so downstream
+          // consumers (report template, MarketAnalysisSection) can disclose
+          // that title/accident/owner data is unverified rather than treating
+          // the placeholder zeros as a clean history.
+          vinAuditAvailable: !!vinAuditHistory,
+          historyWarning: vinAuditHistory
+            ? null
+            : "Vehicle history unavailable from VinAudit — title, accident, and owner counts are not verified. Check server logs for the specific VinAudit failure.",
         })),
       };
 
@@ -1188,6 +1218,9 @@ export const inspectionRouter = router({
           title: c.title, price: c.price, mileage: c.mileage, source: c.source,
         })),
         nearbyListingCount: marketData.comparables.length,
+        wholesaleValue: marketData.wholesaleValue,
+        tradeInValue: marketData.tradeInValue,
+        targetMarginPercent: Math.round(marginPercent * 100),
       });
 
       // Don't auto-apply auditor adjustments — store for dealer to review

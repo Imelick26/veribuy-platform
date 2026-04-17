@@ -4,9 +4,11 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Progress } from "@/components/ui/Progress";
 import { CaptureGrid } from "./CaptureGrid";
 import { ConditionReview } from "./ConditionReview";
 import { GUIDED_SHOTS } from "./GuidedCapture";
+import { trpc } from "@/lib/trpc";
 import {
   ShieldAlert,
   Camera,
@@ -115,6 +117,61 @@ interface StepPanelProps {
   isCompletingConditionReview?: boolean;
   // Confidence
   inspectionConfidence?: InspectionConfidence | null;
+}
+
+/**
+ * Polls the backend for AI-analysis progress while the scan is running.
+ * Renders a VeriBuy-gradient progress bar, the current stage, an elapsed
+ * timer, and a "hold tight" message so the user understands the wait.
+ */
+function AIAnalysisProgress({ inspectionId }: { inspectionId: string }) {
+  const { data } = trpc.inspection.getAnalysisProgress.useQuery(
+    { inspectionId },
+    {
+      // Poll ~every 900ms while the scan is running — cheap in-memory read.
+      refetchInterval: (query) => (query.state.data?.percent === 100 ? false : 900),
+      refetchIntervalInBackground: false,
+    },
+  );
+
+  // Show immediately with 0% so the user sees progress UI the moment they click.
+  const percent = data?.percent ?? 0;
+  const stage = data?.stage ?? "Starting analysis…";
+  const detail = data?.detail ?? "";
+  const startedAt = data?.startedAt ?? Date.now();
+
+  // Render-time elapsed estimate. Good enough — no setInterval needed since
+  // the poll refetch itself re-renders roughly once per second.
+  const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  const elapsedLabel = elapsedSec < 60
+    ? `${elapsedSec}s elapsed`
+    : `${Math.floor(elapsedSec / 60)}m ${elapsedSec % 60}s elapsed`;
+
+  return (
+    <div className="mt-3 p-4 rounded-xl border border-brand-200 bg-brand-50/60 space-y-3">
+      <div>
+        <div className="flex items-center justify-between mb-1.5 gap-3">
+          <p className="text-sm font-semibold text-brand-600 truncate">{stage}</p>
+          <span className="text-xs font-bold text-brand-600 shrink-0">{percent}%</span>
+        </div>
+        <Progress value={percent} color="brand" size="md" />
+      </div>
+
+      {detail && (
+        <p className="text-xs text-text-secondary">{detail}</p>
+      )}
+
+      <div className="flex items-start gap-2 pt-1 border-t border-brand-200/60">
+        <Sparkles className="h-3.5 w-3.5 text-brand-500 mt-0.5 shrink-0" />
+        <p className="text-xs text-text-secondary leading-relaxed">
+          <span className="font-medium text-text-primary">This usually takes about a minute — hold tight.</span>{" "}
+          We're inspecting each photo, cross-checking paint, panels, tires, and wear patterns, then building your condition report.
+        </p>
+      </div>
+
+      <p className="text-[10px] text-text-tertiary font-medium">{elapsedLabel}</p>
+    </div>
+  );
 }
 
 export function StepPanel({
@@ -502,7 +559,7 @@ export function StepPanel({
                     >
                       {isRunningAIAnalysis ? (
                         <span className="flex items-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" /> Analyzing...
+                          <Loader2 className="h-4 w-4 animate-spin" /> Analyzing…
                         </span>
                       ) : (
                         <span className="flex items-center gap-2">
@@ -510,6 +567,10 @@ export function StepPanel({
                         </span>
                       )}
                     </Button>
+
+                    {isRunningAIAnalysis && (
+                      <AIAnalysisProgress inspectionId={inspection.id} />
+                    )}
                   </>
                 );
               })()}

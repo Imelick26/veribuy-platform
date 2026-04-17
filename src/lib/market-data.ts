@@ -303,16 +303,23 @@ export async function fetchMarketData(
 
   // ── Step 1: BB Valuation (VIN first, YMM fallback) ──────────────
   let bbValuation: BBValuation | null = null;
+  let bbFailureReason: string | null = null;
   try {
     bbValuation = await fetchBlackBookValuation(vehicle.vin, mileage, state);
     if (!bbValuation) {
+      console.log(`[MarketData] BB VIN lookup returned no data for ${vehicle.vin} — trying YMM fallback`);
       bbValuation = await fetchBlackBookByYMM(vehicle.year, vehicle.make, vehicle.model, mileage, state);
+      if (!bbValuation) {
+        bbFailureReason = `Black Book has no data for VIN ${vehicle.vin} or YMM ${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+      }
     }
     if (bbValuation) reportSuccess("BlackBook");
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    bbFailureReason = `Black Book API error: ${errMsg}`;
     const statusMatch = String(err).match(/\((\d{3})\)/);
     reportFailure("BlackBook", err instanceof Error ? err : String(err), statusMatch ? Number(statusMatch[1]) : undefined, vehicle.vin).catch(() => {});
-    console.error(`[MarketData] BlackBook valuation failed: ${err instanceof Error ? err.message : err}`);
+    console.error(`[MarketData] BlackBook valuation failed: ${errMsg}`);
   }
 
   // ── Step 1b: AI Fallback if BB has no data ────────────────────────
@@ -422,6 +429,12 @@ export async function fetchMarketData(
   let demandSignal: "strong" | "normal" | "weak" = "normal";
   let marketFlags: string[] = [];
   let marketConfidence = 0.5;
+
+  // Surface BB failure in the flags that the dealer UI reads so problems
+  // are visible instead of silently drifting to AI fallback values.
+  if (bbFailureReason && dataSource !== "blackbook") {
+    marketFlags = [bbFailureReason, ...marketFlags];
+  }
 
   try {
     const mktResult = await analyzeMarketIntelligence({
