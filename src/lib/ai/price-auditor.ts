@@ -82,6 +82,13 @@ export interface PriceAuditInput {
   confirmedFindings?: { title: string; severity: string }[];
   comparableListings?: { title: string; price: number; mileage: number; source: string }[];
   nearbyListingCount?: number;
+
+  /** Wholesale value in cents — primary buy-side benchmark */
+  wholesaleValue?: number;
+  /** Trade-in value in cents — alternate buy-side benchmark */
+  tradeInValue?: number;
+  /** Dealer's target margin percent (for context, e.g. 25) */
+  targetMarginPercent?: number;
 }
 
 export interface PriceAuditResult {
@@ -129,64 +136,64 @@ export async function auditPrice(
 
     primary: {
       model: "gpt-4o",
-      systemPrompt: `You are an independent vehicle pricing advisor. Black Book is the primary pricing source. Your job is to review the pricing result and flag cases where Black Book values may not tell the full story.
+      systemPrompt: `You are a second-opinion vehicle acquisition advisor. Your only job is to sanity-check a proposed dealer BUY price against other dealer BUY-side benchmarks for the same vehicle, and flag it only if it is way off.
 
-CRITICAL KNOWLEDGE — ENTHUSIAST PLATFORMS:
-- 7.3L Powerstroke diesels (1994-2003 Ford F-250/F-350): Worth $12K-30K+. Manual trans adds 20-40%. These are NOT cheap old trucks. Black Book may undervalue these.
-- 5.9L/6.7L Cummins (Dodge/Ram 2500/3500): $15K-35K+. Manual premium applies. Strong enthusiast demand BB may not fully capture.
-- Duramax diesels (Chevy/GMC 2500/3500): $15K-35K+.
-- Toyota Land Cruiser (all years): Holds value extremely well. BB sometimes lags behind real market.
-- Jeep Wrangler: Minimal depreciation regardless of age.
-- Manual transmission trucks: 20-40% premium, increasingly rare.
-- Diesel + manual + 4WD on a heavy-duty truck is the trifecta — VERY valuable.
-- 200K miles on a diesel truck is MID-LIFE, not high mileage. These run 400K+.
+KEY FRAMING: The proposed price you are reviewing is a DEALER ACQUISITION TARGET — what a dealer should pay to buy this vehicle for inventory. It is intentionally BELOW retail (dealers need margin). The correct comparison is BUY-TO-BUY, not buy-to-retail.
 
-PRICING MODEL:
-Black Book provides condition-tiered retail/wholesale/trade-in values. The condition tier is selected based on VeriBuy's inspection score (0-100). BB values are already adjusted for mileage and region. A market adjustment may be applied if comparable dealer listings diverge significantly from BB retail.
+BUY-SIDE BENCHMARKS to compare against:
+- Wholesale value (auction market price) — the primary benchmark
+- Trade-in value — what a dealer would offer on trade
+- Retail listings MINUS typical dealer margin (~20-30%) — rough derived buy benchmark
 
-The math is: BB Retail [tier] × market adjustment × history multiplier − recon = estimated retail. Then dealer margin is subtracted to get the buy price.
+DEFAULT ANSWER IS APPROVE. Only flag as "way off" when the proposed buy price is obviously wrong:
+- Way too high: proposed buy is at or above wholesale + 20% (dealer overpaying)
+- Way too low: proposed buy is well below wholesale (dealer expecting too much discount)
+- Clearly wrong for platform: e.g., proposing $8K buy on a clean enthusiast platform worth $20K+ at wholesale
 
-You should flag issues like:
-- Enthusiast platform UNDERPRICED by BB (e.g., clean manual Powerstroke valued at $9K)
-- History multiplier too lenient for severe title/damage issues
-- History multiplier too harsh (e.g., 1 minor accident on a truck shouldn't drop value 15%)
-- Condition tier mapping seems wrong (e.g., score 74 = "average" but issues are cosmetic-only on a work truck)
-- Recon cost doesn't match the confirmed findings
-- Market adjustment seems off (comps tell a different story than BB)
-- Final price outside plausible range for this specific vehicle
+CRITICAL KNOWLEDGE — SPECIALTY PLATFORMS WHERE WHOLESALE BENCHMARKS MAY LAG:
+- 7.3L Powerstroke diesels: enthusiast wholesale often $15K+ even if generic wholesale shows less.
+- 5.9L/6.7L Cummins: strong wholesale demand.
+- Duramax diesels: strong wholesale demand.
+- Toyota Land Cruiser: wholesale holds extremely well.
+- Jeep Wrangler: minimal wholesale depreciation.
+- Ford Raptor / Ram TRX / Chevy ZR2: wholesale premiums over base trims.
+- Manual transmission trucks: 20-40% wholesale premium.
 
-ONLY flag real issues. Don't flag things that are correct but unusual.
-If everything looks reasonable, approve with a high coherence score.
-If the price needs adjustment, provide a suggested retail price in cents. The dealer will decide whether to accept your suggestion or keep the BB price.`,
-      userPrompt: `Review this pricing result:
+WHAT NOT TO DO:
+- Do NOT compare the proposed buy price against retail — those are different numbers for a reason.
+- Do NOT comment on how the price was calculated. No mentions of multipliers, adjustments, pricing steps, modules, or pipeline mechanics.
+- Do NOT nitpick. Small differences from wholesale are normal — a buy slightly above wholesale is fine for a clean unit in demand.
+- Do NOT flag a price just because it's below retail — that's the whole point.
+
+If the proposed buy is reasonably aligned with wholesale/trade-in benchmarks for this vehicle's condition and platform, APPROVE with a high coherence score. Only DISAGREE when the price is genuinely way off.`,
+      userPrompt: `Sanity-check this proposed dealer buy price against buy-side benchmarks.
 
 VEHICLE: ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} miles` : ""}
+Category: ${input.bodyCategory || "unknown"}${conditionContext}${areaScoreContext}${findingsContext}
 
-BLACK BOOK: ${sourceSummary}
+TITLE / HISTORY: ${input.historySummary || "No significant history reported"}
 
-PRICING CHAIN:
-${(input.pricingTrace || []).filter((s) => s.label !== "Fair Purchase Price").map((step, i) => {
-  const pad = step.label.padEnd(24);
-  return `Step ${i + 1}: ${pad} ${step.operation.padEnd(12)} = $${step.outputDollars.toLocaleString()}  [${step.explanation}]`;
-}).join("\n")}
+BUY-SIDE BENCHMARKS:
+- Wholesale value: ${input.wholesaleValue ? `$${Math.round(input.wholesaleValue / 100).toLocaleString()}` : "not available"}
+- Trade-in value: ${input.tradeInValue ? `$${Math.round(input.tradeInValue / 100).toLocaleString()}` : "not available"}${input.targetMarginPercent ? `\n- Dealer's target margin: ${input.targetMarginPercent}%` : ""}
 
-FAIR PURCHASE PRICE: $${fairDollars.toLocaleString()}
+RETAIL CONTEXT (for reference only — do NOT compare buy price directly to retail):
+${sourceSummary}${compsContext}
 
-YOUR JOB: Does the BB pricing make sense for THIS specific vehicle? Consider the vehicle's history, condition, and how comparable listings align. If you think the retail value should be different, suggest an adjusted price.
+PROPOSED DEALER BUY PRICE: $${fairDollars.toLocaleString()}
 
-FULL VEHICLE CONTEXT:
-Category: ${input.bodyCategory || "unknown"}${conditionContext}${areaScoreContext}${findingsContext}${compsContext}
+YOUR JOB: Is $${fairDollars.toLocaleString()} reasonably aligned with the BUY-SIDE BENCHMARKS above for this specific vehicle? Approve unless the proposed buy is way off (much too high above wholesale, or much too low below wholesale for a vehicle of this condition/platform).
 
 Return JSON:
 {
   "approved": boolean,
-  "adjustedFairPrice": number | null (in CENTS — only if not approved, your suggested fair purchase price),
-  "flags": ["list of specific issues found"],
-  "coherenceScore": number (0.0-1.0, how confident are you in the current pricing),
-  "reasoning": "2-3 sentences explaining your assessment. If suggesting an adjustment, explain WHY BB may be off for this vehicle."
+  "adjustedFairPrice": number | null (in CENTS — only if NOT approved AND the price is way off; your suggested buy price),
+  "flags": ["only include if way off — short vehicle-level reasons. Never reference calculation steps or compare to retail."],
+  "coherenceScore": number (0.0-1.0, how aligned the proposed buy is with wholesale/trade-in benchmarks),
+  "reasoning": "1-2 sentences. If approving: confirm the buy is aligned with wholesale/trade-in for this vehicle. If disagreeing: state the wholesale/buy-side number you expect and why."
 }`,
       temperature: 0.1,
-      maxTokens: 800,
+      maxTokens: 500,
     },
 
     validate: (parsed: unknown): ValidationResult<PriceAuditResult> => {
@@ -257,7 +264,9 @@ Return JSON:
     simplified: {
       model: "gpt-4o",
       buildPrompt: () => {
-        return `Quick audit: A ${vehicleDesc} priced at $${fairDollars.toLocaleString()} fair purchase price. Consensus $${input.consensusValue.toLocaleString()}, config ${input.configMultiplier.toFixed(2)}x, condition ${input.conditionScore}/100 (${input.conditionMultiplier.toFixed(2)}x), history ${input.historyMultiplier.toFixed(2)}x, -$${reconDollars.toLocaleString()} recon. Does this make sense? Return JSON: { "approved": boolean, "adjustedFairPrice": number|null (cents, if not approved), "flags": string[], "coherenceScore": 0-1, "reasoning": string }`;
+        const wholesaleDollars = input.wholesaleValue ? Math.round(input.wholesaleValue / 100).toLocaleString() : "n/a";
+        const tradeInDollars = input.tradeInValue ? Math.round(input.tradeInValue / 100).toLocaleString() : "n/a";
+        return `Sanity check: dealer buy price $${fairDollars.toLocaleString()} for a ${vehicleDesc}${mileage ? ` at ${mileage.toLocaleString()} mi` : ""}, condition ${input.conditionScore}/100, history ${input.historySummary || "clean"}. Buy-side benchmarks: wholesale $${wholesaleDollars}, trade-in $${tradeInDollars}. Approve unless the buy price is WAY off the wholesale benchmark. Do NOT compare to retail. Return JSON: { "approved": boolean, "adjustedFairPrice": number|null (cents, only if way off), "flags": string[] (empty if approved), "coherenceScore": 0-1, "reasoning": "1 sentence" }`;
       },
     },
 
