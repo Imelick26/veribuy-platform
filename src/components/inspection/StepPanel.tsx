@@ -165,7 +165,7 @@ function AIAnalysisProgress({ inspectionId }: { inspectionId: string }) {
         <Sparkles className="h-3.5 w-3.5 text-brand-500 mt-0.5 shrink-0" />
         <p className="text-xs text-text-secondary leading-relaxed">
           <span className="font-medium text-text-primary">This usually takes about a minute — hold tight.</span>{" "}
-          We're inspecting each photo, cross-checking paint, panels, tires, and wear patterns, then building your condition report.
+          We're inspecting each photo, cross-checking paint, panels, tires, and wear patterns.
         </p>
       </div>
 
