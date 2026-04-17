@@ -47,10 +47,6 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
     onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
   });
 
-  const setAcquisitionType = trpc.inspection.setAcquisitionType.useMutation({
-    onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
-  });
-
   const acceptAudit = trpc.inspection.acceptAuditAdjustment.useMutation({
     onSuccess: () => utils.vehicle.getDetail.invalidate({ id }),
   });
@@ -256,8 +252,8 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          {/* Financial hero — 3 column */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6">
+          {/* Financial hero — 4 column */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 mb-6">
             <div>
               <Overline>Buy At</Overline>
               <p className="text-[36px] font-bold tracking-tight text-money-neutral leading-none mt-1">
@@ -268,6 +264,12 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
               <Overline>Est. Retail</Overline>
               <p className="text-[18px] font-bold text-text-primary mt-1">
                 {formatCurrency(estRetail)}
+              </p>
+            </div>
+            <div>
+              <Overline>Est. Recon</Overline>
+              <p className="text-[18px] font-bold text-money-negative mt-1">
+                {formatCurrency(reconEstimate)}
               </p>
             </div>
             <div>
@@ -300,28 +302,9 @@ export default function VehicleDetailPage({ params }: { params: Promise<{ id: st
             </div>
           )}
 
-          {/* Acquisition type toggle + BB tier badge */}
+          {/* BB tier badge */}
           {(market as MarketAnalysisData)?.bbConditionTier && (
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Acquisition</span>
-                <div className="flex items-center gap-0.5 bg-surface-sunken rounded-md p-0.5">
-                  <button
-                    onClick={() => setAcquisitionType.mutate({ inspectionId: inspection!.id, acquisitionType: "WHOLESALE" })}
-                    className={cn("px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer",
-                      (inspection?.acquisitionType ?? "WHOLESALE") === "WHOLESALE"
-                        ? "bg-surface-default text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
-                    )}
-                  >Wholesale</button>
-                  <button
-                    onClick={() => setAcquisitionType.mutate({ inspectionId: inspection!.id, acquisitionType: "TRADE_IN" })}
-                    className={cn("px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer",
-                      inspection?.acquisitionType === "TRADE_IN"
-                        ? "bg-surface-default text-text-primary shadow-sm" : "text-text-tertiary hover:text-text-secondary"
-                    )}
-                  >Trade-In</button>
-                </div>
-              </div>
+            <div className="flex items-center justify-end mb-4">
               <div className="flex items-center gap-2">
                 <Badge variant="default">Black Book</Badge>
                 <span className="text-xs text-text-secondary">
